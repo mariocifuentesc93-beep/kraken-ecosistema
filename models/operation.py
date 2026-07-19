@@ -14,13 +14,15 @@ class Operation:
     # IDENTIFICACIÓN
     # =====================================================
 
-    operation_id: str
+    id: Optional[int] = None
 
-    signal: Signal
+    operation_id: str = ""
 
-    profile: Profile
+    signal: Optional[Signal] = None
 
-    account: MT5Account
+    profile: Optional[Profile] = None
+
+    account: Optional[MT5Account] = None
 
     # =====================================================
     # RELACIONES

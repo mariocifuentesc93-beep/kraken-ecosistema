@@ -60,12 +60,21 @@ class ProfileRepository:
                 comment,
                 deviation,
 
+                total_operations,
+                winning_operations,
+                losing_operations,
+                breakeven_operations,
+                total_profit,
+                total_loss,
+                net_profit,
+                win_rate,
+
                 created_at,
                 updated_at
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -103,6 +112,15 @@ class ProfileRepository:
                 profile.magic_number,
                 profile.comment,
                 profile.deviation,
+
+                profile.total_operations,
+                profile.winning_operations,
+                profile.losing_operations,
+                profile.breakeven_operations,
+                profile.total_profit,
+                profile.total_loss,
+                profile.net_profit,
+                profile.win_rate,
 
                 profile.created_at,
                 profile.updated_at,
@@ -168,6 +186,15 @@ class ProfileRepository:
                 comment=?,
                 deviation=?,
 
+                total_operations=?,
+                winning_operations=?,
+                losing_operations=?,
+                breakeven_operations=?,
+                total_profit=?,
+                total_loss=?,
+                net_profit=?,
+                win_rate=?,
+
                 updated_at=?
 
             WHERE id=?
@@ -208,6 +235,15 @@ class ProfileRepository:
                 profile.magic_number,
                 profile.comment,
                 profile.deviation,
+
+                profile.total_operations,
+                profile.winning_operations,
+                profile.losing_operations,
+                profile.breakeven_operations,
+                profile.total_profit,
+                profile.total_loss,
+                profile.net_profit,
+                profile.win_rate,
 
                 profile.updated_at,
 

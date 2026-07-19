@@ -79,6 +79,22 @@ def create_tables(connection: sqlite3.Connection):
 
         deviation INTEGER DEFAULT 20,
 
+        total_operations INTEGER DEFAULT 0,
+
+        winning_operations INTEGER DEFAULT 0,
+
+        losing_operations INTEGER DEFAULT 0,
+
+        breakeven_operations INTEGER DEFAULT 0,
+
+        total_profit REAL DEFAULT 0,
+
+        total_loss REAL DEFAULT 0,
+
+        net_profit REAL DEFAULT 0,
+
+        win_rate REAL DEFAULT 0,
+
         created_at TEXT,
 
         updated_at TEXT
@@ -99,6 +115,14 @@ def create_tables(connection: sqlite3.Connection):
         "magic_number": "INTEGER DEFAULT 10001",
         "comment": "TEXT DEFAULT ''",
         "deviation": "INTEGER DEFAULT 20",
+        "total_operations": "INTEGER DEFAULT 0",
+        "winning_operations": "INTEGER DEFAULT 0",
+        "losing_operations": "INTEGER DEFAULT 0",
+        "breakeven_operations": "INTEGER DEFAULT 0",
+        "total_profit": "REAL DEFAULT 0",
+        "total_loss": "REAL DEFAULT 0",
+        "net_profit": "REAL DEFAULT 0",
+        "win_rate": "REAL DEFAULT 0",
     }.items():
         if column not in profile_columns:
             cursor.execute(
@@ -394,6 +418,8 @@ def create_tables(connection: sqlite3.Connection):
 
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
+        operation_id TEXT,
+
         signal_id INTEGER,
 
         profile_id INTEGER,
@@ -452,6 +478,10 @@ def create_tables(connection: sqlite3.Connection):
 
     )
     """)
+
+    _ensure_columns(cursor, "operations", {
+        "operation_id": "TEXT",
+    })
 
     cursor.execute("""
     CREATE INDEX IF NOT EXISTS idx_operations_profile

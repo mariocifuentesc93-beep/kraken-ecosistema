@@ -1,5 +1,5 @@
 from repositories.profile_telegram_repository import (
-    profile_telegram_repository,
+    profile_telegram_channel_repository,
 )
 
 from repositories.profile_mt5_repository import (
@@ -19,7 +19,7 @@ class ProfileEngine:
         chat_id,
     ):
 
-        profiles = profile_telegram_repository.get_profiles_by_channel(
+        profiles = profile_telegram_channel_repository.get_profiles(
             chat_id
         )
 

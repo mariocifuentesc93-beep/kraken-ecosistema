@@ -260,6 +260,18 @@ class ProfileMT5Repository:
 
         return cursor.rowcount > 0
 
+    def delete_by_profile_account(self, profile_id, account_id):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            DELETE FROM profile_mt5_accounts
+            WHERE profile_id=? AND mt5_account_id=?
+            """,
+            (profile_id, account_id),
+        )
+        database_manager.commit()
+        return cursor.rowcount > 0
+
     # =====================================================
     # HELPERS
     # =====================================================

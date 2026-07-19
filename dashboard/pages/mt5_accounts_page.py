@@ -113,7 +113,7 @@ class MT5AccountsPage(QWidget):
 
                 account.id,
                 account.name,
-                account.broker,
+                account.server,
                 account.login,
                 account.server,
                 "🟢" if account.enabled else "🔴",

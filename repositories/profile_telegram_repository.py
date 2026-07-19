@@ -4,6 +4,50 @@ from models.profile import Profile
 
 class ProfileTelegramChannelRepository:
 
+    def create_channel(self, chat_id, title, profile_id=None, account_id=None):
+        if profile_id is None or account_id is None:
+            raise ValueError("profile_id and account_id are required")
+
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            INSERT INTO profile_telegram_channels
+            (profile_id, account_id, chat_id, title, enabled, priority)
+            VALUES (?, ?, ?, ?, 1, 1)
+            """,
+            (profile_id, account_id, chat_id, title),
+        )
+        database_manager.commit()
+        return cursor.lastrowid
+
+    def get_channel(self, chat_id):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM profile_telegram_channels
+            WHERE chat_id=? ORDER BY priority LIMIT 1
+            """,
+            (chat_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def get_channels(self):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            "SELECT * FROM profile_telegram_channels ORDER BY priority, title"
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def set_channel_enabled(self, chat_id, enabled):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            "UPDATE profile_telegram_channels SET enabled=? WHERE chat_id=?",
+            (int(bool(enabled)), chat_id),
+        )
+        database_manager.commit()
+        return cursor.rowcount > 0
+
     # =====================================================
     # CONSULTAS
     # =====================================================

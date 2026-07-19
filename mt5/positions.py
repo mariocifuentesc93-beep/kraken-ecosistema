@@ -1,6 +1,6 @@
 import MetaTrader5 as mt5
 
-from core.config_service import get_mt5_symbol
+from core.config_service import get_symbol
 
 
 class PositionManager:
@@ -10,7 +10,12 @@ class PositionManager:
         if symbol is None:
             return mt5.positions_get()
 
-        mt5_symbol = get_mt5_symbol(symbol)
+        configured_symbol = get_symbol(symbol)
+        mt5_symbol = (
+            configured_symbol.mt5_symbol
+            if configured_symbol is not None
+            else symbol
+        )
 
         return mt5.positions_get(symbol=mt5_symbol)
 

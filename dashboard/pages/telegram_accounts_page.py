@@ -134,7 +134,7 @@ class TelegramAccountsPage(QWidget):
 
                 "Sí" if getattr(
                     account,
-                    "authenticated",
+                    "authorized",
                     False,
                 ) else "No",
 

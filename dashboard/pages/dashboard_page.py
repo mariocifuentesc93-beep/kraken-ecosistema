@@ -192,19 +192,19 @@ class DashboardPage(QWidget):
 
         self.lbl_capital.setText(
 
-            f"${active.initial_balance:,.2f}"
+            "$0.00"
 
         )
 
         self.lbl_balance.setText(
 
-            f"${active.current_balance:,.2f}"
+            "$0.00"
 
         )
 
         self.lbl_profit.setText(
 
-            f"${active.total_profit:,.2f}"
+            f"${active.net_profit:,.2f}"
 
         )
 
@@ -228,19 +228,19 @@ class DashboardPage(QWidget):
 
         self.lbl_wins.setText(
 
-            str(active.total_wins)
+            str(active.winning_operations)
 
         )
 
         self.lbl_losses.setText(
 
-            str(active.total_losses)
+            str(active.losing_operations)
 
         )
 
         self.lbl_drawdown.setText(
 
-            f"{active.max_drawdown:.2f}%"
+            "0.00%"
 
         )
 

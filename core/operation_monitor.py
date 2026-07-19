@@ -78,7 +78,7 @@ class OperationMonitor:
 
     def monitor(self):
 
-        operations = operation_repository.get_open_operations()
+        operations = operation_repository.get_open()
 
         for operation in operations:
 
