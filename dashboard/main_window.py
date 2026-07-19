@@ -33,6 +33,7 @@ from dashboard.pages.symbols_page import SymbolsPage
 from dashboard.pages.settings_page import SettingsPage
 from dashboard.pages.logs_page import LogsPage
 from dashboard.pages.signal_inspector_page import SignalInspectorPage
+from dashboard.pages.trade_timeline_page import TradeTimelinePage
 from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
@@ -215,6 +216,8 @@ class MainWindow(QMainWindow):
 
             "Inspector de señales",
 
+            "Línea de tiempo",
+
             "Configuración"
 
         ]
@@ -253,6 +256,8 @@ class MainWindow(QMainWindow):
 
         self.signalInspectorPage = SignalInspectorPage()
 
+        self.tradeTimelinePage = TradeTimelinePage()
+
         self.settingsPage = SettingsPage()
 
         self.stack.addWidget(self.dashboardPage)
@@ -274,6 +279,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.logsPage)
 
         self.stack.addWidget(self.signalInspectorPage)
+
+        self.stack.addWidget(self.tradeTimelinePage)
 
         self.stack.addWidget(self.settingsPage)
 

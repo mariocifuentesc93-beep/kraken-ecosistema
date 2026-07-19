@@ -526,6 +526,14 @@ def create_tables(connection: sqlite3.Connection):
     ON operation_events(operation_id)
     """)
 
+    _ensure_columns(cursor, "operation_events", {
+        "previous_state": "TEXT DEFAULT ''",
+        "new_state": "TEXT DEFAULT ''",
+        "profile_id": "INTEGER",
+        "symbol": "TEXT DEFAULT ''",
+        "execution_mode": "TEXT DEFAULT ''",
+    })
+
     # ==========================================================
     # DAILY STATISTICS
     # ==========================================================
