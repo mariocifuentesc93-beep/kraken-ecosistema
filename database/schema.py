@@ -554,6 +554,22 @@ def create_tables(connection: sqlite3.Connection):
     cursor.execute("""CREATE INDEX IF NOT EXISTS idx_simulation_price_events_operation
                       ON simulation_price_events(operation_id)""")
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS mt5_connection_diagnostics(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER, success INTEGER NOT NULL,
+        terminal_path TEXT, account_number TEXT, server TEXT, details TEXT NOT NULL,
+        created_at TEXT NOT NULL, FOREIGN KEY(account_id) REFERENCES mt5_accounts(id) ON DELETE SET NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS mt5_symbol_validations(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, diagnostic_id INTEGER NOT NULL, symbol TEXT NOT NULL,
+        mt5_symbol TEXT NOT NULL, available INTEGER NOT NULL, visible INTEGER NOT NULL,
+        selectable INTEGER NOT NULL, tick_available INTEGER NOT NULL, details TEXT NOT NULL,
+        created_at TEXT NOT NULL, FOREIGN KEY(diagnostic_id) REFERENCES mt5_connection_diagnostics(id) ON DELETE CASCADE
+    )
+    """)
+
     # ==========================================================
     # DAILY STATISTICS
     # ==========================================================

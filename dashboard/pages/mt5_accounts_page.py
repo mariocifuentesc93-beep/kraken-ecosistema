@@ -8,10 +8,12 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QMessageBox,
+    QFileDialog,
 )
 
 from repositories.mt5_account_repository import mt5_account_repository
 from mt5.connector import mt5_connector
+from services.mt5_connection_diagnostics import mt5_connection_diagnostics
 from models.mt5_account import MT5Account
 from dashboard.dialogs.mt5_account_dialog import MT5AccountDialog
 
@@ -44,12 +46,18 @@ class MT5AccountsPage(QWidget):
 
         self.btn_test = QPushButton("Probar conexión")
 
+        self.btn_export_json = QPushButton("Exportar JSON")
+
+        self.btn_export_text = QPushButton("Exportar TXT")
+
         self.btn_refresh = QPushButton("Actualizar")
 
         toolbar.addWidget(self.btn_new)
         toolbar.addWidget(self.btn_edit)
         toolbar.addWidget(self.btn_delete)
         toolbar.addWidget(self.btn_test)
+        toolbar.addWidget(self.btn_export_json)
+        toolbar.addWidget(self.btn_export_text)
 
         toolbar.addStretch()
 
@@ -106,6 +114,10 @@ class MT5AccountsPage(QWidget):
         self.btn_test.clicked.connect(
             self.test_connection
         )
+
+        self.btn_export_json.clicked.connect(lambda: self.export_diagnostic("json"))
+        self.btn_export_text.clicked.connect(lambda: self.export_diagnostic("text"))
+        self.last_diagnostic = None
 
     # ======================================================
 
@@ -236,41 +248,37 @@ class MT5AccountsPage(QWidget):
 
             return
 
-        connected, message = mt5_connector.test_connection(account)
-
-        if connected:
-
-            info = mt5_connector.get_account_info()
-
-            if info:
-
-                account.balance = info.balance
-                account.equity = info.equity
-
-            QMessageBox.information(
-
-                self,
-
-                "MT5",
-
-                (
-                    "Conexión exitosa\n\n"
-                    f"Balance : {account.balance:.2f}\n"
-                    f"Equity : {account.equity:.2f}"
-                ),
-
-            )
-
+        self.last_diagnostic = mt5_connection_diagnostics.run(account)
+        report = self.last_diagnostic
+        validated = sum(row["tick_available"] for row in report["symbols"])
+        message = (
+            f"Terminal: {report['terminal_path']}\nCuenta: {report['account']}\n"
+            f"Servidor: {report['server']}\nBalance: {report['balance']}\n"
+            f"Equity: {report['equity']}\nMoneda: {report['currency']}\n"
+            f"Apalancamiento: {report['leverage']}\nTrading permitido: {report['trade_allowed']}\n"
+            f"Algoritmos permitidos: {report['algorithmic_trading_allowed']}\n"
+            f"Conectado: {report['connected_timestamp']}\n"
+            f"Símbolos validados: {validated}/{len(report['symbols'])}\n\n"
+            f"{report['actionable_error'] or report['last_error']}"
+        )
+        if report["success"]:
+            account.balance = report["balance"] or 0.0
+            account.equity = report["equity"] or 0.0
+            QMessageBox.information(self, "Diagnóstico MT5", message)
         else:
-
-            QMessageBox.critical(
-
-                self,
-
-                "MT5",
-
-                f"No fue posible conectar con la cuenta:\n{message}",
-
-            )
-
+            QMessageBox.critical(self, "Diagnóstico MT5", message)
         self.refresh()
+
+    def export_diagnostic(self, report_type):
+        if not self.last_diagnostic:
+            QMessageBox.warning(self, "MT5", "Primero ejecute 'Probar conexión'.")
+            return
+        suffix = "json" if report_type == "json" else "txt"
+        path, _ = QFileDialog.getSaveFileName(self, "Exportar diagnóstico", f"mt5_diagnostic.{suffix}")
+        if not path:
+            return
+        if report_type == "json":
+            mt5_connection_diagnostics.export_json(self.last_diagnostic, path)
+        else:
+            mt5_connection_diagnostics.export_text(self.last_diagnostic, path)
+        QMessageBox.information(self, "MT5", "Diagnóstico exportado correctamente.")
