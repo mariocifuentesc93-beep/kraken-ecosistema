@@ -49,7 +49,7 @@ class ActiveWorkflowSmokeTests(unittest.TestCase):
         from dashboard.main_window import MainWindow
 
         window = MainWindow()
-        self.assertEqual(window.stack.count(), 17)
+        self.assertEqual(window.stack.count(), 18)
         for index in range(window.stack.count()):
             window.menu.setCurrentRow(index)
             self.assertIs(window.stack.currentWidget(), window.stack.widget(index))
