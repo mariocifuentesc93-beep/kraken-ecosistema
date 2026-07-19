@@ -1,6 +1,19 @@
 import sqlite3
 
 
+def _ensure_columns(cursor, table, definitions):
+    columns = {
+        row[1]
+        for row in cursor.execute(f"PRAGMA table_info({table})")
+    }
+
+    for column, definition in definitions.items():
+        if column not in columns:
+            cursor.execute(
+                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+            )
+
+
 def create_tables(connection: sqlite3.Connection):
 
     cursor = connection.cursor()
@@ -155,7 +168,25 @@ def create_tables(connection: sqlite3.Connection):
 
         terminal_path TEXT,
 
+        execution_mode TEXT DEFAULT 'LIVE',
+
+        risk_enabled INTEGER DEFAULT 1,
+
+        risk_mode TEXT DEFAULT 'PROFILE',
+
+        risk_percent REAL DEFAULT 0,
+
+        risk_amount REAL DEFAULT 0,
+
+        fixed_lot REAL DEFAULT 0,
+
         magic_number INTEGER DEFAULT 10001,
+
+        custom_magic INTEGER DEFAULT 0,
+
+        comment TEXT DEFAULT 'KRAKEN',
+
+        deviation INTEGER DEFAULT 20,
 
         active INTEGER DEFAULT 1,
 
@@ -167,6 +198,18 @@ def create_tables(connection: sqlite3.Connection):
 
     )
     """)
+
+    _ensure_columns(cursor, "mt5_accounts", {
+        "execution_mode": "TEXT DEFAULT 'LIVE'",
+        "risk_enabled": "INTEGER DEFAULT 1",
+        "risk_mode": "TEXT DEFAULT 'PROFILE'",
+        "risk_percent": "REAL DEFAULT 0",
+        "risk_amount": "REAL DEFAULT 0",
+        "fixed_lot": "REAL DEFAULT 0",
+        "custom_magic": "INTEGER DEFAULT 0",
+        "comment": "TEXT DEFAULT 'KRAKEN'",
+        "deviation": "INTEGER DEFAULT 20",
+    })
 
     # ==========================================================
     # PROFILE -> MT5
@@ -185,9 +228,15 @@ def create_tables(connection: sqlite3.Connection):
 
         priority INTEGER DEFAULT 1,
 
+        execution_mode TEXT DEFAULT 'PROFILE',
+
+        risk_mode TEXT DEFAULT 'PROFILE',
+
         fixed_lot REAL DEFAULT 0,
 
         risk_percent REAL DEFAULT 0,
+
+        risk_amount REAL DEFAULT 0,
 
         custom_magic INTEGER DEFAULT 0,
 
@@ -203,6 +252,12 @@ def create_tables(connection: sqlite3.Connection):
 
     )
     """)
+
+    _ensure_columns(cursor, "profile_mt5_accounts", {
+        "execution_mode": "TEXT DEFAULT 'PROFILE'",
+        "risk_mode": "TEXT DEFAULT 'PROFILE'",
+        "risk_amount": "REAL DEFAULT 0",
+    })
     # ==========================================================
     # SYMBOLS
     # ==========================================================

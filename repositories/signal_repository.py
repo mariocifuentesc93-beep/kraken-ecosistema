@@ -14,8 +14,13 @@ class SignalRepository:
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        if not signal.created_at:
-            signal.created_at = now
+        created_at = getattr(signal, "received_at", None)
+
+        if isinstance(created_at, datetime):
+            created_at = created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+        if not created_at:
+            created_at = now
 
         cursor = database_manager.cursor()
 
@@ -50,10 +55,10 @@ class SignalRepository:
                 signal.tp1,
                 signal.tp2,
                 signal.tp3,
-                int(signal.market_execution),
+                int(bool(signal.market_execution)),
                 signal.raw_message,
                 signal.status,
-                signal.created_at,
+                created_at,
             ),
         )
 
@@ -81,7 +86,7 @@ class SignalRepository:
         if row is None:
             return None
 
-        return Signal(**dict(row))
+        return self._to_signal(row)
 
     # =====================================================
 
@@ -101,7 +106,7 @@ class SignalRepository:
 
         return [
 
-            Signal(**dict(row))
+            self._to_signal(row)
 
             for row in cursor.fetchall()
 
@@ -128,7 +133,7 @@ class SignalRepository:
 
         return [
 
-            Signal(**dict(row))
+            self._to_signal(row)
 
             for row in cursor.fetchall()
 
@@ -155,7 +160,7 @@ class SignalRepository:
 
         return [
 
-            Signal(**dict(row))
+            self._to_signal(row)
 
             for row in cursor.fetchall()
 
@@ -182,7 +187,7 @@ class SignalRepository:
 
         return [
 
-            Signal(**dict(row))
+            self._to_signal(row)
 
             for row in cursor.fetchall()
 
@@ -209,7 +214,7 @@ class SignalRepository:
 
         return [
 
-            Signal(**dict(row))
+            self._to_signal(row)
 
             for row in cursor.fetchall()
 
@@ -349,6 +354,31 @@ class SignalRepository:
         )
 
         database_manager.commit()
+
+    @staticmethod
+    def _to_signal(row):
+        data = dict(row)
+        take_profits = [
+            data.pop(name)
+            for name in ("tp1", "tp2", "tp3")
+            if data.get(name) not in (None, 0, 0.0)
+        ]
+        created_at = data.pop("created_at", None)
+
+        return Signal(
+            id=data.get("id"),
+            telegram_account_id=data.get("telegram_account_id"),
+            profile_id=data.get("profile_id"),
+            symbol=data.get("symbol") or "",
+            direction=data.get("direction") or "",
+            entry=data.get("entry") or 0.0,
+            stop_loss=data.get("stop_loss") or 0.0,
+            take_profits=take_profits,
+            market_execution=bool(data.get("market_execution")),
+            raw_message=data.get("raw_message") or "",
+            status=data.get("status") or "RECEIVED",
+            received_at=created_at or datetime.now(),
+        )
 
 
 signal_repository = SignalRepository()

@@ -22,6 +22,8 @@ class Signal:
 
     received_at: datetime = field(default_factory=datetime.now)
 
+    market_execution: bool = False
+
     # =====================================================
     # TRADING
     # =====================================================

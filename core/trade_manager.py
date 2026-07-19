@@ -1,7 +1,7 @@
 from core.execution_modes import ExecutionMode
 from core.config_service import get_execution_mode
 
-from core.simulation import simulation_engine
+from core.simulation_engine import simulation_engine
 
 from mt5.executor import mt5_executor
 
@@ -155,7 +155,12 @@ class TradeManager:
                 )
             )
 
-            return self._simulation(signal)
+            return self._simulation(
+                signal,
+                profile,
+                account,
+                operation,
+            )
 
         # -----------------------------------------------------
         # DEMO / LIVE
@@ -242,9 +247,16 @@ class TradeManager:
 
     # ---------------------------------------------------------
 
-    def _simulation(self, signal):
+    def _simulation(self, signal, profile, account, operation):
 
-        return simulation_engine.execute(signal)
+        simulation_engine.execute(
+            signal=signal,
+            profile=profile,
+            account=account,
+            operation=operation,
+        )
+
+        return True
 
     # ---------------------------------------------------------
 

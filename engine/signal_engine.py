@@ -44,7 +44,8 @@ class SignalEngine:
     def process(
         self,
         signal,
-        chat_id,
+        profile=None,
+        chat_id=None,
         account_id=None,
     ):
 
@@ -83,11 +84,16 @@ class SignalEngine:
         # ORIGEN
         # -----------------------------------------------------
 
+        if chat_id is None:
+            chat_id = getattr(signal, "chat_id", None)
+
         signal.chat_id = chat_id
 
         signal.telegram_account_id = account_id
 
-        profiles = profile_repository.get_profiles_by_chat(chat_id)
+        profiles = [profile] if profile is not None else (
+            profile_repository.get_profiles_by_chat(chat_id)
+        )
 
         if not profiles:
 

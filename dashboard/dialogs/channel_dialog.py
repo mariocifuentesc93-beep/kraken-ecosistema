@@ -326,6 +326,7 @@ class ChannelDialog(QDialog):
 
         self.chkEnabled.setChecked(
             getattr(channel, "enabled", True)
+        )
     
     def get_channel_data(self):
 
@@ -397,4 +398,3 @@ class ChannelDialog(QDialog):
 
         super().accept()
 
-        

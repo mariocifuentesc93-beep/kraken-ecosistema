@@ -39,7 +39,6 @@ class ProfileMT5Repository:
             SELECT
                 a.*,
 
-                p.id                    AS profile_mt5_id,
                 p.priority,
                 p.enabled,
 

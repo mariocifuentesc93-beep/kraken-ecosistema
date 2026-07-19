@@ -102,7 +102,7 @@ class KrakenEngine:
             print("Kraken detenido.")
             return
 
-        signal_engine.process(
+        return signal_engine.process(
             signal=signal,
             profile=profile,
         )

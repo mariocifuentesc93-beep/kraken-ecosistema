@@ -1,4 +1,5 @@
 from datetime import datetime
+import uuid
 
 from models.operation import Operation
 from repositories.operation_repository import operation_repository
@@ -15,11 +16,19 @@ class SimulationEngine:
     # EJECUTAR SEÑAL
     # =====================================================
 
-    def execute(self, signal, account):
+    def execute(self, signal, profile, account, operation=None):
 
-        operation = Operation()
+        if operation is None:
+            operation = Operation(
+                operation_id=str(uuid.uuid4()),
+                signal=signal,
+                profile=profile,
+                account=account,
+            )
 
-        operation.signal_id = signal.id
+            operation_repository.add(operation)
+
+        operation.signal_id = getattr(signal, "id", None)
         operation.profile_id = signal.profile_id
 
         operation.telegram_account_id = getattr(
@@ -74,7 +83,7 @@ class SimulationEngine:
             "%Y-%m-%d %H:%M:%S"
         )
 
-        operation_repository.create(operation)
+        operation_repository.update(operation)
 
         log_repository.info(
             "SimulationEngine",
