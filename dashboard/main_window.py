@@ -33,7 +33,9 @@ from dashboard.pages.symbols_page import SymbolsPage
 from dashboard.pages.settings_page import SettingsPage
 from dashboard.pages.logs_page import LogsPage
 from dashboard.event_handlers import DashboardEventHandlers
+from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
+from version import APPLICATION_NAME, VERSION
 from core.config_service import load_active_config, get_execution_mode
 from database.database_manager import database_manager
 from engine.kraken_engine import kraken_engine
@@ -45,7 +47,7 @@ class MainWindow(QMainWindow):
 
         super().__init__()
 
-        self.setWindowTitle("Kraken Bot Enterprise")
+        self.setWindowTitle(APPLICATION_NAME)
 
         self.resize(1700, 1000)
 
@@ -103,6 +105,8 @@ class MainWindow(QMainWindow):
 
         self.actRestore = QAction("Restaurar", self)
 
+        self.actAbout = QAction("Acerca de", self)
+
         self.toolbar.addAction(self.actStart)
 
         self.toolbar.addAction(self.actStop)
@@ -127,6 +131,8 @@ class MainWindow(QMainWindow):
 
         self.toolbar.addAction(self.actSettings)
 
+        self.toolbar.addAction(self.actAbout)
+
     def build_statusbar(self):
 
         self.status = QStatusBar()
@@ -149,6 +155,8 @@ class MainWindow(QMainWindow):
 
         self.lblProfit = QLabel("Profit: 0")
 
+        self.lblVersion = QLabel(f"Versión {VERSION}")
+
         self.status.addPermanentWidget(self.lblMode)
 
         self.status.addPermanentWidget(self.lblTelegram)
@@ -164,6 +172,8 @@ class MainWindow(QMainWindow):
         self.status.addPermanentWidget(self.lblOperations)
 
         self.status.addPermanentWidget(self.lblProfit)
+
+        self.status.addPermanentWidget(self.lblVersion)
 
     def build_central(self):
 
@@ -350,6 +360,11 @@ class MainWindow(QMainWindow):
         self.actRestore.triggered.connect(
             self.restore_database
         )
+
+        self.actAbout.triggered.connect(self.show_about)
+
+    def show_about(self):
+        AboutDialog(self).exec()
 
     def initialize_state(self):
 

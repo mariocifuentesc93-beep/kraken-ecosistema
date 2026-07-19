@@ -5,7 +5,9 @@ import unittest
 from PySide6.QtWidgets import QApplication
 
 from dashboard.main_window import MainWindow
+from dashboard.dialogs.about_dialog import AboutDialog
 from engine.kraken_engine import kraken_engine
+from version import VERSION
 
 
 class StartupShutdownSmokeTest(unittest.TestCase):
@@ -14,6 +16,10 @@ class StartupShutdownSmokeTest(unittest.TestCase):
         window = MainWindow()
         window.show()
         app.processEvents()
+        self.assertIn(VERSION, window.lblVersion.text())
+        about = AboutDialog(window)
+        self.assertIn(VERSION, " ".join(label.text() for label in about.findChildren(type(window.lblVersion))))
+        about.close()
         window.close()
         app.processEvents()
         self.assertEqual(kraken_engine.status.name, "STOPPED")
