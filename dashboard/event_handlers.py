@@ -1,4 +1,5 @@
 from core.event_bus import event_bus
+from core.config_service import get_execution_mode
 
 
 class DashboardEventHandlers:
@@ -163,7 +164,7 @@ class DashboardEventHandlers:
 
         self.window.log("Kraken Engine iniciado")
 
-        self.window.set_mode("LIVE")
+        self.window.set_mode(get_execution_mode())
 
     def on_application_stopped(self, event):
 

@@ -24,7 +24,10 @@ class DatabaseManager:
 
             return self.connection
 
-        self.connection = sqlite3.connect(self.database)
+        self.connection = sqlite3.connect(
+            self.database,
+            check_same_thread=False,
+        )
 
         self.connection.row_factory = sqlite3.Row
 
@@ -121,6 +124,14 @@ class DatabaseManager:
         self.connection.close()
 
         self.connection = None
+
+    def backup(self, destination):
+        """Create a consistent SQLite backup, including pending WAL changes."""
+        target = sqlite3.connect(destination)
+        try:
+            self.connect().backup(target)
+        finally:
+            target.close()
 
 
 database_manager = DatabaseManager()

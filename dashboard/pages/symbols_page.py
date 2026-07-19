@@ -249,9 +249,7 @@ class SymbolsPage(QWidget):
 
         symbol.enabled = True
 
-        symbol_repository.update(
-            symbol
-        )
+        self._save_symbol(symbol)
 
         self.refresh()
 
@@ -267,9 +265,7 @@ class SymbolsPage(QWidget):
 
         symbol.enabled = False
 
-        symbol_repository.update(
-            symbol
-        )
+        self._save_symbol(symbol)
 
         self.refresh()
 
@@ -287,9 +283,7 @@ class SymbolsPage(QWidget):
 
             symbol.enabled = True
 
-            symbol_repository.update(
-                symbol
-            )
+            self._save_symbol(symbol)
 
         QMessageBox.information(
 
@@ -317,9 +311,7 @@ class SymbolsPage(QWidget):
 
             symbol.enabled = False
 
-            symbol_repository.update(
-                symbol
-            )
+            self._save_symbol(symbol)
 
         QMessageBox.information(
 
@@ -332,3 +324,17 @@ class SymbolsPage(QWidget):
         )
 
         self.refresh()
+
+    @staticmethod
+    def _save_symbol(symbol):
+        return symbol_repository.update(
+            symbol.id,
+            symbol.enabled,
+            symbol.mt5_symbol,
+            symbol.description,
+            symbol.aliases,
+            symbol.risk,
+            symbol.min_lot,
+            symbol.max_lot,
+            symbol.action,
+        )

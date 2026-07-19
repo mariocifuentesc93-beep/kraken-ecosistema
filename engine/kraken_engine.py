@@ -1,3 +1,5 @@
+import sys
+
 from engine.runtime import RuntimeStatus
 
 from engine.signal_engine import signal_engine
@@ -10,6 +12,10 @@ from core.events import (
     ApplicationStartedEvent,
     ApplicationStoppedEvent,
 )
+
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
 
 
 class KrakenEngine:

@@ -559,7 +559,7 @@ class MainWindow(QMainWindow):
             return
         try:
             database_manager.commit()
-            shutil.copy2(database_manager.database, Path(destination))
+            database_manager.backup(Path(destination))
             self.log(f"Respaldo creado: {destination}")
             self.notify("Respaldo de base de datos creado.")
         except OSError as error:
