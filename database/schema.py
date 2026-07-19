@@ -44,6 +44,10 @@ def create_tables(connection: sqlite3.Connection):
 
         fixed_lot REAL DEFAULT 0.10,
 
+        min_lot REAL DEFAULT 0.01,
+
+        max_lot REAL DEFAULT 100.0,
+
         max_daily_loss REAL DEFAULT 0,
 
         max_daily_profit REAL DEFAULT 0,
@@ -56,12 +60,37 @@ def create_tables(connection: sqlite3.Connection):
 
         execute_market INTEGER DEFAULT 1,
 
+        magic_number INTEGER DEFAULT 10001,
+
+        comment TEXT DEFAULT '',
+
+        deviation INTEGER DEFAULT 20,
+
         created_at TEXT,
 
         updated_at TEXT
 
     )
     """)
+
+    # Keep existing installations compatible with ProfileRepository, whose
+    # persisted Profile model includes these fields.
+    profile_columns = {
+        row[1]
+        for row in cursor.execute("PRAGMA table_info(profiles)")
+    }
+
+    for column, definition in {
+        "min_lot": "REAL DEFAULT 0.01",
+        "max_lot": "REAL DEFAULT 100.0",
+        "magic_number": "INTEGER DEFAULT 10001",
+        "comment": "TEXT DEFAULT ''",
+        "deviation": "INTEGER DEFAULT 20",
+    }.items():
+        if column not in profile_columns:
+            cursor.execute(
+                f"ALTER TABLE profiles ADD COLUMN {column} {definition}"
+            )
 
     # ==========================================================
     # TELEGRAM ACCOUNTS
