@@ -32,5 +32,17 @@ class TradingCalendarTests(unittest.TestCase):
         self.assertTrue(csv_file.exists() and excel_file.exists() and pdf_file.read_bytes().startswith(b"%PDF"))
         database_manager.close(); legacy=self.directory/"legacy.db"; sqlite3.connect(legacy).close(); database_manager.database=legacy; database_manager.initialize(); self.assertTrue(database_manager.table_exists("paper_trades"))
 
+    def test_deterministic_demo_data_and_safe_deletion(self):
+        self.assertTrue(trading_calendar_service.demo_allowed())
+        self.assertEqual(trading_calendar_service.load_demo(2024, 2), 16)
+        daily=trading_calendar_service.daily(2024, 2)
+        self.assertGreaterEqual(sum(bool(day["trades"]) for day in daily.values()), 15)
+        results={trade["result"] for day in daily.values() for trade in day["trades"]}
+        self.assertTrue({"TP1","TP2","TP3","SL"}.issubset(results))
+        self.assertEqual(daily[15]["closed"],2)
+        manual=self.trade(20, 7, "MANUAL")
+        self.assertEqual(trading_calendar_service.delete_demo(),16)
+        self.assertEqual(len(trading_calendar_service.records(2024,2,{"symbol":"MANUAL"})),1)
+
 
 if __name__=="__main__": unittest.main()

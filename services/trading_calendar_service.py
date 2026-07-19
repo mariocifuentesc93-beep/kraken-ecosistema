@@ -1,10 +1,15 @@
 import calendar
 import csv
+import json
+import os
 from datetime import datetime
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
 from database.database_manager import database_manager
+from models.profile import Profile
+from repositories.paper_trading_repository import paper_trading_repository
+from repositories.profile_repository import profile_repository
 
 
 class TradingCalendarService:
@@ -19,7 +24,7 @@ class TradingCalendarService:
         for row in operations:
             r=dict(row); rows.append({"id":f"O{r['id']}","date":r.get("closed_at") or r.get("opened_at"),"profile_id":r.get("profile_id"),"account_id":r.get("mt5_account_id"),"symbol":r.get("symbol"),"direction":r.get("direction"),"entry":r.get("entry_price"),"exit":r.get("exit_price"),"volume":r.get("volume"),"risk":0,"gross":r.get("profit",0) or 0,"costs":0,"net":r.get("profit",0) or 0,"result":r.get("result") or r.get("status"),"status":r.get("status"),"mode":str(r.get("mode") or "Simulation").title(),"source":r.get("source") or "Telegram","opened_at":r.get("opened_at"),"closed_at":r.get("closed_at")})
         for row in papers:
-            r=dict(row); rows.append({"id":f"P{r['id']}","date":r.get("closed_at") or r.get("opened_at"),"profile_id":r.get("profile_id"),"account_id":None,"symbol":r.get("symbol"),"direction":r.get("direction"),"entry":r.get("entry_price"),"exit":None,"volume":r.get("volume"),"risk":r.get("initial_risk",0),"gross":r.get("gross_pl",0),"costs":sum(r.get(k,0) or 0 for k in ("spread_cost","slippage_cost","commission_cost")),"net":r.get("net_pl",0),"result":r.get("status"),"status":r.get("status"),"mode":"Paper","source":"Telegram","opened_at":r.get("opened_at"),"closed_at":r.get("closed_at")})
+            r=dict(row); metadata=json.loads(r.get("metadata") or "{}"); rows.append({"id":f"P{r['id']}","date":r.get("closed_at") or r.get("opened_at"),"profile_id":r.get("profile_id"),"account_id":None,"symbol":r.get("symbol"),"direction":r.get("direction"),"entry":r.get("entry_price"),"exit":None,"volume":r.get("volume"),"risk":r.get("initial_risk",0),"gross":r.get("gross_pl",0),"costs":sum(r.get(k,0) or 0 for k in ("spread_cost","slippage_cost","commission_cost")),"net":r.get("net_pl",0),"result":metadata.get("result",r.get("status")),"status":r.get("status"),"mode":"Paper","source":metadata.get("source","Telegram"),"opened_at":r.get("opened_at"),"closed_at":r.get("closed_at")})
         return [r for r in rows if self._matches(r,filters)]
     @staticmethod
     def _matches(row,f):
@@ -41,6 +46,18 @@ class TradingCalendarService:
         return {"net":round(sum(values),2),"gross_profit":round(gross_profit,2),"gross_loss":round(gross_loss,2),"win_rate":round(len(wins)/len(closed)*100,2) if closed else 0,"profit_factor":round(gross_profit/abs(gross_loss),2) if gross_loss else 0,"total":len(closed),"wins":len(wins),"losses":len(losses),"average":round(sum(values)/len(values),2) if values else 0,"best_day":max(daily_values,default=0),"worst_day":min(daily_values,default=0),"drawdown":round(drawdown,2),"starting_balance":accounts[0],"ending_balance":accounts[1]}
     def annual_heatmap(self,year,filters=None):
         return {(month,day):value["net"] for month in range(1,13) for day,value in self.daily(year,month,filters).items() if value["closed"]}
+    def has_records(self):
+        return bool(database_manager.execute("SELECT 1 FROM operations LIMIT 1").fetchone() or database_manager.execute("SELECT 1 FROM paper_trades LIMIT 1").fetchone())
+    def demo_allowed(self): return not self.has_records() or os.getenv("KRAKEN_DEMO_MODE","").lower() in ("1","true","yes")
+    def load_demo(self, year, month):
+        profile=profile_repository.get_active() or profile_repository.create(Profile(name="Demo Calendar", execution_mode="PAPER", risk_percent=1, max_open_trades=3, max_daily_loss=100))
+        account=paper_trading_repository.account(profile.id); patterns=[(1,120,"TP3"),(2,-65,"SL"),(3,0,"CANCELLED"),(4,40,"TP1"),(5,-30,"SL"),(6,75,"TP2"),(7,15,"TP1"),(8,-20,"SL"),(9,0,"EXPIRED"),(10,90,"TP3"),(11,-45,"SL"),(12,25,"TP1"),(13,60,"TP2"),(14,-10,"SL"),(15,35,"TP1"),(15,18,"TP2")]
+        for index,(day,net,result) in enumerate(patterns):
+            key=f"demo-{year}-{month}-{index}"; opened=f"{year:04d}-{month:02d}-{day:02d} 09:30:00"; closed=f"{year:04d}-{month:02d}-{day:02d} 15:30:00"; costs=2.0
+            paper_trading_repository.create_trade({"paper_account_id":account["id"],"operation_id":None,"signal_key":key,"profile_id":profile.id,"symbol":"EMASVOL10" if index%2==0 else "LIONX25","direction":"BUY" if index%2==0 else "SELL","status":"CLOSED","volume":0.1,"remaining_volume":0,"entry_price":100,"stop_loss":90,"take_profits":[],"gross_pl":net+costs,"spread_cost":1,"slippage_cost":.5,"commission_cost":.5,"net_pl":net,"initial_risk":20,"margin_estimate":10,"opened_at":opened,"closed_at":closed,"duration_seconds":21600,"updated_at":closed,"metadata":{"demo":True,"result":result,"source":"Telegram"}})
+        return len(patterns)
+    def delete_demo(self):
+        cursor=database_manager.cursor(); cursor.execute("DELETE FROM paper_trades WHERE json_extract(metadata,'$.demo')=1"); database_manager.commit(); return cursor.rowcount
     def export_csv(self,rows,path):
         with Path(path).open("w",newline="",encoding="utf-8") as file:
             writer=csv.DictWriter(file,fieldnames=("date","id","symbol","direction","volume","gross","costs","net","result","mode","source","profile_id"),extrasaction="ignore"); writer.writeheader(); writer.writerows(rows)
