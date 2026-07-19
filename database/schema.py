@@ -570,6 +570,22 @@ def create_tables(connection: sqlite3.Connection):
     )
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_diagnostics(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER, status TEXT NOT NULL,
+        success INTEGER NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL,
+        FOREIGN KEY(account_id) REFERENCES telegram_accounts(id) ON DELETE SET NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_channel_validations(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, diagnostic_id INTEGER NOT NULL, channel_id INTEGER,
+        chat_id TEXT NOT NULL, title TEXT, accessible INTEGER NOT NULL, enabled INTEGER NOT NULL,
+        details TEXT NOT NULL, created_at TEXT NOT NULL,
+        FOREIGN KEY(diagnostic_id) REFERENCES telegram_diagnostics(id) ON DELETE CASCADE
+    )
+    """)
+
     # ==========================================================
     # DAILY STATISTICS
     # ==========================================================

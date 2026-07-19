@@ -4,13 +4,14 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox,
+    QTableWidgetItem, QHeaderView, QMessageBox, QFileDialog, QInputDialog, QLineEdit,
 )
 
 from dashboard.dialogs.telegram_account_dialog import TelegramAccountDialog
 from models.telegram_account import TelegramAccount
 from repositories.telegram_account_repository import telegram_account_repository
 from telegram.account_manager import telegram_account_manager
+from services.telegram_diagnostics import telegram_diagnostics
 
 
 class TelegramAccountsPage(QWidget):
@@ -26,10 +27,17 @@ class TelegramAccountsPage(QWidget):
         self.btn_new = QPushButton("Nueva")
         self.btn_edit = QPushButton("Editar")
         self.btn_delete = QPushButton("Eliminar")
-        self.btn_login = QPushButton("Iniciar sesión")
-        self.btn_logout = QPushButton("Cerrar sesión")
+        self.btn_login = QPushButton("Probar conexión")
+        self.btn_start_auth = QPushButton("Iniciar autorización")
+        self.btn_verify_auth = QPushButton("Verificar código")
+        self.btn_logout = QPushButton("Desconectar")
+        self.btn_delete_session = QPushButton("Eliminar sesión local")
+        self.btn_export_json = QPushButton("Exportar JSON")
+        self.btn_export_text = QPushButton("Exportar TXT")
         self.btn_refresh = QPushButton("Actualizar")
-        for button in (self.btn_new, self.btn_edit, self.btn_delete, self.btn_login, self.btn_logout):
+        for button in (self.btn_new, self.btn_edit, self.btn_delete, self.btn_login,
+                       self.btn_start_auth, self.btn_verify_auth, self.btn_logout,
+                       self.btn_delete_session, self.btn_export_json, self.btn_export_text):
             toolbar.addWidget(button)
         toolbar.addStretch()
         toolbar.addWidget(self.btn_refresh)
@@ -50,7 +58,13 @@ class TelegramAccountsPage(QWidget):
         self.btn_delete.clicked.connect(self.delete_account)
         self.btn_refresh.clicked.connect(self.refresh)
         self.btn_login.clicked.connect(self.login)
+        self.btn_start_auth.clicked.connect(self.start_authorization)
+        self.btn_verify_auth.clicked.connect(self.verify_authorization)
         self.btn_logout.clicked.connect(self.logout)
+        self.btn_delete_session.clicked.connect(self.delete_local_session)
+        self.btn_export_json.clicked.connect(lambda: self.export_diagnostic("json"))
+        self.btn_export_text.clicked.connect(lambda: self.export_diagnostic("text"))
+        self.last_diagnostic = None
 
     def refresh(self):
         telegram_account_manager.reload()
@@ -135,28 +149,36 @@ class TelegramAccountsPage(QWidget):
             QMessageBox.warning(self, "Telegram", "Seleccione una cuenta.")
             return
         try:
-            connected, authorized, message = self._run(
-                telegram_account_manager.test_connection(account.id)
-            )
-            account.connected = connected
-            account.authorized = authorized
-            account.last_error = "" if connected else message
-            account.updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            telegram_account_repository.update(account)
-            if not connected:
-                QMessageBox.critical(self, "Telegram", f"No se pudo conectar: {message}")
-                self.refresh()
-                return
-            message = "Cuenta conectada y autenticada." if account.authorized else (
-                "Cuenta conectada. Complete la autenticación de Telethon para continuar."
-            )
-            QMessageBox.information(self, "Telegram", message)
+            self.last_diagnostic = self._run(telegram_diagnostics.test_connection(account))
+            self._show_diagnostic(self.last_diagnostic)
         except Exception as error:
-            account.connected = False
-            account.authorized = False
-            account.last_error = str(error)
-            telegram_account_repository.update(account)
-            QMessageBox.critical(self, "Telegram", f"No se pudo iniciar sesión: {error}")
+            QMessageBox.critical(self, "Telegram", f"No se pudo ejecutar diagnóstico: {error}")
+        self.refresh()
+
+    def start_authorization(self):
+        account = self.selected_account()
+        if account is None:
+            QMessageBox.warning(self, "Telegram", "Seleccione una cuenta.")
+            return
+        self.last_diagnostic = self._run(telegram_diagnostics.start_authorization(account))
+        self._show_diagnostic(self.last_diagnostic)
+        self.refresh()
+
+    def verify_authorization(self):
+        account = self.selected_account()
+        if account is None:
+            QMessageBox.warning(self, "Telegram", "Seleccione una cuenta.")
+            return
+        code, accepted = QInputDialog.getText(self, "Código Telegram", "Código recibido:")
+        if not accepted or not code:
+            return
+        report = self._run(telegram_diagnostics.verify_code(account, code))
+        if report["status"] == telegram_diagnostics.PASSWORD_REQUIRED:
+            password, accepted = QInputDialog.getText(self, "Contraseña Telegram", "Contraseña de dos pasos:", QLineEdit.Password)
+            if accepted and password:
+                report = self._run(telegram_diagnostics.verify_code(account, code, password))
+        self.last_diagnostic = report
+        self._show_diagnostic(report)
         self.refresh()
 
     def logout(self):
@@ -165,14 +187,39 @@ class TelegramAccountsPage(QWidget):
             QMessageBox.warning(self, "Telegram", "Seleccione una cuenta.")
             return
         try:
-            self._run(telegram_account_manager.disconnect(account.id))
-            account.connected = False
-            account.authorized = False
-            account.updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            telegram_account_repository.update(account)
-            QMessageBox.information(self, "Telegram", "Sesión cerrada.")
+            self.last_diagnostic = self._run(telegram_diagnostics.disconnect(account))
+            self._show_diagnostic(self.last_diagnostic)
         except Exception as error:
-            account.last_error = str(error)
-            telegram_account_repository.update(account)
             QMessageBox.critical(self, "Telegram", f"No se pudo cerrar sesión: {error}")
         self.refresh()
+
+    def delete_local_session(self):
+        account = self.selected_account()
+        if account is None:
+            QMessageBox.warning(self, "Telegram", "Seleccione una cuenta.")
+            return
+        if QMessageBox.question(self, "Eliminar sesión", "¿Eliminar el archivo local de sesión?", QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return
+        self.last_diagnostic = self._run(telegram_diagnostics.delete_local_session(account))
+        self._show_diagnostic(self.last_diagnostic)
+        self.refresh()
+
+    def export_diagnostic(self, report_type):
+        if not self.last_diagnostic:
+            QMessageBox.warning(self, "Telegram", "Primero ejecute una prueba de conexión.")
+            return
+        suffix = "json" if report_type == "json" else "txt"
+        path, _ = QFileDialog.getSaveFileName(self, "Exportar diagnóstico", f"telegram_diagnostic.{suffix}")
+        if path:
+            (telegram_diagnostics.export_json if report_type == "json" else telegram_diagnostics.export_text)(self.last_diagnostic, path)
+            QMessageBox.information(self, "Telegram", "Diagnóstico exportado correctamente.")
+
+    def _show_diagnostic(self, report):
+        message = (f"Estado: {report['status']}\nConectado: {report['connected']}\n"
+                   f"Autorizado: {report['authorized']}\nUsuario: {report['username']}\n"
+                   f"Teléfono: {report['phone_masked']}\nCanales: {sum(row['accessible'] for row in report['channels'])}/{len(report['channels'])}\n\n"
+                   f"{report['last_error']}")
+        if report["success"]:
+            QMessageBox.information(self, "Diagnóstico Telegram", message)
+        else:
+            QMessageBox.warning(self, "Diagnóstico Telegram", message)
