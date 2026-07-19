@@ -38,6 +38,7 @@ from dashboard.pages.market_data_page import MarketDataPage
 from dashboard.pages.live_readiness_page import LiveReadinessPage
 from dashboard.pages.paper_trading_page import PaperTradingPage
 from dashboard.pages.trading_calendar_page import TradingCalendarPage
+from dashboard.pages.analytics_page import AnalyticsPage
 from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
@@ -231,6 +232,8 @@ class MainWindow(QMainWindow):
 
             "Calendario de Trading",
 
+            "Analíticas",
+
             "Configuración"
 
         ]
@@ -279,6 +282,8 @@ class MainWindow(QMainWindow):
 
         self.tradingCalendarPage = TradingCalendarPage()
 
+        self.analyticsPage = AnalyticsPage()
+
         self.settingsPage = SettingsPage()
 
         self.stack.addWidget(self.dashboardPage)
@@ -310,6 +315,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.paperTradingPage)
 
         self.stack.addWidget(self.tradingCalendarPage)
+
+        self.stack.addWidget(self.analyticsPage)
 
         self.stack.addWidget(self.settingsPage)
 
@@ -619,7 +626,7 @@ class MainWindow(QMainWindow):
                          self.profilesPage, self.mt5Page, self.telegramPage,
                          self.channelsPage, self.symbolsPage, self.logsPage,
                          self.signalInspectorPage, self.tradeTimelinePage,
-                         self.marketDataPage, self.liveReadinessPage, self.paperTradingPage, self.tradingCalendarPage, self.settingsPage):
+                         self.marketDataPage, self.liveReadinessPage, self.paperTradingPage, self.tradingCalendarPage, self.analyticsPage, self.settingsPage):
                 refresh = getattr(page, "refresh", None)
                 if callable(refresh):
                     refresh()
