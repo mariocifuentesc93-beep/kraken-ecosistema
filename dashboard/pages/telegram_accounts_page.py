@@ -135,14 +135,18 @@ class TelegramAccountsPage(QWidget):
             QMessageBox.warning(self, "Telegram", "Seleccione una cuenta.")
             return
         try:
-            client = self._run(telegram_account_manager.connect(account.id))
-            if client is None:
-                raise RuntimeError("No se pudo crear el cliente de Telegram.")
-            account.connected = client.is_connected()
-            account.authorized = self._run(client.is_user_authorized())
-            account.last_error = ""
+            connected, authorized, message = self._run(
+                telegram_account_manager.test_connection(account.id)
+            )
+            account.connected = connected
+            account.authorized = authorized
+            account.last_error = "" if connected else message
             account.updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             telegram_account_repository.update(account)
+            if not connected:
+                QMessageBox.critical(self, "Telegram", f"No se pudo conectar: {message}")
+                self.refresh()
+                return
             message = "Cuenta conectada y autenticada." if account.authorized else (
                 "Cuenta conectada. Complete la autenticación de Telethon para continuar."
             )

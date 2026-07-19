@@ -152,21 +152,41 @@ class TelegramAccountManager:
     # CICLO DE VIDA
     # ==========================================================
 
-    async def connect(self, account_id=None):
+    async def connect(self, account_id=None, timeout=10, retries=2):
 
         client = self.get_client(account_id)
 
         if client is None:
 
-            return None
+            raise ValueError("No existe una cuenta Telegram habilitada.")
 
-        if not client.is_connected():
+        for attempt in range(retries + 1):
+            try:
+                if not client.is_connected():
+                    await asyncio.wait_for(client.connect(), timeout=timeout)
+                return client
+            except (asyncio.TimeoutError, OSError) as error:
+                if attempt == retries:
+                    raise ConnectionError(f"Telegram no respondió: {error}") from error
+                await asyncio.sleep(0.25 * (attempt + 1))
 
-            await client.connect()
+    async def test_connection(self, account_id=None, timeout=10, retries=2):
+        account = self.get_account(account_id)
+        if account is None or not account.api_id or not account.api_hash or not account.phone:
+            return False, False, "Faltan API ID, API hash o teléfono de Telegram."
+        try:
+            client = await self.connect(account_id, timeout, retries)
+            authorized = await asyncio.wait_for(
+                client.is_user_authorized(), timeout=timeout
+            )
+            return True, bool(authorized), (
+                "Cuenta Telegram autorizada."
+                if authorized else "La cuenta no está autorizada; complete la autorización de Telethon."
+            )
+        except (ConnectionError, asyncio.TimeoutError, OSError) as error:
+            return False, False, str(error)
 
-        return client
-
-    async def disconnect(self, account_id=None):
+    async def disconnect(self, account_id=None, timeout=10):
 
         client = self.get_client(account_id)
 
@@ -176,7 +196,7 @@ class TelegramAccountManager:
 
         if client.is_connected():
 
-            await client.disconnect()
+            await asyncio.wait_for(client.disconnect(), timeout=timeout)
 
     async def disconnect_all(self):
         for client in list(self.clients.values()):

@@ -39,6 +39,7 @@ from version import APPLICATION_NAME, VERSION
 from core.config_service import load_active_config, get_execution_mode
 from database.database_manager import database_manager
 from engine.kraken_engine import kraken_engine
+from utils.live_readiness import live_mode_issues
 
 
 class MainWindow(QMainWindow):
@@ -341,9 +342,7 @@ class MainWindow(QMainWindow):
             lambda: self.set_mode("SIMULATION")
         )
 
-        self.actLive.triggered.connect(
-            lambda: self.set_mode("LIVE")
-        )
+        self.actLive.triggered.connect(self.enable_live_mode)
 
         self.actRefresh.triggered.connect(
             self.refresh_all
@@ -530,6 +529,15 @@ class MainWindow(QMainWindow):
         if not load_active_config():
             QMessageBox.warning(self, "Kraken Engine", "No hay un perfil activo. Active un perfil antes de iniciar el motor.")
             return
+        if get_execution_mode() == "LIVE":
+            issues = live_mode_issues()
+            if issues:
+                QMessageBox.warning(
+                    self,
+                    "LIVE bloqueado",
+                    "No se puede iniciar LIVE:\n\n- " + "\n- ".join(issues),
+                )
+                return
         try:
             kraken_engine.start()
             self.set_mode(get_execution_mode())
@@ -546,6 +554,20 @@ class MainWindow(QMainWindow):
         except Exception as error:
             self.log(f"Error al detener Kraken Engine: {error}")
             QMessageBox.critical(self, "Kraken Engine", f"No se pudo detener el motor: {error}")
+
+    def enable_live_mode(self):
+        if not load_active_config():
+            QMessageBox.warning(self, "LIVE bloqueado", "No hay un perfil activo.")
+            return
+        issues = live_mode_issues()
+        if issues:
+            QMessageBox.warning(
+                self,
+                "LIVE bloqueado",
+                "Complete la preparación de conectividad:\n\n- " + "\n- ".join(issues),
+            )
+            return
+        self.set_mode("LIVE")
 
     def refresh_all(self):
         try:

@@ -124,7 +124,10 @@ class MT5AccountsPage(QWidget):
                 account.server,
                 account.login,
                 account.server,
-                "🟢" if account.enabled else "🔴",
+                "🟢" if (
+                    mt5_connector.current_account == account.login
+                    and mt5_connector.is_connected()
+                ) else "🔴",
                 f"{getattr(account,'balance',0):,.2f}",
                 f"{getattr(account,'equity',0):,.2f}",
                 account.magic_number,
@@ -233,11 +236,11 @@ class MT5AccountsPage(QWidget):
 
             return
 
-        connected = mt5_connector.login(account)
+        connected, message = mt5_connector.test_connection(account)
 
         if connected:
 
-            info = mt5_connector.account_info()
+            info = mt5_connector.get_account_info()
 
             if info:
 
@@ -266,7 +269,7 @@ class MT5AccountsPage(QWidget):
 
                 "MT5",
 
-                "No fue posible conectar con la cuenta.",
+                f"No fue posible conectar con la cuenta:\n{message}",
 
             )
 
