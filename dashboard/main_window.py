@@ -35,12 +35,14 @@ from dashboard.pages.logs_page import LogsPage
 from dashboard.pages.signal_inspector_page import SignalInspectorPage
 from dashboard.pages.trade_timeline_page import TradeTimelinePage
 from dashboard.pages.market_data_page import MarketDataPage
+from dashboard.pages.live_readiness_page import LiveReadinessPage
 from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
 from version import APPLICATION_NAME, VERSION
 from core.config_service import load_active_config, get_execution_mode
 from database.database_manager import database_manager
+from repositories.settings_repository import settings_repository
 from engine.kraken_engine import kraken_engine
 from utils.live_readiness import live_mode_issues
 
@@ -221,6 +223,8 @@ class MainWindow(QMainWindow):
 
             "Datos de mercado",
 
+            "Certificación LIVE",
+
             "Configuración"
 
         ]
@@ -263,6 +267,8 @@ class MainWindow(QMainWindow):
 
         self.marketDataPage = MarketDataPage()
 
+        self.liveReadinessPage = LiveReadinessPage()
+
         self.settingsPage = SettingsPage()
 
         self.stack.addWidget(self.dashboardPage)
@@ -288,6 +294,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.tradeTimelinePage)
 
         self.stack.addWidget(self.marketDataPage)
+
+        self.stack.addWidget(self.liveReadinessPage)
 
         self.stack.addWidget(self.settingsPage)
 
@@ -595,7 +603,9 @@ class MainWindow(QMainWindow):
             load_active_config()
             for page in (self.dashboardPage, self.operationsPage, self.statisticsPage,
                          self.profilesPage, self.mt5Page, self.telegramPage,
-                         self.channelsPage, self.symbolsPage, self.logsPage, self.settingsPage):
+                         self.channelsPage, self.symbolsPage, self.logsPage,
+                         self.signalInspectorPage, self.tradeTimelinePage,
+                         self.marketDataPage, self.liveReadinessPage, self.settingsPage):
                 refresh = getattr(page, "refresh", None)
                 if callable(refresh):
                     refresh()
@@ -624,6 +634,7 @@ class MainWindow(QMainWindow):
         try:
             database_manager.commit()
             database_manager.backup(Path(destination))
+            settings_repository.set("last_backup_path", str(Path(destination).resolve()))
             self.log(f"Respaldo creado: {destination}")
             self.notify("Respaldo de base de datos creado.")
         except OSError as error:
