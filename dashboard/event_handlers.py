@@ -228,7 +228,7 @@ class DashboardEventHandlers:
     # =====================================================
 
     def on_profit_updated(self, event):
-        value = float(event)
+        value = float(getattr(event, "profit", event))
 
         self.window.update_profit(value)
 

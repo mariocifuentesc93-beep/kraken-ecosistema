@@ -16,8 +16,6 @@ class Operation:
 
     id: Optional[int] = None
 
-    operation_id: str = ""
-
     signal: Optional[Signal] = None
 
     profile: Optional[Profile] = None

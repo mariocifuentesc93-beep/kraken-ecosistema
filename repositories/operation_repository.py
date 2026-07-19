@@ -12,12 +12,12 @@ class OperationRepository:
         cursor.execute(
             """
             INSERT INTO operations (
-                operation_id, signal_id, profile_id, mt5_account_id,
+                signal_id, profile_id, mt5_account_id,
                 ticket, magic, symbol, direction, volume, entry_price,
                 exit_price, stop_loss, take_profit, profit, result, status,
                 rr, partial_closed, break_even, trailing_stop,
                 opened_at, closed_at, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             self._values(operation),
         )
@@ -33,28 +33,24 @@ class OperationRepository:
         cursor.execute(
             """
             SELECT * FROM operations
-            WHERE operation_id=? OR CAST(id AS TEXT)=?
+            WHERE id=?
             LIMIT 1
             """,
-            (str(operation_id), str(operation_id)),
+            (int(operation_id),),
         )
         row = cursor.fetchone()
         return self._to_operation(row) if row else None
 
     def update(self, operation: Operation):
         if not operation.id:
-            existing = self.get(operation.operation_id)
-            if existing:
-                operation.id = existing.id
-            else:
-                return self.create(operation)
+            return self.create(operation)
 
         cursor = database_manager.cursor()
         cursor.execute(
             """
             UPDATE operations SET
-                operation_id=?, signal_id=?, profile_id=?, mt5_account_id=?,
-                ticket=?, magic=?, symbol=?, direction=?, volume=?,
+                signal_id=?, profile_id=?, mt5_account_id=?, ticket=?, magic=?,
+                symbol=?, direction=?, volume=?,
                 entry_price=?, exit_price=?, stop_loss=?, take_profit=?,
                 profit=?, result=?, status=?, rr=?, partial_closed=?,
                 break_even=?, trailing_stop=?, opened_at=?, closed_at=?,
@@ -69,8 +65,8 @@ class OperationRepository:
     def remove(self, operation_id):
         cursor = database_manager.cursor()
         cursor.execute(
-            "DELETE FROM operations WHERE operation_id=? OR CAST(id AS TEXT)=?",
-            (str(operation_id), str(operation_id)),
+            "DELETE FROM operations WHERE id=?",
+            (int(operation_id),),
         )
         database_manager.commit()
         return cursor.rowcount > 0
@@ -191,7 +187,6 @@ class OperationRepository:
 
     def _values(self, operation):
         return (
-            operation.operation_id or None,
             getattr(operation, "signal_id", None) or getattr(operation.signal, "id", None),
             operation.profile_id,
             operation.mt5_account_id,
@@ -220,7 +215,6 @@ class OperationRepository:
     def _to_operation(row):
         return Operation(
             id=row["id"],
-            operation_id=row["operation_id"] or str(row["id"]),
             profile_id=row["profile_id"],
             mt5_account_id=row["mt5_account_id"],
             ticket=row["ticket"],

@@ -418,8 +418,6 @@ def create_tables(connection: sqlite3.Connection):
 
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-        operation_id TEXT,
-
         signal_id INTEGER,
 
         profile_id INTEGER,
@@ -478,10 +476,6 @@ def create_tables(connection: sqlite3.Connection):
 
     )
     """)
-
-    _ensure_columns(cursor, "operations", {
-        "operation_id": "TEXT",
-    })
 
     cursor.execute("""
     CREATE INDEX IF NOT EXISTS idx_operations_profile

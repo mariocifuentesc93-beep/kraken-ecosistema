@@ -1,5 +1,4 @@
 from datetime import datetime
-import uuid
 
 from models.operation import Operation
 from repositories.operation_repository import operation_repository
@@ -20,7 +19,6 @@ class SimulationEngine:
 
         if operation is None:
             operation = Operation(
-                operation_id=str(uuid.uuid4()),
                 signal=signal,
                 profile=profile,
                 account=account,
