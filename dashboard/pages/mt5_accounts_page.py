@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
 
 from repositories.mt5_account_repository import mt5_account_repository
 from mt5.connector import mt5_connector
+from models.mt5_account import MT5Account
+from dashboard.dialogs.mt5_account_dialog import MT5AccountDialog
 
 
 class MT5AccountsPage(QWidget):
@@ -95,6 +97,12 @@ class MT5AccountsPage(QWidget):
             self.refresh
         )
 
+        self.btn_new.clicked.connect(self.new_account)
+
+        self.btn_edit.clicked.connect(self.edit_account)
+
+        self.btn_delete.clicked.connect(self.delete_account)
+
         self.btn_test.clicked.connect(
             self.test_connection
         )
@@ -156,6 +164,58 @@ class MT5AccountsPage(QWidget):
         return mt5_account_repository.get_by_id(
             account_id
         )
+
+    def _apply_dialog_data(self, account, data):
+        account.name = data["name"]
+        account.login = int(data["login"])
+        account.password = data["password"]
+        account.server = data["server"]
+        account.terminal_path = data["terminal_path"]
+        account.active = data["enabled"]
+        account.auto_connect = data["auto_reconnect"]
+        account.execution_mode = data["environment"]
+        account.deviation = data["deviation"]
+        return account
+
+    def new_account(self):
+        dialog = MT5AccountDialog(parent=self)
+        if dialog.exec():
+            try:
+                mt5_account_repository.create(
+                    self._apply_dialog_data(MT5Account(), dialog.get_account_data())
+                )
+                self.refresh()
+            except (TypeError, ValueError) as error:
+                QMessageBox.critical(self, "MT5", f"No se pudo guardar la cuenta: {error}")
+
+    def edit_account(self):
+        account = self.selected_account()
+        if account is None:
+            QMessageBox.warning(self, "MT5", "Seleccione una cuenta.")
+            return
+        dialog = MT5AccountDialog(account=account, parent=self)
+        if dialog.exec():
+            try:
+                mt5_account_repository.update(
+                    self._apply_dialog_data(account, dialog.get_account_data())
+                )
+                self.refresh()
+            except (TypeError, ValueError) as error:
+                QMessageBox.critical(self, "MT5", f"No se pudo actualizar la cuenta: {error}")
+
+    def delete_account(self):
+        account = self.selected_account()
+        if account is None:
+            QMessageBox.warning(self, "MT5", "Seleccione una cuenta.")
+            return
+        if QMessageBox.question(
+            self,
+            "Eliminar cuenta MT5",
+            f"¿Desea eliminar '{account.name}'?",
+            QMessageBox.Yes | QMessageBox.No,
+        ) == QMessageBox.Yes:
+            mt5_account_repository.delete(account.id)
+            self.refresh()
 
     # ======================================================
 

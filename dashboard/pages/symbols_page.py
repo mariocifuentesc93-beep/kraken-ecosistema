@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from repositories.profile_repository import profile_repository
 from repositories.symbol_repository import symbol_repository
+from config.symbols import get_mt5_symbol, get_symbols
 
 
 class SymbolsPage(QWidget):
@@ -159,9 +160,23 @@ class SymbolsPage(QWidget):
 
         profile_id = self.cbo_profile.currentData()
 
-        symbols = symbol_repository.get_all(
-            profile_id
-        )
+        symbols = symbol_repository.get_all(profile_id)
+
+        if not symbols:
+            for name in get_symbols():
+                symbol_repository.create(
+                    profile_id,
+                    True,
+                    name,
+                    get_mt5_symbol(name) or name,
+                    "",
+                    "",
+                    1.0,
+                    0.01,
+                    100.0,
+                    "trade",
+                )
+            symbols = symbol_repository.get_all(profile_id)
 
         self.table.setRowCount(
             len(symbols)

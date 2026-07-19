@@ -33,6 +33,9 @@ class MT5AccountDialog(QDialog):
 
         self.build_ui()
 
+        if account is not None:
+            self.load_account(account)
+
     # ---------------------------------------------------------
 
     def build_ui(self):
@@ -369,11 +372,11 @@ class MT5AccountDialog(QDialog):
         )
 
         self.chkEnabled.setChecked(
-            getattr(account, "enabled", True)
+            getattr(account, "active", True)
         )
 
         self.cboEnvironment.setCurrentText(
-            getattr(account, "environment", "LIVE")
+            getattr(account, "execution_mode", "LIVE")
         )
 
         self.spnSlippage.setValue(

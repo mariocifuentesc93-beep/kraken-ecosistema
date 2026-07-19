@@ -13,6 +13,8 @@ from engine.kraken_engine import kraken_engine
 from models.profile import Profile
 from repositories.profile_repository import profile_repository
 from repositories.symbol_repository import symbol_repository
+from repositories.mt5_account_repository import mt5_account_repository
+from models.mt5_account import MT5Account
 
 
 class ActiveWorkflowSmokeTests(unittest.TestCase):
@@ -78,9 +80,20 @@ class ActiveWorkflowSmokeTests(unittest.TestCase):
         )
         window.symbolsPage.load_profiles()
         window.symbolsPage.refresh()
-        window.symbolsPage.table.selectRow(0)
+        symbol_row = next(
+            row for row in range(window.symbolsPage.table.rowCount())
+            if window.symbolsPage.table.item(row, 1).text() == "EURUSD"
+        )
+        window.symbolsPage.table.selectRow(symbol_row)
         window.symbolsPage.disable_symbol()
         self.assertFalse(symbol_repository.get_by_id(symbol_id).enabled)
+
+        mt5_account = MT5Account(
+            name="Workflow MT5", login=123456, password="secret", server="Broker"
+        )
+        mt5_account_repository.create(mt5_account)
+        window.mt5Page.refresh()
+        self.assertEqual(window.mt5Page.table.rowCount(), 1)
         window.close()
 
     def test_database_backup_restore_integrity(self):
