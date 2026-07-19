@@ -50,7 +50,8 @@ from database.database_manager import database_manager
 from repositories.settings_repository import settings_repository
 from engine.kraken_engine import kraken_engine
 from utils.live_readiness import live_mode_issues
-from dashboard.ui_theme import NEGATIVE, POSITIVE, WARNING, application_style, status_chip
+from dashboard.ui_theme import (NEGATIVE, POSITIVE, WARNING, application_style,
+                                apply_terminal_palette, configure_active_tables, status_chip)
 from dashboard.branding import application_icon, logo_pixmap
 from repositories.profile_repository import profile_repository
 
@@ -65,6 +66,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(application_icon())
 
         self.resize(1600, 900)
+        apply_terminal_palette()
         self.setStyleSheet(application_style())
 
         self.build_ui()
@@ -76,6 +78,7 @@ class MainWindow(QMainWindow):
         self.build_statusbar()
                 
         self.build_central()
+        configure_active_tables(self)
 
         self.build_console()
 

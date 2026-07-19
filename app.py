@@ -6,12 +6,15 @@ from dashboard.main_window import MainWindow
 from utils.application_lifecycle import shutdown_application
 from utils.startup_validation import get_setup_warnings, validate_startup
 from dashboard.branding import application_icon, splash_pixmap
+from dashboard.ui_theme import apply_terminal_palette, application_style
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Kraken Bot Enterprise")
     app.setWindowIcon(application_icon())
+    apply_terminal_palette(app)
+    app.setStyleSheet(application_style())
     splash = QSplashScreen(splash_pixmap())
     splash.show()
     app.processEvents()
