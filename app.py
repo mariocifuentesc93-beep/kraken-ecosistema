@@ -1,14 +1,20 @@
 import sys
 
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QSplashScreen
 
 from dashboard.main_window import MainWindow
 from utils.application_lifecycle import shutdown_application
 from utils.startup_validation import get_setup_warnings, validate_startup
+from dashboard.branding import application_icon, splash_pixmap
 
 
 def main():
     app = QApplication(sys.argv)
+    app.setApplicationName("Kraken Bot Enterprise")
+    app.setWindowIcon(application_icon())
+    splash = QSplashScreen(splash_pixmap())
+    splash.show()
+    app.processEvents()
     app.aboutToQuit.connect(shutdown_application)
     errors = validate_startup()
     if errors:
@@ -29,6 +35,7 @@ def main():
         )
 
     window = MainWindow()
+    splash.finish(window)
     window.show()
     try:
         return app.exec()

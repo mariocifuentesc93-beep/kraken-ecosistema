@@ -21,7 +21,7 @@ class UiRedesignSmokeTests(unittest.TestCase):
         from dashboard.main_window import MainWindow
         window=MainWindow()
         for width,height in ((1366,768),(1600,900)):
-            window.resize(width,height); window.show(); self.app.processEvents(); self.assertFalse(window.grab().isNull()); self.assertGreaterEqual(window.menu.width(),270); self.assertEqual(window.menu.count(),17)
+            window.resize(width,height); window.show(); self.app.processEvents(); self.assertFalse(window.grab().isNull()); self.assertGreaterEqual(window.menu.width(),270); self.assertEqual(window.menu.count(),18)
         self.assertIn("Perfil",window.topProfile.text()); window.close()
     def test_dashboard_demo_and_status_chips(self):
         from dashboard.main_window import MainWindow

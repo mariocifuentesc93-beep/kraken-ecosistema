@@ -51,6 +51,7 @@ from repositories.settings_repository import settings_repository
 from engine.kraken_engine import kraken_engine
 from utils.live_readiness import live_mode_issues
 from dashboard.ui_theme import NEGATIVE, POSITIVE, WARNING, application_style, status_chip
+from dashboard.branding import application_icon, logo_pixmap
 from repositories.profile_repository import profile_repository
 
 
@@ -61,6 +62,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle(APPLICATION_NAME)
+        self.setWindowIcon(application_icon())
 
         self.resize(1600, 900)
         self.setStyleSheet(application_style())
@@ -218,11 +220,13 @@ class MainWindow(QMainWindow):
         sidebar.setMaximumWidth(310)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(10, 14, 10, 10)
-        brand = QLabel("KRAKEN BOT\nENTERPRISE")
-        brand.setStyleSheet("font-size:18px;font-weight:800;color:#00C853;padding:8px;")
+        brand = QLabel(); brand.setPixmap(logo_pixmap(52)); brand.setToolTip("Kraken Bot Enterprise"); brand.setFixedSize(62, 62); brand.setScaledContents(True)
+        brand_name = QLabel("KRAKEN BOT\nENTERPRISE")
+        brand_name.setStyleSheet("font-size:18px;font-weight:800;color:#00C853;padding:8px;")
+        brand_row = QHBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.addWidget(brand); brand_row.addWidget(brand_name); brand_row.addStretch()
         section = QLabel("OPERACIÓN  ·  DATOS  ·  SISTEMA")
         section.setStyleSheet("color:#B0BEC5;font-size:10px;padding:0 8px 6px 8px;")
-        sidebar_layout.addWidget(brand)
+        sidebar_layout.addLayout(brand_row)
         sidebar_layout.addWidget(section)
         self.menu = QListWidget()
         self.menu.setToolTip("Navegación principal")

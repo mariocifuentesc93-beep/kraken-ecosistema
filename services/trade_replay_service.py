@@ -49,7 +49,7 @@ class TradeReplayService:
     def state_index(events,state): return next((index for index,event in enumerate(events) if event["state"]==state),-1)
     def export_json(self,session,path): Path(path).write_text(json.dumps(session,indent=2,ensure_ascii=False,default=str),encoding="utf-8")
     def export_pdf(self,session,path):
-        text=f"Kraken Bot Replay | {session['date']} | {len(session['events'])} events"; content=f"BT /F1 12 Tf 50 750 Td ({text}) Tj ET"; pdf=f"%PDF-1.4\n1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n2 0 obj<< /Type /Pages /Kids[3 0 R] /Count 1 >>endobj\n3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox[0 0 612 792] /Resources<< /Font<< /F1 4 0 R >> >> /Contents 5 0 R >>endobj\n4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n5 0 obj<< /Length {len(content)} >>stream\n{content}\nendstream endobj\ntrailer<< /Root 1 0 R >>\n%%EOF"; Path(path).write_bytes(pdf.encode("latin-1","replace"))
+        text=f"Kraken Bot Enterprise | Replay | {session['date']} | {len(session['events'])} events"; content=f"BT /F1 12 Tf 50 750 Td ({text}) Tj ET"; pdf=f"%PDF-1.4\n1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n2 0 obj<< /Type /Pages /Kids[3 0 R] /Count 1 >>endobj\n3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox[0 0 612 792] /Resources<< /Font<< /F1 4 0 R >> >> /Contents 5 0 R >>endobj\n4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n5 0 obj<< /Length {len(content)} >>stream\n{content}\nendstream endobj\ntrailer<< /Root 1 0 R >>\n%%EOF"; Path(path).write_bytes(pdf.encode("latin-1","replace"))
 
 
 trade_replay_service=TradeReplayService()
