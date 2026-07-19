@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QFileDialog,
     QMessageBox,
+    QStyle,
 )
 
 from dashboard.pages.dashboard_page import DashboardPage
@@ -48,6 +49,8 @@ from database.database_manager import database_manager
 from repositories.settings_repository import settings_repository
 from engine.kraken_engine import kraken_engine
 from utils.live_readiness import live_mode_issues
+from dashboard.ui_theme import NEGATIVE, POSITIVE, WARNING, application_style, status_chip
+from repositories.profile_repository import profile_repository
 
 
 class MainWindow(QMainWindow):
@@ -58,7 +61,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(APPLICATION_NAME)
 
-        self.resize(1700, 1000)
+        self.resize(1600, 900)
+        self.setStyleSheet(application_style())
 
         self.build_ui()
 
@@ -184,6 +188,18 @@ class MainWindow(QMainWindow):
 
         self.status.addPermanentWidget(self.lblVersion)
 
+        self.topStatus = QToolBar("Estado", self)
+        self.topStatus.setMovable(False)
+        self.addToolBar(Qt.TopToolBarArea, self.topStatus)
+        self.topProfile = QLabel("Perfil: sin activo")
+        self.topMode = QLabel("Modo: OFF")
+        self.topMT5 = QLabel("MT5: desconectado")
+        self.topTelegram = QLabel("Telegram: desconectado")
+        self.topDatabase = QLabel("SQLite: disponible")
+        self.topVersion = QLabel(f"v{VERSION}")
+        for widget, color in ((self.topProfile, WARNING), (self.topMode, WARNING), (self.topMT5, NEGATIVE), (self.topTelegram, NEGATIVE), (self.topDatabase, POSITIVE), (self.topVersion, POSITIVE)):
+            widget.setStyleSheet(status_chip(color)); self.topStatus.addWidget(widget)
+
     def build_central(self):
 
         central = QWidget()
@@ -196,9 +212,20 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(splitter)
 
+        sidebar = QWidget()
+        sidebar.setMinimumWidth(300)
+        sidebar.setMaximumWidth(310)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(10, 14, 10, 10)
+        brand = QLabel("KRAKEN BOT\nENTERPRISE")
+        brand.setStyleSheet("font-size:18px;font-weight:800;color:#00C853;padding:8px;")
+        section = QLabel("OPERACIÓN  ·  DATOS  ·  SISTEMA")
+        section.setStyleSheet("color:#B0BEC5;font-size:10px;padding:0 8px 6px 8px;")
+        sidebar_layout.addWidget(brand)
+        sidebar_layout.addWidget(section)
         self.menu = QListWidget()
-
-        self.menu.setMaximumWidth(240)
+        self.menu.setToolTip("Navegación principal")
+        sidebar_layout.addWidget(self.menu)
 
         pages = [
 
@@ -238,19 +265,25 @@ class MainWindow(QMainWindow):
 
         ]
 
-        for page in pages:
+        icon_map = [QStyle.SP_ComputerIcon, QStyle.SP_FileDialogDetailedView, QStyle.SP_DesktopIcon,
+                    QStyle.SP_DirHomeIcon, QStyle.SP_DriveHDIcon, QStyle.SP_DialogYesButton,
+                    QStyle.SP_DirIcon, QStyle.SP_FileDialogContentsView, QStyle.SP_MessageBoxInformation,
+                    QStyle.SP_FileDialogInfoView, QStyle.SP_BrowserReload, QStyle.SP_DriveNetIcon,
+                    QStyle.SP_MessageBoxWarning, QStyle.SP_MediaPlay, QStyle.SP_FileDialogListView,
+                    QStyle.SP_FileDialogDetailedView, QStyle.SP_FileDialogContentsView]
+        for page, icon in zip(pages, icon_map):
+            item = QListWidgetItem(self.style().standardIcon(icon), page)
+            item.setToolTip(page)
+            self.menu.addItem(item)
 
-            self.menu.addItem(
-                QListWidgetItem(page)
-            )
-
-        splitter.addWidget(self.menu)
+        splitter.addWidget(sidebar)
 
         self.stack = QStackedWidget()
 
         splitter.addWidget(self.stack)
 
         splitter.setStretchFactor(1, 1)
+        splitter.setSizes([300, 1200])
 
         self.dashboardPage = DashboardPage()
 
@@ -320,11 +353,12 @@ class MainWindow(QMainWindow):
 
         self.stack.addWidget(self.settingsPage)
 
-        self.menu.currentRowChanged.connect(
-            self.stack.setCurrentIndex
-        )
+        self.menu.currentRowChanged.connect(self.stack.setCurrentIndex)
 
         self.menu.setCurrentRow(0)
+
+        self.dashboardPage.navigate_requested.connect(self.navigate_to_page)
+        self.dashboardPage.action_requested.connect(self.handle_dashboard_action)
 
     def build_console(self):
 
@@ -492,6 +526,22 @@ class MainWindow(QMainWindow):
             f"Profit: {self.total_profit:.2f}"
 
         )
+        active = profile_repository.get_active()
+        self.topProfile.setText(f"Perfil: {active.name if active else 'sin activo'}")
+        self.topMode.setText(f"Modo: {self.mode}")
+        self.topMT5.setText("MT5: conectado" if self.mt5_online else "MT5: desconectado")
+        self.topTelegram.setText("Telegram: conectado" if self.telegram_online else "Telegram: desconectado")
+        self.topDatabase.setText("SQLite: disponible" if database_manager.table_exists("profiles") else "SQLite: error")
+
+    def navigate_to_page(self, title):
+        for row in range(self.menu.count()):
+            if self.menu.item(row).text() == title:
+                self.menu.setCurrentRow(row)
+                return
+
+    def handle_dashboard_action(self, action):
+        if action == "SIMULATION":
+            self.set_mode("SIMULATION")
 
     def set_mode(self, mode):
 
