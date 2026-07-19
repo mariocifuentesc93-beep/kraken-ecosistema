@@ -1,3 +1,4 @@
-MetaTrader5
-PySide6
-Telethon
+PySide6==6.8.2.1
+telethon==1.38.1
+MetaTrader5==5.0.5120
+PyYAML==6.0.2

@@ -1,38 +1,26 @@
 import sys
 
-from PySide6.QtWidgets import QApplication
-
-print("1 - Inicio")
-
-from database.database_manager import database_manager
-
-print("2 - Database importado")
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from dashboard.main_window import MainWindow
-
-print("3 - MainWindow importada")
+from utils.startup_validation import validate_startup
 
 
 def main():
-
-    print("4 - Entró a main()")
-
-    database_manager.initialize()
-
-    print("5 - Base inicializada")
-
     app = QApplication(sys.argv)
-
-    print("6 - QApplication creada")
+    errors = validate_startup()
+    if errors:
+        QMessageBox.critical(
+            None,
+            "Kraken Bot no pudo iniciar",
+            "Corrija los siguientes problemas antes de continuar:\n\n- " + "\n- ".join(errors),
+        )
+        return 1
 
     window = MainWindow()
-
-    print("7 - MainWindow creada")
-
     window.show()
-
-    sys.exit(app.exec())
+    return app.exec()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

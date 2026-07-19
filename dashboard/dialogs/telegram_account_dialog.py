@@ -31,6 +31,9 @@ class TelegramAccountDialog(QDialog):
 
         self.build_ui()
 
+        if account is not None:
+            self.load_account(account)
+
     # --------------------------------------------------------
 
     def build_ui(self):
@@ -365,7 +368,7 @@ class TelegramAccountDialog(QDialog):
             getattr(account, "receive_messages", True)
         )
 
-        if getattr(account, "logged_in", False):
+        if getattr(account, "connected", False):
 
             self.lblStatus.setText(
                 "Sesión iniciada"

@@ -1,3 +1,7 @@
+from datetime import datetime
+from pathlib import Path
+import shutil
+
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
@@ -14,6 +18,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QDockWidget,
     QTextEdit,
+    QFileDialog,
+    QMessageBox,
 )
 
 from dashboard.pages.dashboard_page import DashboardPage
@@ -27,6 +33,9 @@ from dashboard.pages.symbols_page import SymbolsPage
 from dashboard.pages.settings_page import SettingsPage
 from dashboard.pages.logs_page import LogsPage
 from dashboard.event_handlers import DashboardEventHandlers
+from core.config_service import load_active_config, get_execution_mode
+from database.database_manager import database_manager
+from engine.kraken_engine import kraken_engine
 
 
 class MainWindow(QMainWindow):
@@ -497,40 +506,40 @@ class MainWindow(QMainWindow):
         self.notifications.append(text)
 
     def start_engine(self):
-
-        self.log(
-
-            "Iniciando Kraken Engine..."
-
-        )
-
-        #
-        # KrakenEngine.start()
-        #
+        if not load_active_config():
+            QMessageBox.warning(self, "Kraken Engine", "No hay un perfil activo. Active un perfil antes de iniciar el motor.")
+            return
+        try:
+            kraken_engine.start()
+            self.set_mode(get_execution_mode())
+            self.log("Kraken Engine iniciado.")
+        except Exception as error:
+            self.log(f"Error al iniciar Kraken Engine: {error}")
+            QMessageBox.critical(self, "Kraken Engine", f"No se pudo iniciar el motor: {error}")
 
     def stop_engine(self):
-
-        self.log(
-
-            "Deteniendo Kraken Engine..."
-
-        )
-
-        #
-        # KrakenEngine.stop()
-        #
+        try:
+            kraken_engine.stop()
+            self.set_mode("OFF")
+            self.log("Kraken Engine detenido.")
+        except Exception as error:
+            self.log(f"Error al detener Kraken Engine: {error}")
+            QMessageBox.critical(self, "Kraken Engine", f"No se pudo detener el motor: {error}")
 
     def refresh_all(self):
-
-        self.log(
-
-            "Actualizando dashboard..."
-
-        )
-
-        #
-        # dashboard.refresh()
-        #
+        try:
+            load_active_config()
+            for page in (self.dashboardPage, self.operationsPage, self.statisticsPage,
+                         self.profilesPage, self.mt5Page, self.telegramPage,
+                         self.channelsPage, self.symbolsPage, self.logsPage, self.settingsPage):
+                refresh = getattr(page, "refresh", None)
+                if callable(refresh):
+                    refresh()
+            self.log("Dashboard actualizado.")
+            self.notify("Datos actualizados.")
+        except Exception as error:
+            self.log(f"Error al actualizar el dashboard: {error}")
+            QMessageBox.critical(self, "Actualizar", f"No se pudieron actualizar los datos: {error}")
 
     def open_settings(self):
 
@@ -541,14 +550,50 @@ class MainWindow(QMainWindow):
         )
 
     def backup_database(self):
-
-        self.notify(
-
-            "Respaldo iniciado."
-
+        suggested_name = f"kraken-{datetime.now():%Y%m%d-%H%M%S}.db"
+        destination, _ = QFileDialog.getSaveFileName(
+            self, "Guardar respaldo", str(database_manager.database.parent / suggested_name),
+            "Base de datos SQLite (*.db)",
         )
+        if not destination:
+            return
+        try:
+            database_manager.commit()
+            shutil.copy2(database_manager.database, Path(destination))
+            self.log(f"Respaldo creado: {destination}")
+            self.notify("Respaldo de base de datos creado.")
+        except OSError as error:
+            self.log(f"Error al crear respaldo: {error}")
+            QMessageBox.critical(self, "Respaldo", f"No se pudo crear el respaldo: {error}")
 
     def restore_database(self):
+        source, _ = QFileDialog.getOpenFileName(
+            self, "Restaurar respaldo", str(database_manager.database.parent),
+            "Base de datos SQLite (*.db)",
+        )
+        if not source:
+            return
+        if Path(source).resolve() == database_manager.database.resolve():
+            QMessageBox.warning(self, "Restaurar", "Seleccione un respaldo distinto a la base activa.")
+            return
+        if QMessageBox.question(
+            self, "Restaurar respaldo",
+            "La base de datos activa será reemplazada. ¿Desea continuar?",
+            QMessageBox.Yes | QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        try:
+            kraken_engine.stop()
+            database_manager.close()
+            shutil.copy2(Path(source), database_manager.database)
+            database_manager.initialize()
+            self.refresh_all()
+            self.log(f"Base de datos restaurada desde: {source}")
+            self.notify("Base de datos restaurada correctamente.")
+        except (OSError, ValueError) as error:
+            self.log(f"Error al restaurar respaldo: {error}")
+            QMessageBox.critical(self, "Restaurar", f"No se pudo restaurar la base de datos: {error}")
+        return
 
         self.notify(
 

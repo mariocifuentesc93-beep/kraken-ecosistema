@@ -32,6 +32,14 @@ class ProfileTelegramChannelRepository:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    def get_by_id(self, channel_id):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            "SELECT * FROM profile_telegram_channels WHERE id=?", (channel_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
     def get_channels(self):
         cursor = database_manager.cursor()
         cursor.execute(
@@ -44,6 +52,30 @@ class ProfileTelegramChannelRepository:
         cursor.execute(
             "UPDATE profile_telegram_channels SET enabled=? WHERE chat_id=?",
             (int(bool(enabled)), chat_id),
+        )
+        database_manager.commit()
+        return cursor.rowcount > 0
+
+    def update_channel(self, channel_id, chat_id, title, username, profile_id, account_id,
+                       enabled, priority):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            UPDATE profile_telegram_channels
+            SET chat_id=?, title=?, username=?, profile_id=?, account_id=?,
+                enabled=?, priority=?
+            WHERE id=?
+            """,
+            (chat_id, title, username, profile_id, account_id, int(bool(enabled)),
+             priority, channel_id),
+        )
+        database_manager.commit()
+        return cursor.rowcount > 0
+
+    def delete_channel(self, channel_id):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            "DELETE FROM profile_telegram_channels WHERE id=?", (channel_id,)
         )
         database_manager.commit()
         return cursor.rowcount > 0

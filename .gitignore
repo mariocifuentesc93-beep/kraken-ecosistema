@@ -1,0 +1,10 @@
+.venv/
+**/__pycache__/
+*.pyc
+*.session
+database/backups/
+database/*.backup
+database/*.bak
+.idea/
+.vscode/
+*.swp

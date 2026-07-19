@@ -1,0 +1,4 @@
+application:
+  name: Kraken Bot Enterprise
+database:
+  filename: kraken.db

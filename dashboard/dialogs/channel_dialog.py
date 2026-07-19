@@ -33,6 +33,9 @@ class ChannelDialog(QDialog):
 
         self.build_ui()
 
+        if channel is not None:
+            self.load_channel(channel)
+
     # ---------------------------------------------------------
 
     def build_ui(self):
@@ -308,25 +311,38 @@ class ChannelDialog(QDialog):
 
         self.channel = channel
 
-        self.txtName.setText(
-            getattr(channel, "name", "")
-        )
+        data = channel if isinstance(channel, dict) else vars(channel)
+
+        self.txtName.setText(data.get("title", data.get("name", "")))
 
         self.txtChatId.setText(
-            str(getattr(channel, "chat_id", ""))
+            str(data.get("chat_id", ""))
         )
 
         self.txtUsername.setText(
-            getattr(channel, "username", "")
+            data.get("username", "")
         )
 
         self.txtDescription.setPlainText(
-            getattr(channel, "description", "")
+            data.get("description", "")
         )
 
         self.chkEnabled.setChecked(
-            getattr(channel, "enabled", True)
+            bool(data.get("enabled", True))
         )
+
+        index = self.cboProfile.findData(data.get("profile_id"))
+        if index >= 0:
+            self.cboProfile.setCurrentIndex(index)
+
+        self.cboPriority.setCurrentIndex(
+            max(0, min(int(data.get("priority", 1)) - 1, 3))
+        )
+
+    def set_profiles(self, profiles):
+        self.cboProfile.clear()
+        for profile in profiles:
+            self.cboProfile.addItem(profile.display_name, profile.id)
     
     def get_channel_data(self):
 
