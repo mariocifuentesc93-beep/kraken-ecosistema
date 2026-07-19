@@ -4,6 +4,8 @@ from pathlib import Path
 import yaml
 
 from database.database_manager import database_manager
+from repositories.mt5_account_repository import mt5_account_repository
+from repositories.telegram_account_repository import telegram_account_repository
 
 
 REQUIRED_TABLES = {
@@ -37,3 +39,23 @@ def validate_startup():
         if find_spec(module) is None:
             errors.append(f"La dependencia requerida {label} no está instalada.")
     return errors
+
+
+def get_setup_warnings():
+    """Return non-blocking first-run setup guidance for local users."""
+    warnings = []
+    try:
+        mt5_accounts = mt5_account_repository.get_all()
+        if not any(account.terminal_path for account in mt5_accounts):
+            warnings.append(
+                "No hay una terminal MT5 configurada. Agregue una cuenta MT5 y su ruta de terminal antes de operar."
+            )
+
+        telegram_accounts = telegram_account_repository.get_all()
+        if not any(account.api_id and account.api_hash for account in telegram_accounts):
+            warnings.append(
+                "No hay credenciales de Telegram configuradas. Agregue API ID y API hash antes de recibir señales."
+            )
+    except Exception as error:
+        warnings.append(f"No se pudo revisar la configuración inicial: {error}")
+    return warnings

@@ -82,7 +82,7 @@ class Profile:
     # EJECUCIÓN
     # =====================================================
 
-    execution_mode: str = "LIVE"
+    execution_mode: str = "OFF"
 
     tp_level: int = 1
 

@@ -67,7 +67,7 @@ def create_tables(connection: sqlite3.Connection):
 
         max_open_trades INTEGER DEFAULT 0,
 
-        execution_mode TEXT DEFAULT 'LIVE',
+        execution_mode TEXT DEFAULT 'OFF',
 
         tp_level INTEGER DEFAULT 1,
 
@@ -192,7 +192,7 @@ def create_tables(connection: sqlite3.Connection):
 
         terminal_path TEXT,
 
-        execution_mode TEXT DEFAULT 'LIVE',
+        execution_mode TEXT DEFAULT 'OFF',
 
         risk_enabled INTEGER DEFAULT 1,
 
@@ -224,7 +224,7 @@ def create_tables(connection: sqlite3.Connection):
     """)
 
     _ensure_columns(cursor, "mt5_accounts", {
-        "execution_mode": "TEXT DEFAULT 'LIVE'",
+        "execution_mode": "TEXT DEFAULT 'OFF'",
         "risk_enabled": "INTEGER DEFAULT 1",
         "risk_mode": "TEXT DEFAULT 'PROFILE'",
         "risk_percent": "REAL DEFAULT 0",

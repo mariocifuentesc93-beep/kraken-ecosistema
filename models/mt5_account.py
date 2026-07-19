@@ -39,7 +39,7 @@ class MT5Account:
 
     reconnect: bool = True
 
-    execution_mode: str = "LIVE"
+    execution_mode: str = "OFF"
 
     priority: int = 1
 
