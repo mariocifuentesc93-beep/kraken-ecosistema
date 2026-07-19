@@ -1,0 +1,10 @@
+telegram:
+  api_id: 34772324
+  api_hash: 378926fb646ebae101f0450d32e7bc2c
+  phone: "+573103920412"
+  session: "sessions/bridge_bot"
+
+trading:
+  risk_percent: 5
+  tp_level: 1
+  execute_market: true

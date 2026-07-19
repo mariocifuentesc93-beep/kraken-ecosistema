@@ -1,0 +1,560 @@
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QSplitter,
+    QListWidget,
+    QListWidgetItem,
+    QStackedWidget,
+    QToolBar,
+    QStatusBar,
+    QLabel,
+    QDockWidget,
+    QTextEdit,
+)
+
+from dashboard.pages.dashboard_page import DashboardPage
+from dashboard.pages.operations_page import OperationsPage
+from dashboard.pages.statistics_page import StatisticsPage
+from dashboard.pages.profiles_page import ProfilesPage
+from dashboard.pages.mt5_accounts_page import MT5AccountsPage
+from dashboard.pages.telegram_accounts_page import TelegramAccountsPage
+from dashboard.pages.channels_page import ChannelsPage
+from dashboard.pages.symbols_page import SymbolsPage
+from dashboard.pages.settings_page import SettingsPage
+from dashboard.pages.logs_page import LogsPage
+from dashboard.event_handlers import DashboardEventHandlers
+
+
+class MainWindow(QMainWindow):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.setWindowTitle("Kraken Bot Enterprise")
+
+        self.resize(1700, 1000)
+
+        self.build_ui()
+
+    def build_ui(self):
+
+        self.build_toolbar()
+
+        self.build_statusbar()
+                
+        self.build_central()
+
+        self.build_console()
+
+        self.build_notifications()
+        
+        self.connect_signals()
+
+        self.initialize_state()
+
+        self.event_handlers = DashboardEventHandlers(self)
+
+
+    def build_toolbar(self):
+
+        self.toolbar = QToolBar()
+
+        self.toolbar.setMovable(False)
+
+        self.toolbar.setIconSize(
+            QSize(24, 24)
+        )
+
+        self.addToolBar(self.toolbar)
+
+        self.actStart = QAction("Iniciar", self)
+
+        self.actStop = QAction("Detener", self)
+
+        self.actSimulation = QAction("Simulación", self)
+
+        self.actLive = QAction("LIVE", self)
+
+        self.actRefresh = QAction("Actualizar", self)
+
+        self.actSettings = QAction("Configuración", self)
+
+        self.actBackup = QAction("Backup", self)
+
+        self.actRestore = QAction("Restaurar", self)
+
+        self.toolbar.addAction(self.actStart)
+
+        self.toolbar.addAction(self.actStop)
+
+        self.toolbar.addSeparator()
+
+        self.toolbar.addAction(self.actSimulation)
+
+        self.toolbar.addAction(self.actLive)
+
+        self.toolbar.addSeparator()
+
+        self.toolbar.addAction(self.actRefresh)
+
+        self.toolbar.addSeparator()
+
+        self.toolbar.addAction(self.actBackup)
+
+        self.toolbar.addAction(self.actRestore)
+
+        self.toolbar.addSeparator()
+
+        self.toolbar.addAction(self.actSettings)
+
+    def build_statusbar(self):
+
+        self.status = QStatusBar()
+
+        self.setStatusBar(self.status)
+
+        self.lblMode = QLabel("OFF")
+
+        self.lblTelegram = QLabel("Telegram: OFFLINE")
+
+        self.lblMT5 = QLabel("MT5: OFFLINE")
+
+        self.lblProfiles = QLabel("Perfiles: 0")
+
+        self.lblAccounts = QLabel("MT5: 0")
+
+        self.lblSignals = QLabel("Señales: 0")
+
+        self.lblOperations = QLabel("Operaciones: 0")
+
+        self.lblProfit = QLabel("Profit: 0")
+
+        self.status.addPermanentWidget(self.lblMode)
+
+        self.status.addPermanentWidget(self.lblTelegram)
+
+        self.status.addPermanentWidget(self.lblMT5)
+
+        self.status.addPermanentWidget(self.lblProfiles)
+
+        self.status.addPermanentWidget(self.lblAccounts)
+
+        self.status.addPermanentWidget(self.lblSignals)
+
+        self.status.addPermanentWidget(self.lblOperations)
+
+        self.status.addPermanentWidget(self.lblProfit)
+
+    def build_central(self):
+
+        central = QWidget()
+
+        self.setCentralWidget(central)
+
+        layout = QHBoxLayout(central)
+
+        splitter = QSplitter()
+
+        layout.addWidget(splitter)
+
+        self.menu = QListWidget()
+
+        self.menu.setMaximumWidth(240)
+
+        pages = [
+
+            "Dashboard",
+
+            "Operaciones",
+
+            "Estadísticas",
+
+            "Perfiles",
+
+            "MT5",
+
+            "Telegram",
+
+            "Canales",
+
+            "Símbolos",
+
+            "Logs",
+
+            "Configuración"
+
+        ]
+
+        for page in pages:
+
+            self.menu.addItem(
+                QListWidgetItem(page)
+            )
+
+        splitter.addWidget(self.menu)
+
+        self.stack = QStackedWidget()
+
+        splitter.addWidget(self.stack)
+
+        splitter.setStretchFactor(1, 1)
+
+        self.dashboardPage = DashboardPage()
+
+        self.operationsPage = OperationsPage()
+
+        self.statisticsPage = StatisticsPage()
+
+        self.profilesPage = ProfilesPage()
+
+        self.mt5Page = MT5AccountsPage()
+
+        self.telegramPage = TelegramAccountsPage()
+
+        self.channelsPage = ChannelsPage()
+
+        self.symbolsPage = SymbolsPage()
+
+        self.logsPage = LogsPage()
+
+        self.settingsPage = SettingsPage()
+
+        self.stack.addWidget(self.dashboardPage)
+
+        self.stack.addWidget(self.operationsPage)
+
+        self.stack.addWidget(self.statisticsPage)
+
+        self.stack.addWidget(self.profilesPage)
+
+        self.stack.addWidget(self.mt5Page)
+
+        self.stack.addWidget(self.telegramPage)
+
+        self.stack.addWidget(self.channelsPage)
+
+        self.stack.addWidget(self.symbolsPage)
+
+        self.stack.addWidget(self.logsPage)
+
+        self.stack.addWidget(self.settingsPage)
+
+        self.menu.currentRowChanged.connect(
+            self.stack.setCurrentIndex
+        )
+
+        self.menu.setCurrentRow(0)
+
+    def build_console(self):
+
+        self.consoleDock = QDockWidget(
+            "Consola"
+        )
+
+        self.consoleDock.setObjectName(
+            "ConsoleDock"
+        )
+
+        self.console = QTextEdit()
+
+        self.console.setReadOnly(True)
+
+        self.consoleDock.setWidget(
+            self.console
+        )
+
+        self.addDockWidget(
+
+            Qt.BottomDockWidgetArea,
+
+            self.consoleDock
+
+        )
+
+    def build_notifications(self):
+
+        self.notificationDock = QDockWidget(
+            "Notificaciones"
+        )
+
+        self.notificationDock.setObjectName(
+            "NotificationsDock"
+        )
+
+        self.notifications = QTextEdit()
+
+        self.notifications.setReadOnly(True)
+
+        self.notificationDock.setWidget(
+            self.notifications
+        )
+
+        self.addDockWidget(
+
+            Qt.RightDockWidgetArea,
+
+            self.notificationDock
+
+        )
+
+    def connect_signals(self):
+
+        self.actStart.triggered.connect(
+            self.start_engine
+        )
+
+        self.actStop.triggered.connect(
+            self.stop_engine
+        )
+
+        self.actSimulation.triggered.connect(
+            lambda: self.set_mode("SIMULATION")
+        )
+
+        self.actLive.triggered.connect(
+            lambda: self.set_mode("LIVE")
+        )
+
+        self.actRefresh.triggered.connect(
+            self.refresh_all
+        )
+
+        self.actSettings.triggered.connect(
+            self.open_settings
+        )
+
+        self.actBackup.triggered.connect(
+            self.backup_database
+        )
+
+        self.actRestore.triggered.connect(
+            self.restore_database
+        )
+
+    def initialize_state(self):
+
+        self.mode = "OFF"
+
+        self.telegram_online = False
+
+        self.mt5_online = False
+
+        self.active_profiles = 0
+
+        self.mt5_accounts = 0
+
+        self.signal_count = 0
+
+        self.operation_count = 0
+
+        self.total_profit = 0
+
+        self.update_statusbar()
+
+    def update_statusbar(self):
+
+        self.lblMode.setText(
+
+            f"Modo: {self.mode}"
+
+        )
+
+        self.lblTelegram.setText(
+
+            "Telegram: ONLINE"
+
+            if self.telegram_online
+
+            else "Telegram: OFFLINE"
+
+        )
+
+        self.lblMT5.setText(
+
+            "MT5: ONLINE"
+
+            if self.mt5_online
+
+            else "MT5: OFFLINE"
+
+        )
+
+        self.lblProfiles.setText(
+
+            f"Perfiles: {self.active_profiles}"
+
+        )
+
+        self.lblAccounts.setText(
+
+            f"MT5: {self.mt5_accounts}"
+
+        )
+
+        self.lblSignals.setText(
+
+            f"Señales: {self.signal_count}"
+
+        )
+
+        self.lblOperations.setText(
+
+            f"Operaciones: {self.operation_count}"
+
+        )
+
+        self.lblProfit.setText(
+
+            f"Profit: {self.total_profit:.2f}"
+
+        )
+
+    def set_mode(self, mode):
+
+        self.mode = mode
+
+        self.log(
+
+            f"Modo cambiado a {mode}"
+
+        )
+
+        self.update_statusbar()
+
+    def set_telegram_status(self, online):
+
+        self.telegram_online = online
+
+        self.update_statusbar()
+
+        self.notify(
+
+            "Telegram conectado"
+
+            if online
+
+            else "Telegram desconectado"
+
+        )
+
+    def set_mt5_status(self, online):
+
+        self.mt5_online = online
+
+        self.update_statusbar()
+
+        self.notify(
+
+            "MT5 conectado"
+
+            if online
+
+            else "MT5 desconectado"
+
+        )
+
+    def set_profile_count(self, count):
+
+        self.active_profiles = count
+
+        self.update_statusbar()
+
+    def set_account_count(self, count):
+
+        self.mt5_accounts = count
+
+        self.update_statusbar()
+
+    def increment_signal(self):
+
+        self.signal_count += 1
+
+        self.update_statusbar()
+
+    def increment_operation(self):
+
+        self.operation_count += 1
+
+        self.update_statusbar()
+
+    def update_profit(self, value):
+
+        self.total_profit = value
+
+        self.update_statusbar()
+
+    def log(self, text):
+
+        self.console.append(text)
+
+    def notify(self, text):
+
+        self.notifications.append(text)
+
+    def start_engine(self):
+
+        self.log(
+
+            "Iniciando Kraken Engine..."
+
+        )
+
+        #
+        # KrakenEngine.start()
+        #
+
+    def stop_engine(self):
+
+        self.log(
+
+            "Deteniendo Kraken Engine..."
+
+        )
+
+        #
+        # KrakenEngine.stop()
+        #
+
+    def refresh_all(self):
+
+        self.log(
+
+            "Actualizando dashboard..."
+
+        )
+
+        #
+        # dashboard.refresh()
+        #
+
+    def open_settings(self):
+
+        self.stack.setCurrentWidget(
+
+            self.settingsPage
+
+        )
+
+    def backup_database(self):
+
+        self.notify(
+
+            "Respaldo iniciado."
+
+        )
+
+    def restore_database(self):
+
+        self.notify(
+
+            "Restauración iniciada."
+
+        )
+
+
+
