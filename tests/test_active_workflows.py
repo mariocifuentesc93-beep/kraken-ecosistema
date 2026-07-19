@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from core.config_service import load_active_config
 from database.database_manager import database_manager
@@ -99,6 +99,38 @@ class ActiveWorkflowSmokeTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM profiles").fetchone()[0], 1)
         finally:
             connection.close()
+
+    def test_main_window_backup_restore_and_simulation_actions(self):
+        from dashboard.main_window import MainWindow
+
+        profile_repository.create(
+            Profile(name="Toolbar Simulation", execution_mode="SIMULATION")
+        )
+        self.assertTrue(load_active_config())
+        window = MainWindow()
+        backup = self.temporary_directory / "dashboard-backup.db"
+        original_save = QFileDialog.getSaveFileName
+        original_open = QFileDialog.getOpenFileName
+        QFileDialog.getSaveFileName = staticmethod(lambda *args: (str(backup), ""))
+        QFileDialog.getOpenFileName = staticmethod(lambda *args: (str(backup), ""))
+        try:
+            window.backup_database()
+            self.assertTrue(backup.exists())
+            profile_repository.create(Profile(name="Changed After Backup"))
+            self.assertEqual(profile_repository.count(), 2)
+            window.restore_database()
+            self.assertEqual(profile_repository.count(), 1)
+
+            window.actSimulation.trigger()
+            self.assertEqual(window.mode, "SIMULATION")
+            window.start_engine()
+            self.assertEqual(kraken_engine.status.name, "RUNNING")
+            window.stop_engine()
+            self.assertEqual(kraken_engine.status.name, "STOPPED")
+        finally:
+            QFileDialog.getSaveFileName = original_save
+            QFileDialog.getOpenFileName = original_open
+            window.close()
 
     def test_simulation_engine_lifecycle(self):
         profile_repository.create(Profile(name="Simulation Profile", execution_mode="SIMULATION"))
