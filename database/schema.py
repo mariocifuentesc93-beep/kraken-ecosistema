@@ -586,6 +586,29 @@ def create_tables(connection: sqlite3.Connection):
     )
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS paper_accounts(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id INTEGER UNIQUE, starting_balance REAL NOT NULL,
+        balance REAL NOT NULL, equity REAL NOT NULL, currency TEXT NOT NULL, slippage REAL NOT NULL,
+        commission REAL NOT NULL, allow_fallback INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS paper_trades(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, paper_account_id INTEGER NOT NULL, operation_id INTEGER,
+        signal_key TEXT NOT NULL UNIQUE, profile_id INTEGER, symbol TEXT NOT NULL, direction TEXT NOT NULL,
+        status TEXT NOT NULL, volume REAL NOT NULL, remaining_volume REAL NOT NULL, entry_price REAL,
+        stop_loss REAL, take_profits TEXT, gross_pl REAL NOT NULL DEFAULT 0, spread_cost REAL NOT NULL DEFAULT 0,
+        slippage_cost REAL NOT NULL DEFAULT 0, commission_cost REAL NOT NULL DEFAULT 0, net_pl REAL NOT NULL DEFAULT 0,
+        initial_risk REAL NOT NULL DEFAULT 0, margin_estimate REAL NOT NULL DEFAULT 0, opened_at TEXT,
+        closed_at TEXT, duration_seconds REAL NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}',
+        FOREIGN KEY(paper_account_id) REFERENCES paper_accounts(id) ON DELETE CASCADE
+    )
+    """)
+    _ensure_columns(cursor, "paper_trades", {"duration_seconds": "REAL NOT NULL DEFAULT 0"})
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_paper_trades_account ON paper_trades(paper_account_id, status)")
+
     # ==========================================================
     # DAILY STATISTICS
     # ==========================================================

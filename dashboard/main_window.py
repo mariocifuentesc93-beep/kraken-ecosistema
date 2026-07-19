@@ -36,6 +36,7 @@ from dashboard.pages.signal_inspector_page import SignalInspectorPage
 from dashboard.pages.trade_timeline_page import TradeTimelinePage
 from dashboard.pages.market_data_page import MarketDataPage
 from dashboard.pages.live_readiness_page import LiveReadinessPage
+from dashboard.pages.paper_trading_page import PaperTradingPage
 from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
@@ -225,6 +226,8 @@ class MainWindow(QMainWindow):
 
             "Certificación LIVE",
 
+            "Paper Trading",
+
             "Configuración"
 
         ]
@@ -269,6 +272,8 @@ class MainWindow(QMainWindow):
 
         self.liveReadinessPage = LiveReadinessPage()
 
+        self.paperTradingPage = PaperTradingPage()
+
         self.settingsPage = SettingsPage()
 
         self.stack.addWidget(self.dashboardPage)
@@ -296,6 +301,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.marketDataPage)
 
         self.stack.addWidget(self.liveReadinessPage)
+
+        self.stack.addWidget(self.paperTradingPage)
 
         self.stack.addWidget(self.settingsPage)
 
@@ -605,7 +612,7 @@ class MainWindow(QMainWindow):
                          self.profilesPage, self.mt5Page, self.telegramPage,
                          self.channelsPage, self.symbolsPage, self.logsPage,
                          self.signalInspectorPage, self.tradeTimelinePage,
-                         self.marketDataPage, self.liveReadinessPage, self.settingsPage):
+                         self.marketDataPage, self.liveReadinessPage, self.paperTradingPage, self.settingsPage):
                 refresh = getattr(page, "refresh", None)
                 if callable(refresh):
                     refresh()

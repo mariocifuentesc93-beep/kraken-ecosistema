@@ -1,4 +1,5 @@
 from trading.execution_pipeline import execution_pipeline
+from trading.paper_trading_engine import paper_trading_engine
 
 
 class ExecutionEngine:
@@ -20,6 +21,8 @@ class ExecutionEngine:
         if mode == "SIMULATION":
             execution_pipeline.simulate_with_market_data(signal, profile, account)
             return True
+        if mode == "PAPER":
+            return paper_trading_engine.execute(signal, profile, account) is not None
         # LIVE remains intentionally non-executable in this phase.
         operation = execution_pipeline.create(signal, profile, account, "LIVE_BLOCKED")
         execution_pipeline.transition(
