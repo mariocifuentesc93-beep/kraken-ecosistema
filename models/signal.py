@@ -62,6 +62,10 @@ class Signal:
 
     status: str = "NEW"
 
+    rejection_reason: str = ""
+
+    execution_decision: str = ""
+
     raw_message: str = ""
 
     metadata: Dict = field(default_factory=dict)

@@ -32,6 +32,7 @@ from dashboard.pages.channels_page import ChannelsPage
 from dashboard.pages.symbols_page import SymbolsPage
 from dashboard.pages.settings_page import SettingsPage
 from dashboard.pages.logs_page import LogsPage
+from dashboard.pages.signal_inspector_page import SignalInspectorPage
 from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
@@ -212,6 +213,8 @@ class MainWindow(QMainWindow):
 
             "Logs",
 
+            "Inspector de señales",
+
             "Configuración"
 
         ]
@@ -248,6 +251,8 @@ class MainWindow(QMainWindow):
 
         self.logsPage = LogsPage()
 
+        self.signalInspectorPage = SignalInspectorPage()
+
         self.settingsPage = SettingsPage()
 
         self.stack.addWidget(self.dashboardPage)
@@ -267,6 +272,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.symbolsPage)
 
         self.stack.addWidget(self.logsPage)
+
+        self.stack.addWidget(self.signalInspectorPage)
 
         self.stack.addWidget(self.settingsPage)
 

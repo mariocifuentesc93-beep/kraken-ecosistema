@@ -409,6 +409,16 @@ def create_tables(connection: sqlite3.Connection):
     ON signals(profile_id)
     """)
 
+    _ensure_columns(cursor, "signals", {
+        "source": "TEXT DEFAULT 'Telegram'",
+        "message_id": "INTEGER",
+        "score": "REAL DEFAULT 0",
+        "rejection_reason": "TEXT DEFAULT ''",
+        "parsed_fields": "TEXT DEFAULT '{}'",
+        "trade_request": "TEXT DEFAULT '{}'",
+        "execution_decision": "TEXT DEFAULT ''",
+    })
+
     # ==========================================================
     # OPERATIONS
     # ==========================================================

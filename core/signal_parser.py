@@ -12,7 +12,7 @@ def parse_signal(text):
 
     if not text:
 
-        return None
+        return Signal(raw_message="")
 
     original_text = text
 
@@ -45,6 +45,11 @@ def parse_signal(text):
             signal.symbol = symbol
 
             break
+
+    if not signal.symbol:
+        candidate = re.search(r"\b([A-Z][A-Z0-9]{2,})\s+(?:BUY|SELL)\b", normalized)
+        if candidate:
+            signal.symbol = candidate.group(1)
 
     # =====================================================
     # DIRECCIÓN
@@ -155,13 +160,5 @@ def parse_signal(text):
     # =====================================================
     # VALIDACIÓN
     # =====================================================
-
-    if not signal.symbol:
-
-        return None
-
-    if not signal.direction:
-
-        return None
 
     return signal
