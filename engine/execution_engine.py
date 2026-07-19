@@ -18,10 +18,13 @@ class ExecutionEngine:
             return False
         mode = getattr(profile, "execution_mode", "OFF")
         if mode == "SIMULATION":
-            execution_pipeline.simulate(signal, profile, account, "tp3")
+            execution_pipeline.simulate_with_market_data(signal, profile, account)
             return True
         # LIVE remains intentionally non-executable in this phase.
-        execution_pipeline.create(signal, profile, account, mode)
+        operation = execution_pipeline.create(signal, profile, account, "LIVE_BLOCKED")
+        execution_pipeline.transition(
+            operation, "REJECTED", "La ejecución LIVE permanece bloqueada.", "LIVE_BLOCKED"
+        )
         return False
 
     def execute_multiple(self, signal, profile, accounts):

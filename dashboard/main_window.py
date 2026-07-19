@@ -34,6 +34,7 @@ from dashboard.pages.settings_page import SettingsPage
 from dashboard.pages.logs_page import LogsPage
 from dashboard.pages.signal_inspector_page import SignalInspectorPage
 from dashboard.pages.trade_timeline_page import TradeTimelinePage
+from dashboard.pages.market_data_page import MarketDataPage
 from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
@@ -218,6 +219,8 @@ class MainWindow(QMainWindow):
 
             "Línea de tiempo",
 
+            "Datos de mercado",
+
             "Configuración"
 
         ]
@@ -258,6 +261,8 @@ class MainWindow(QMainWindow):
 
         self.tradeTimelinePage = TradeTimelinePage()
 
+        self.marketDataPage = MarketDataPage()
+
         self.settingsPage = SettingsPage()
 
         self.stack.addWidget(self.dashboardPage)
@@ -281,6 +286,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.signalInspectorPage)
 
         self.stack.addWidget(self.tradeTimelinePage)
+
+        self.stack.addWidget(self.marketDataPage)
 
         self.stack.addWidget(self.settingsPage)
 

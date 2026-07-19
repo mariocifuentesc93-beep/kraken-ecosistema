@@ -535,6 +535,26 @@ def create_tables(connection: sqlite3.Connection):
     })
 
     # ==========================================================
+    # SIMULATION MARKET PRICE EVENTS
+    # ==========================================================
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS simulation_price_events(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        operation_id INTEGER NOT NULL,
+        symbol TEXT NOT NULL,
+        bid REAL,
+        ask REAL,
+        last_price REAL,
+        source TEXT NOT NULL,
+        event TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(operation_id) REFERENCES operations(id) ON DELETE CASCADE
+    )
+    """)
+    cursor.execute("""CREATE INDEX IF NOT EXISTS idx_simulation_price_events_operation
+                      ON simulation_price_events(operation_id)""")
+
+    # ==========================================================
     # DAILY STATISTICS
     # ==========================================================
 
