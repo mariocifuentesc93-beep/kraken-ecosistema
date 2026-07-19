@@ -1,129 +1,79 @@
 import sqlite3
+import threading
 from pathlib import Path
 
 from database.schema import create_tables
 
 
 class DatabaseManager:
+    """SQLite connection factory with one connection per calling thread."""
 
     def __init__(self):
+        self.database = Path(__file__).resolve().parent / "kraken.db"
+        self._local = threading.local()
+        self._initialization_lock = threading.RLock()
 
-        root = Path(__file__).resolve().parent
-
-        self.database = root / "kraken.db"
-
-        self.connection = None
-
-    # =====================================================
-    # CONNECTION
-    # =====================================================
+    @property
+    def connection(self):
+        return getattr(self._local, "connection", None)
 
     def connect(self):
+        connection = self.connection
+        if connection is not None:
+            return connection
 
-        if self.connection is not None:
-
-            return self.connection
-
-        self.connection = sqlite3.connect(
-            self.database,
-            check_same_thread=False,
-        )
-
-        self.connection.row_factory = sqlite3.Row
-
-        self.connection.execute(
-
-            "PRAGMA foreign_keys = ON"
-
-        )
-
-        self.connection.execute(
-
-            "PRAGMA journal_mode = WAL"
-
-        )
-
-        self.connection.execute(
-
-            "PRAGMA synchronous = NORMAL"
-
-        )
-
-        create_tables(self.connection)
-
-        return self.connection
-
-    # =====================================================
-    # INITIALIZATION
-    # =====================================================
+        # Schema creation and WAL configuration must not race when a worker
+        # starts while the UI thread is opening the application database.
+        with self._initialization_lock:
+            connection = sqlite3.connect(self.database, check_same_thread=True)
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA journal_mode = WAL")
+            connection.execute("PRAGMA synchronous = NORMAL")
+            create_tables(connection)
+            self._local.connection = connection
+        return connection
 
     def initialize(self):
-
         self.connect()
 
-    # =====================================================
-    # DATABASE ACCESS
-    # =====================================================
-
     def cursor(self):
-
         return self.connect().cursor()
 
     def execute(self, sql, params=()):
-
         cursor = self.cursor()
-
         cursor.execute(sql, params)
-
         return cursor
 
     def executemany(self, sql, values):
-
         cursor = self.cursor()
-
         cursor.executemany(sql, values)
-
         return cursor
 
-    # =====================================================
-    # TRANSACTIONS
-    # =====================================================
-
     def commit(self):
-
         self.connect().commit()
 
     def rollback(self):
-
         self.connect().rollback()
 
-    # =====================================================
-    # UTILITIES
-    # =====================================================
-
     def table_exists(self, table_name):
-
         cursor = self.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type='table'
-            AND name=?
-            """,
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
             (table_name,),
         )
-
         return cursor.fetchone() is not None
 
     def close(self):
+        """Close only the current thread's connection.
 
-        if self.connection is None:
-
+        A thread must close its own connection; this avoids handing SQLite
+        objects across threads during application shutdown.
+        """
+        connection = self.connection
+        if connection is None:
             return
-
-        self.connection.close()
-
-        self.connection = None
+        connection.close()
+        self._local.connection = None
 
     def backup(self, destination):
         """Create a consistent SQLite backup, including pending WAL changes."""

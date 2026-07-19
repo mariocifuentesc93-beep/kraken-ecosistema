@@ -33,6 +33,7 @@ from dashboard.pages.symbols_page import SymbolsPage
 from dashboard.pages.settings_page import SettingsPage
 from dashboard.pages.logs_page import LogsPage
 from dashboard.event_handlers import DashboardEventHandlers
+from utils.application_lifecycle import shutdown_application
 from core.config_service import load_active_config, get_execution_mode
 from database.database_manager import database_manager
 from engine.kraken_engine import kraken_engine
@@ -67,6 +68,11 @@ class MainWindow(QMainWindow):
         self.initialize_state()
 
         self.event_handlers = DashboardEventHandlers(self)
+
+    def closeEvent(self, event):
+        self.event_handlers.disconnect()
+        shutdown_application()
+        event.accept()
 
 
     def build_toolbar(self):

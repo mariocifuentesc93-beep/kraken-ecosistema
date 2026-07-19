@@ -3,11 +3,13 @@ import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from dashboard.main_window import MainWindow
+from utils.application_lifecycle import shutdown_application
 from utils.startup_validation import validate_startup
 
 
 def main():
     app = QApplication(sys.argv)
+    app.aboutToQuit.connect(shutdown_application)
     errors = validate_startup()
     if errors:
         QMessageBox.critical(
@@ -19,7 +21,10 @@ def main():
 
     window = MainWindow()
     window.show()
-    return app.exec()
+    try:
+        return app.exec()
+    finally:
+        shutdown_application()
 
 
 if __name__ == "__main__":

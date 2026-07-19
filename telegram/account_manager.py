@@ -1,4 +1,5 @@
 from telethon import TelegramClient
+import asyncio
 
 from repositories.telegram_account_repository import telegram_account_repository
 
@@ -176,6 +177,28 @@ class TelegramAccountManager:
         if client.is_connected():
 
             await client.disconnect()
+
+    async def disconnect_all(self):
+        for client in list(self.clients.values()):
+            try:
+                if client.is_connected():
+                    await client.disconnect()
+            except Exception:
+                # A previously closed Telethon loop does not prevent the rest
+                # of the application shutdown sequence from completing.
+                pass
+        self.clients.clear()
+
+    def shutdown(self):
+        """Disconnect clients before the Qt event loop and Python exit."""
+        if not self.clients:
+            return
+        try:
+            asyncio.run(self.disconnect_all())
+        except RuntimeError:
+            # Qt invokes shutdown on its main thread, where no asyncio loop is
+            # normally running. Leave ownership with an active external loop.
+            pass
 
 
 telegram_account_manager = TelegramAccountManager()
