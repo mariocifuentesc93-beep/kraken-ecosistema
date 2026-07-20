@@ -1,24 +1,153 @@
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QMessageBox, QLineEdit, QCheckBox
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QGridLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from dashboard.styles import BORDER_COLOR, CARD_COLOR, PRIMARY_COLOR, SECONDARY_TEXT, TEXT_COLOR
+from dashboard.widgets.enterprise import StatCard
 from repositories.profile_repository import profile_repository
 from trading.paper_trading_engine import paper_trading_engine
 
 
 class PaperTradingPage(QWidget):
     def __init__(self):
-        super().__init__(); layout=QVBoxLayout(self); settings=QHBoxLayout(); self.start=QLineEdit(); self.currency=QLineEdit(); self.slippage=QLineEdit(); self.commission=QLineEdit(); self.fallback=QCheckBox("Permitir fallback"); save=QPushButton("Guardar cuenta virtual"); save.clicked.connect(self.save_settings)
-        for label,field in (("Saldo inicial",self.start),("Moneda",self.currency),("Slippage",self.slippage),("Comisión",self.commission)): settings.addWidget(QLabel(label)); settings.addWidget(field)
-        settings.addWidget(self.fallback); settings.addWidget(save); layout.addLayout(settings); bar=QHBoxLayout(); self.summary=QLabel(); bar.addWidget(self.summary); bar.addStretch(); refresh=QPushButton("Actualizar"); refresh.clicked.connect(self.refresh); reset=QPushButton("Reiniciar cuenta virtual"); reset.clicked.connect(self.reset); bar.addWidget(refresh); bar.addWidget(reset); layout.addLayout(bar); self.table=QTableWidget(); self.table.setColumnCount(7); self.table.setHorizontalHeaderLabels(["ID","Símbolo","Dirección","Estado","Lote","Neto","Resultado"]); self.table.setEditTriggers(QTableWidget.NoEditTriggers); layout.addWidget(self.table); self.refresh()
+        super().__init__()
+        self.build_ui()
+        self.refresh()
+
+    def build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        top = QHBoxLayout()
+        account = QFrame()
+        account.setStyleSheet(
+            f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"
+        )
+        form = QGridLayout(account)
+        form.setContentsMargins(12, 10, 12, 10)
+        form.setHorizontalSpacing(10)
+        form.setVerticalSpacing(6)
+        self.start = QLineEdit()
+        self.currency = QLineEdit()
+        self.slippage = QLineEdit()
+        self.commission = QLineEdit()
+        self.fallback = QCheckBox("Permitir precios de respaldo cuando MT5 no esté disponible")
+        for row, (label, field) in enumerate((("Saldo inicial", self.start), ("Moneda", self.currency), ("Deslizamiento", self.slippage), ("Comisión", self.commission), ("Mercado", self.fallback))):
+            form.addWidget(QLabel(label), row, 0)
+            form.addWidget(field, row, 1)
+        form.setColumnStretch(1, 1)
+        save = QPushButton("Guardar cuenta virtual")
+        save.clicked.connect(self.save_settings)
+        form.addWidget(save, 5, 1)
+        top.addWidget(account, 2)
+
+        summary_box = QFrame()
+        summary_box.setStyleSheet(
+            f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"
+        )
+        summary_layout = QVBoxLayout(summary_box)
+        summary_layout.setContentsMargins(12, 10, 12, 10)
+        title = QLabel("Resumen de cuenta virtual")
+        title.setStyleSheet(f"color:{TEXT_COLOR};font-weight:700;font-size:12px;")
+        self.summary = QLabel()
+        self.summary.setWordWrap(True)
+        self.summary.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;")
+        summary_layout.addWidget(title)
+        summary_layout.addWidget(self.summary)
+        summary_layout.addStretch()
+        top.addWidget(summary_box, 3)
+        layout.addLayout(top)
+
+        cards = QHBoxLayout()
+        self.balance_card = StatCard("Balance", "$0.00", "Cuenta virtual")
+        self.equity_card = StatCard("Equity", "$0.00", "Capital disponible", "#45A3FF")
+        self.daily_card = StatCard("P/L diario", "$0.00", "Rendimiento del día")
+        self.drawdown_card = StatCard("Drawdown", "0.00%", "Máximo registrado", "#FF4D5A")
+        for card in (self.balance_card, self.equity_card, self.daily_card, self.drawdown_card):
+            cards.addWidget(card)
+        layout.addLayout(cards)
+
+        action_bar = QHBoxLayout()
+        action_bar.addStretch()
+        refresh = QPushButton("Actualizar")
+        refresh.clicked.connect(self.refresh)
+        reset = QPushButton("Reiniciar cuenta virtual")
+        reset.clicked.connect(self.reset)
+        action_bar.addWidget(refresh)
+        action_bar.addWidget(reset)
+        layout.addLayout(action_bar)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels(
+            ["ID", "Símbolo", "Dirección", "Estado", "Lote", "P/L neto", "Resultado"]
+        )
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        layout.addWidget(self.table, 1)
+
     def refresh(self):
-        profile=profile_repository.get_active()
-        if not profile: self.summary.setText("Seleccione un perfil activo."); self.table.setRowCount(0); return
-        data=paper_trading_engine.summary(profile.id); a=data["account"]; self.start.setText(str(a["starting_balance"])); self.currency.setText(a["currency"]); self.slippage.setText(str(a["slippage"])); self.commission.setText(str(a["commission"])); self.fallback.setChecked(bool(a["allow_fallback"])); self.summary.setText(f"Balance: {a['balance']:.2f} {a['currency']} | Equity: {a['equity']:.2f} | Abiertas: {data['open']} | Pendientes: {data['pending']} | Cerradas: {data['closed']} | P/L diario: {data['daily_pl']:.2f} | Win rate: {data['win_rate']}% | DD: {data['drawdown']:.2f}"); self.table.setRowCount(len(data["trades"]))
-        for row,t in enumerate(data["trades"]):
-            for col,value in enumerate((t["id"],t["symbol"],t["direction"],t["status"],t["volume"],t["net_pl"],t["metadata"].get("result",""))): self.table.setItem(row,col,QTableWidgetItem(str(value)))
+        profile = profile_repository.get_active()
+        if not profile:
+            self.summary.setText("Active un perfil para crear y consultar operaciones virtuales.")
+            self.table.setRowCount(0)
+            return
+        data = paper_trading_engine.summary(profile.id)
+        account = data["account"]
+        self.start.setText(str(account["starting_balance"]))
+        self.currency.setText(account["currency"])
+        self.slippage.setText(str(account["slippage"]))
+        self.commission.setText(str(account["commission"]))
+        self.fallback.setChecked(bool(account["allow_fallback"]))
+        self.summary.setText(
+            f"Perfil: {profile.name}\nAbiertas: {data['open']} · Pendientes: {data['pending']} · "
+            f"Cerradas: {data['closed']}\nWin rate: {data['win_rate']}%"
+        )
+        self.balance_card.set_value(f"{account['balance']:.2f} {account['currency']}")
+        self.equity_card.set_value(f"{account['equity']:.2f} {account['currency']}")
+        self.daily_card.set_value(f"{data['daily_pl']:.2f}")
+        self.drawdown_card.set_value(f"{data['drawdown']:.2f}%")
+        self.table.setRowCount(len(data["trades"]))
+        for row, trade in enumerate(data["trades"]):
+            values = (
+                trade["id"], trade["symbol"], trade["direction"], trade["status"],
+                trade["volume"], trade["net_pl"], trade["metadata"].get("result", ""),
+            )
+            for column, value in enumerate(values):
+                self.table.setItem(row, column, QTableWidgetItem(str(value)))
+
     def reset(self):
-        profile=profile_repository.get_active()
-        if profile and QMessageBox.question(self,"Paper trading","¿Reiniciar cuenta virtual y eliminar operaciones?",QMessageBox.Yes|QMessageBox.No)==QMessageBox.Yes: paper_trading_engine.reset(profile.id); self.refresh()
+        profile = profile_repository.get_active()
+        if profile and QMessageBox.question(
+            self, "Paper trading", "¿Reiniciar la cuenta virtual y eliminar sus operaciones?",
+            QMessageBox.Yes | QMessageBox.No,
+        ) == QMessageBox.Yes:
+            paper_trading_engine.reset(profile.id)
+            self.refresh()
+
     def save_settings(self):
-        profile=profile_repository.get_active()
-        if not profile:return
-        try: paper_trading_engine.configure(profile.id,starting_balance=float(self.start.text()),currency=self.currency.text() or "USD",slippage=float(self.slippage.text()),commission=float(self.commission.text()),allow_fallback=self.fallback.isChecked()); self.refresh()
-        except ValueError: QMessageBox.warning(self,"Paper trading","Revise los valores de la cuenta virtual.")
+        profile = profile_repository.get_active()
+        if not profile:
+            return
+        try:
+            paper_trading_engine.configure(
+                profile.id,
+                starting_balance=float(self.start.text()),
+                currency=self.currency.text() or "USD",
+                slippage=float(self.slippage.text()),
+                commission=float(self.commission.text()),
+                allow_fallback=self.fallback.isChecked(),
+            )
+            self.refresh()
+        except ValueError:
+            QMessageBox.warning(self, "Paper trading", "Revise los valores de la cuenta virtual.")

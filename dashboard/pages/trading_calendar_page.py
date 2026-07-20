@@ -4,7 +4,7 @@ from functools import partial
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QMessageBox,
-                               QPushButton, QSpinBox, QSplitter, QTableWidget,
+                               QPushButton, QSpinBox, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget, QFileDialog, QDialog)
 
 from dashboard.styles import CARD_COLOR, ERROR_COLOR, SUCCESS_COLOR, table_style
@@ -27,8 +27,8 @@ class TradingCalendarPage(QWidget):
         filters.addStretch()
         for kind,label in (("csv","CSV"),("xlsx","Excel"),("pdf","PDF")):
             button=QPushButton(label); button.clicked.connect(partial(self.export,kind)); filters.addWidget(button)
-        layout.addLayout(filters); self.summary=QLabel(); self.summary.setWordWrap(True); layout.addWidget(self.summary)
-        splitter=QSplitter(Qt.Horizontal); calendar_widget=QWidget(); self.grid=QGridLayout(calendar_widget); self.grid.setSpacing(4); splitter.addWidget(calendar_widget); self.detail=QTableWidget(); self.detail.setColumnCount(11); self.detail.setHorizontalHeaderLabels(["Hora","Símbolo","Lado","Entrada","Salida","Lote","Riesgo","Bruto","Costes","Neto","Resultado"]); self.detail.setStyleSheet(table_style()); splitter.addWidget(self.detail); splitter.setSizes([800,500]); layout.addWidget(splitter,3)
+        layout.addLayout(filters); self.summary=QLabel(); self.summary.setWordWrap(True); self.summary.setStyleSheet("background:#0C1B26;border:1px solid #263E50;border-radius:8px;padding:9px;color:#C7D2DC;font-size:10px;"); layout.addWidget(self.summary)
+        workspace=QHBoxLayout(); calendar_widget=QWidget(); self.grid=QGridLayout(calendar_widget); self.grid.setSpacing(4); workspace.addWidget(calendar_widget,8); self.detail=QTableWidget(); self.detail.setColumnCount(11); self.detail.setHorizontalHeaderLabels(["Hora","Símbolo","Lado","Entrada","Salida","Lote","Riesgo","Bruto","Costes","Neto","Resultado"]); self.detail.setStyleSheet(table_style()); workspace.addWidget(self.detail,5); layout.addLayout(workspace,3)
         self.list=QTableWidget(); self.list.setColumnCount(7); self.list.setHorizontalHeaderLabels(["Fecha","Símbolo","Lado","Neto","Resultado","Modo","Perfil"]); self.list.setStyleSheet(table_style()); self.list.setMaximumHeight(175); layout.addWidget(self.list,1)
         self.previous.clicked.connect(lambda:self.shift(-1)); self.next.clicked.connect(lambda:self.set_date(date.today())); today.clicked.connect(lambda:self.set_date(date.today())); self.demo.clicked.connect(self.load_demo); self.delete_demo.clicked.connect(self.remove_demo); self.heatmap.clicked.connect(self.show_heatmap)
         self.month.currentIndexChanged.connect(self.refresh); self.year.valueChanged.connect(self.refresh)

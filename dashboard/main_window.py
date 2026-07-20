@@ -3,13 +3,12 @@ from pathlib import Path
 import shutil
 
 from PySide6.QtCore import Qt, QSize, QSettings, QTimer
-from PySide6.QtGui import QAction, QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QSplitter,
     QListWidget,
     QListWidgetItem,
     QStackedWidget,
@@ -23,6 +22,8 @@ from PySide6.QtWidgets import (
     QStyle,
     QPushButton,
     QSizePolicy,
+    QFrame,
+    QStyledItemDelegate,
 )
 
 from dashboard.pages.dashboard_page import DashboardPage
@@ -55,8 +56,31 @@ from utils.live_readiness import live_mode_issues
 from dashboard.ui_theme import (NEGATIVE, POSITIVE, WARNING, application_style,
                                 apply_terminal_palette, configure_active_tables, status_chip)
 from dashboard.branding import application_icon, logo_pixmap
+from dashboard.icons import colored_icon
 from repositories.profile_repository import profile_repository
 from dashboard.widgets.enterprise import decorate_enterprise_page
+from dashboard.layout_manager import enterprise_layout
+
+
+class NavigationHeaderDelegate(QStyledItemDelegate):
+    """Paint section captions with a subtle line extending to the rail edge."""
+
+    def paint(self, painter, option, index):
+        if index.data(Qt.UserRole) != -1:
+            return super().paint(painter, option, index)
+        painter.save()
+        painter.setFont(QFont("Segoe UI", 8, QFont.DemiBold))
+        painter.setPen(QColor("#B7C4CF"))
+        title = str(index.data(Qt.DisplayRole) or "")
+        title_rect = option.rect.adjusted(8, 0, -6, 0)
+        painter.drawText(title_rect, Qt.AlignVCenter | Qt.AlignLeft, title)
+        title_width = painter.fontMetrics().horizontalAdvance(title)
+        line_left = option.rect.left() + 8 + title_width + 8
+        line_right = option.rect.right() - 6
+        if line_left < line_right:
+            painter.setPen(QPen(QColor("#263442"), 1))
+            painter.drawLine(line_left, option.rect.center().y(), line_right, option.rect.center().y())
+        painter.restore()
 
 
 class MainWindow(QMainWindow):
@@ -98,12 +122,14 @@ class MainWindow(QMainWindow):
         shutdown_application()
         event.accept()
 
-
     def build_toolbar(self):
 
         self.toolbar = QToolBar()
+        self.toolbar.setObjectName("CommandStrip")
+        self.toolbar.setStyleSheet("QToolBar#CommandStrip { background:#09131D; border:0; border-bottom:1px solid #1E3445; padding:5px 7px; }")
 
         self.toolbar.setMovable(False)
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
 
         self.toolbar.setIconSize(
             QSize(14, 14)
@@ -112,12 +138,21 @@ class MainWindow(QMainWindow):
         self.addToolBar(self.toolbar)
 
         self.toolbar_sidebar_spacer = QWidget()
-        self.toolbar_sidebar_spacer.setFixedWidth(190)
+        self.toolbar_sidebar_spacer.setMinimumWidth(0)
+        self.toolbar_sidebar_spacer.setMaximumWidth(16777215)
+        self.toolbar_sidebar_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.toolbar_sidebar_spacer.setStyleSheet("background:transparent; border:0;")
         self.toolbar.addWidget(self.toolbar_sidebar_spacer)
 
         self.actStart = QAction("Iniciar", self)
+        self.actStart.setToolTip(
+            "Inicia el motor global. Cada perfil conserva su propio modo de ejecución."
+        )
 
         self.actStop = QAction("Detener", self)
+        self.actStop.setToolTip(
+            "Paro global de emergencia: detiene señales, ejecución, monitor y clientes conectados."
+        )
 
         self.actSimulation = QAction("Simulación", self)
 
@@ -134,44 +169,35 @@ class MainWindow(QMainWindow):
         self.actAbout = QAction("Acerca de", self)
 
         toolbar_icons = (
-            (self.actStart, QStyle.SP_MediaPlay), (self.actStop, QStyle.SP_MediaStop),
-            (self.actSimulation, QStyle.SP_ComputerIcon), (self.actLive, QStyle.SP_BrowserStop),
-            (self.actRefresh, QStyle.SP_BrowserReload), (self.actBackup, QStyle.SP_DialogSaveButton),
-            (self.actRestore, QStyle.SP_DialogOpenButton), (self.actSettings, QStyle.SP_FileDialogDetailedView),
-            (self.actAbout, QStyle.SP_MessageBoxInformation),
+            (self.actStart, "play", "#00D47A"), (self.actStop, "square", "#FF4D5E"),
+            (self.actSimulation, "chart-spline", "#45A3FF"), (self.actLive, "radio", "#FF4D5E"),
+            (self.actRefresh, "refresh-cw", "#C7D2DC"), (self.actSettings, "settings", "#C7D2DC"),
         )
-        for action, icon in toolbar_icons:
-            action.setIcon(self.style().standardIcon(icon))
+        for action, name, color in toolbar_icons:
+            action.setIcon(colored_icon(name, color))
 
         self.toolbar.addAction(self.actStart)
 
         self.toolbar.addAction(self.actStop)
 
-        self.toolbar.addSeparator()
-
         self.toolbar.addAction(self.actSimulation)
 
         self.toolbar.addAction(self.actLive)
 
-        self.toolbar.addSeparator()
-
         self.toolbar.addAction(self.actRefresh)
-
-        self.toolbar.addSeparator()
-
-        self.toolbar.addAction(self.actBackup)
-
-        self.toolbar.addAction(self.actRestore)
-
-        self.toolbar.addSeparator()
 
         self.toolbar.addAction(self.actSettings)
 
-        self.toolbar.addAction(self.actAbout)
+        # Apply the shell contract after actions have established their size hints.
+        self.toolbar.setMinimumHeight(enterprise_layout.TOOLBAR_HEIGHT)
+        self.toolbar.setMaximumHeight(enterprise_layout.TOOLBAR_HEIGHT)
+
 
     def build_statusbar(self):
 
         self.status = QStatusBar()
+        self.status.setFixedHeight(enterprise_layout.STATUSBAR_HEIGHT)
+        self.status.setStyleSheet("QStatusBar{background:transparent;border:0;} QStatusBar::item{border:0;}")
 
         self.setStatusBar(self.status)
 
@@ -193,12 +219,6 @@ class MainWindow(QMainWindow):
 
         self.lblVersion = QLabel(f"Versión {VERSION}")
 
-        self.status.addPermanentWidget(self.lblMode)
-
-        self.status.addPermanentWidget(self.lblTelegram)
-
-        self.status.addPermanentWidget(self.lblMT5)
-
         self.status.addPermanentWidget(self.lblProfiles)
 
         self.status.addPermanentWidget(self.lblAccounts)
@@ -212,11 +232,16 @@ class MainWindow(QMainWindow):
         self.lblPaper = QLabel("Paper: listo")
         self.lblReplay = QLabel("Replay: listo")
         self.lblClock = QLabel()
-        self.status.addPermanentWidget(self.lblPaper)
-        self.status.addPermanentWidget(self.lblReplay)
         self.status.addPermanentWidget(self.lblClock)
 
         self.status.addPermanentWidget(self.lblVersion)
+
+        footer_base = "font-family:'Bahnschrift','Segoe UI';font-size:9px;font-weight:600;color:#C7D2DC;padding:0 16px;border:0;background:transparent;"
+        for widget in (self.lblProfiles, self.lblAccounts, self.lblSignals, self.lblOperations):
+            widget.setStyleSheet(footer_base)
+        self.lblProfit.setStyleSheet(footer_base + "color:#00C853;")
+        self.lblClock.setStyleSheet(footer_base + "color:#EAF1F5;")
+        self.lblVersion.setStyleSheet(footer_base + "color:#8D9CAA;")
 
         self.topStatus = self.toolbar
         self.topProfile = QLabel("Perfil: sin activo")
@@ -226,9 +251,13 @@ class MainWindow(QMainWindow):
         self.topDatabase = QLabel("SQLite: disponible")
         self.topVersion = QLabel(f"v{VERSION}")
         self.topClock = QLabel()
-        for widget, color in ((self.topProfile, WARNING), (self.topMode, WARNING), (self.topMT5, NEGATIVE), (self.topTelegram, NEGATIVE), (self.topDatabase, POSITIVE), (self.topVersion, POSITIVE)):
+        for widget, color in ((self.topMode, WARNING), (self.topMT5, NEGATIVE), (self.topTelegram, NEGATIVE), (self.topDatabase, POSITIVE), (self.topVersion, POSITIVE)):
             widget.setStyleSheet(status_chip(color)); self.topStatus.addWidget(widget)
         self.topClock.setStyleSheet(status_chip(POSITIVE)); self.topStatus.addWidget(self.topClock)
+        self.toolbar_right_margin = QWidget()
+        self.toolbar_right_margin.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.toolbar_right_margin.setStyleSheet("background:transparent; border:0;")
+        self.topStatus.addWidget(self.toolbar_right_margin)
         self.clock_timer = QTimer(self); self.clock_timer.timeout.connect(self.update_clock); self.clock_timer.start(1000); self.update_clock()
 
     def build_central(self):
@@ -238,33 +267,39 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         layout = QHBoxLayout(central)
-
-        splitter = QSplitter()
-
-        layout.addWidget(splitter)
+        # Align the sidebar with the floating logo panel at the window edge.
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         sidebar = QWidget()
-        sidebar.setMinimumWidth(200)
-        sidebar.setMaximumWidth(215)
+        sidebar.setObjectName("SidebarRail")
+        sidebar.setFixedWidth(enterprise_layout.SIDEBAR_WIDTH)
+        sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        sidebar.setStyleSheet("QWidget#SidebarRail { background:#09131D; border:1px solid #1E3445; border-radius:12px; }")
         sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(8, 0, 8, 6)
+        sidebar_layout.setContentsMargins(8, 8, 8, 6)
+        sidebar_layout.setSpacing(4)
         brand = KrakenLogo(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"); brand.setToolTip("Kraken Bot Enterprise"); brand.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        brand_name = QLabel("KRAKEN BOT\nENTERPRISE")
+        brand_name = QLabel("KRAKEN BOT")
         brand_name.setAlignment(Qt.AlignHCenter)
-        brand_name.setStyleSheet("font-size:18px;font-weight:800;color:#00C853;padding:8px;")
-        brand_row = QVBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.setAlignment(Qt.AlignHCenter); brand_row.addWidget(brand, alignment=Qt.AlignHCenter); brand_row.addWidget(brand_name, alignment=Qt.AlignHCenter)
-        section = QLabel("OPERACIÓN  ·  DATOS  ·  SISTEMA")
-        section.setStyleSheet("color:#B0BEC5;font-size:10px;padding:0 8px 6px 8px;")
+        brand_name.setStyleSheet("font-size:18px;font-weight:800;color:#F4F7FA;padding:0;")
+        brand_subtitle = QLabel("ENTERPRISE")
+        brand_subtitle.setAlignment(Qt.AlignHCenter)
+        brand_subtitle.setStyleSheet("font-size:11px;font-weight:700;letter-spacing:3px;color:#00C853;padding:0 0 6px 0;")
+        brand_row = QVBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.setSpacing(1); brand_row.setAlignment(Qt.AlignHCenter); brand_row.addWidget(brand, alignment=Qt.AlignHCenter); brand_row.addWidget(brand_name, alignment=Qt.AlignHCenter); brand_row.addWidget(brand_subtitle, alignment=Qt.AlignHCenter)
         sidebar_layout.addLayout(brand_row)
-        sidebar_layout.addWidget(section)
         self.sidebar_toggle = QPushButton("‹  Contraer navegación")
         sidebar_layout.addWidget(self.sidebar_toggle)
+        self.sidebar_toggle.hide()
         self.menu = QListWidget()
+        self.menu.setSpacing(0)
+        self.menu.setIconSize(QSize(13, 13))
+        self.menu.setItemDelegate(NavigationHeaderDelegate(self.menu))
         self.menu.setToolTip("Navegación principal")
         sidebar_layout.addWidget(self.menu)
         self.sidebar = sidebar
         self.sidebar_toggle.clicked.connect(self.toggle_sidebar)
-        if QSettings("KrakenBot", "EnterpriseUI").value("sidebar/collapsed", False, type=bool):
+        if False and QSettings("KrakenBot", "EnterpriseUI").value("sidebar/collapsed", False, type=bool):
             self.toggle_sidebar()
 
         pages = [
@@ -307,35 +342,41 @@ class MainWindow(QMainWindow):
 
         ]
 
-        icon_map = [QStyle.SP_ComputerIcon, QStyle.SP_FileDialogDetailedView, QStyle.SP_DesktopIcon,
-                    QStyle.SP_DirHomeIcon, QStyle.SP_DriveHDIcon, QStyle.SP_DialogYesButton,
-                    QStyle.SP_DirIcon, QStyle.SP_FileDialogContentsView, QStyle.SP_MessageBoxInformation,
-                    QStyle.SP_FileDialogInfoView, QStyle.SP_BrowserReload, QStyle.SP_DriveNetIcon,
-                    QStyle.SP_MessageBoxWarning, QStyle.SP_MediaPlay, QStyle.SP_FileDialogListView,
-                    QStyle.SP_FileDialogDetailedView, QStyle.SP_FileDialogContentsView]
-        groups = (("OPERACIÓN", range(0, 4)), ("TRADING", (13, 16, 14, 15)),
+        icon_map = ["layout-dashboard", "list-checks", "chart-no-axes-combined", "users",
+                    "activity", "send", "radio-tower", "tags", "scroll-text", "search-check",
+                    "history", "chart-spline", "circle-check", "briefcase-business", "calendar-days",
+                    "chart-no-axes-combined", "play", "settings"]
+        groups = (("OPERACIÓN", range(0, 4)), ("TRADING", (12, 13, 16, 14, 15)),
                   ("MERCADO", range(4, 8)), ("ANÁLISIS", (9, 10, 11, 8)),
                   ("CONFIGURACIÓN", (3, 17)))
+        # Perfiles belongs to Operación; keep Configuración free of the duplicate.
+        groups = groups[:-1] + ((groups[-1][0], (17,)),)
         self.page_items = {}
         for group, indices in groups:
             header = QListWidgetItem(group)
             header.setFlags(Qt.NoItemFlags)
             header.setData(Qt.UserRole, -1)
-            header.setForeground(Qt.gray)
+            header.setSizeHint(QSize(0, 33))
+            header.setFont(QFont("Segoe UI", 8, QFont.DemiBold))
+            header.setForeground(Qt.GlobalColor.lightGray)
             self.menu.addItem(header)
             for index in indices:
-                page = pages[index]; icon = icon_map[index] if index < len(icon_map) else QStyle.SP_MediaSeekForward
-                item = QListWidgetItem(self.style().standardIcon(icon), page)
+                page = pages[index]; icon = icon_map[index] if index < len(icon_map) else "circle-check"
+                item = QListWidgetItem(colored_icon(icon, "#C7D2DC"), page)
                 item.setData(Qt.UserRole, index); item.setToolTip(page); self.menu.addItem(item); self.page_items[page] = item
+            if tuple(indices) == (17,):
+                for title, action_code, icon in (("Backup", -2, "database-backup"), ("Restaurar", -3, "folder-open")):
+                    action_item = QListWidgetItem(colored_icon(icon, "#C7D2DC"), title)
+                    action_item.setData(Qt.UserRole, action_code)
+                    action_item.setToolTip(title)
+                    self.menu.addItem(action_item)
 
-        splitter.addWidget(sidebar)
+        layout.addWidget(sidebar)
 
         self.stack = QStackedWidget()
 
-        splitter.addWidget(self.stack)
-
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([207, 1200])
+        self.stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(self.stack, 1)
 
         self.dashboardPage = DashboardPage()
 
@@ -410,6 +451,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.settingsPage)
 
         page_details = (
+            (self.operationsPage, "Operaciones", "Consulte las operaciones generadas por simulación y paper trading."),
+            (self.statisticsPage, "Estadísticas", "Revise el rendimiento consolidado de las operaciones registradas."),
             (self.profilesPage, "Perfiles", "Cree y active un perfil para definir operación y riesgo."),
             (self.mt5Page, "Cuentas MT5", "Agregue una cuenta y ejecute el diagnóstico de conexión."),
             (self.telegramPage, "Cuentas Telegram", "Configure una cuenta y complete su autorización."),
@@ -425,8 +468,33 @@ class MainWindow(QMainWindow):
             (self.replayPage, "Replay", "Seleccione una fecha con operaciones para reproducir su línea de tiempo."),
             (self.settingsPage, "Configuración", "Ajuste el modo y protecciones antes de iniciar el motor."),
         )
+        page_heading_icons = {
+            "Perfiles": "users",
+            "Operaciones": "list-checks",
+            "Estadísticas": "chart-spline",
+            "Cuentas MT5": "activity",
+            "Cuentas Telegram": "send",
+            "Canales": "radio-tower",
+            "Símbolos": "tags",
+            "Logs": "scroll-text",
+            "Inspector de señales": "search-check",
+            "Línea de tiempo": "history",
+            "Datos de mercado": "chart-spline",
+            "Paper Trading": "briefcase-business",
+            "Calendario de Trading": "calendar-days",
+            "Analíticas": "chart-no-axes-combined",
+            "Replay": "play",
+            "Configuración": "settings",
+        }
         for page, title, guidance in page_details:
-            decorate_enterprise_page(page, title, guidance)
+            decorate_enterprise_page(
+                page,
+                title,
+                guidance,
+                page_heading_icons.get(title, "circle-check"),
+            )
+        enterprise_layout.configure_page(self.dashboardPage)
+        enterprise_layout.configure_page(self.liveReadinessPage)
 
         self.menu.currentRowChanged.connect(self.select_navigation_page)
 
@@ -434,6 +502,7 @@ class MainWindow(QMainWindow):
 
         self.dashboardPage.navigate_requested.connect(self.navigate_to_page)
         self.dashboardPage.action_requested.connect(self.handle_dashboard_action)
+        self.dashboardPage.notifications_requested.connect(self.toggle_notifications)
 
     def build_console(self):
 
@@ -491,6 +560,12 @@ class MainWindow(QMainWindow):
             self.notificationDock
 
         )
+        # Notifications are available from the dashboard header, not permanently
+        # docked at the right side of the application.
+        self.notificationDock.hide()
+
+    def toggle_notifications(self):
+        self.notificationDock.setVisible(not self.notificationDock.isVisible())
 
     def connect_signals(self):
 
@@ -619,12 +694,9 @@ class MainWindow(QMainWindow):
         self.topClock.setText(current)
 
     def toggle_sidebar(self):
-        collapsed = not self.menu.isHidden()
-        self.menu.setVisible(not collapsed)
-        self.sidebar.setMaximumWidth(78 if collapsed else 215)
-        self.sidebar.setMinimumWidth(72 if collapsed else 200)
-        self.sidebar_toggle.setText("›  Expandir navegación" if collapsed else "‹  Contraer navegación")
-        QSettings("KrakenBot", "EnterpriseUI").setValue("sidebar/collapsed", collapsed)
+        # Enterprise layout keeps navigation fixed so the workspace proportion is
+        # stable at every supported resolution.
+        self.sidebar.setFixedWidth(enterprise_layout.SIDEBAR_WIDTH)
 
     def navigate_to_page(self, title):
         item = self.page_items.get(title)
@@ -636,6 +708,12 @@ class MainWindow(QMainWindow):
         if item is None:
             return
         index = item.data(Qt.UserRole)
+        if index == -2:
+            self.backup_database()
+            return
+        if index == -3:
+            self.restore_database()
+            return
         if isinstance(index, int) and index >= 0:
             self.stack.setCurrentIndex(index)
 
@@ -850,7 +928,50 @@ class MainWindow(QMainWindow):
 
 
 class KrakenLogo(QLabel):
+    _pixmap_cache = {}
+
     def __init__(self, path, parent=None):
-        super().__init__(parent); self.pixmap_source=QPixmap(str(path)); self.setFixedSize(130,106); self.setStyleSheet("background:transparent;border:0;")
+        super().__init__(parent)
+        cache_key = str(Path(path).resolve())
+        if cache_key not in self._pixmap_cache:
+            # The source artwork is 1254 px square but is displayed at only
+            # 140x114.  Pre-scaling avoids processing 1.5 million pixels for
+            # every window while retaining ample detail for the final render.
+            source = QPixmap(cache_key).scaled(
+                280, 280, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            self._pixmap_cache[cache_key] = self._blend_into_sidebar(source)
+        self.pixmap_source = self._pixmap_cache[cache_key]
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setStyleSheet("background:transparent;border:0;")
+
+    def sizeHint(self):
+        return QSize(140, 114)
+
+    @staticmethod
+    def _blend_into_sidebar(pixmap):
+        """Remove the baked-in black canvas and feather the branded artwork edges."""
+        image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
+        width, height = image.width(), image.height()
+        feather = max(8, min(width, height) // 12)
+        for y in range(height):
+            for x in range(width):
+                color = image.pixelColor(x, y)
+                brightness = max(color.red(), color.green(), color.blue())
+                # The source image is a neon mark on near-black.  Convert the canvas
+                # to transparency, retaining the low-light detail with a soft ramp.
+                if brightness <= 20:
+                    alpha = 0
+                elif brightness < 64:
+                    alpha = int((brightness - 20) * 255 / 44)
+                else:
+                    alpha = color.alpha()
+                edge_distance = min(x, y, width - 1 - x, height - 1 - y)
+                alpha = int(alpha * min(1.0, max(0.0, edge_distance / feather)))
+                color.setAlpha(alpha)
+                image.setPixelColor(x, y, color)
+        return QPixmap.fromImage(image)
+
     def paintEvent(self, event):
-        painter=QPainter(self); painter.setRenderHint(QPainter.Antialiasing); clip=QPainterPath(); clip.addRoundedRect(self.rect().adjusted(3,3,-3,-3),18,18); painter.setClipPath(clip); painter.drawPixmap(self.rect(),self.pixmap_source); painter.end()
+        painter=QPainter(self); painter.setRenderHint(QPainter.Antialiasing); clip=QPainterPath(); clip.addRoundedRect(self.rect().adjusted(2,2,-2,-2),20,20); painter.setClipPath(clip); painter.drawPixmap(self.rect(),self.pixmap_source); painter.end()
