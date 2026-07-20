@@ -30,7 +30,7 @@ class CurvePanel(QWidget):
 
 class KpiCard(QWidget):
     def __init__(self, icon, title, accent, detail):
-        super().__init__(); self.setMinimumHeight(116); self.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-top:2px solid {accent};border-radius:8px;")
+        super().__init__(); self.setObjectName("KpiCard"); self.setMinimumHeight(96); self.setStyleSheet(f"#KpiCard{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-top:2px solid {accent};border-radius:8px;}}")
         row=QHBoxLayout(self); row.setContentsMargins(15,13,15,12); row.setSpacing(12)
         glyph=QLabel(icon); glyph.setFixedSize(46,46); glyph.setAlignment(Qt.AlignCenter); glyph.setStyleSheet(f"background:{accent}22;color:{accent};border:0;border-radius:8px;font-size:24px;")
         body=QVBoxLayout(); body.setSpacing(3); label=QLabel(title); label.setStyleSheet("color:#F4F7FA;font-weight:700;border:0;"); self.value=QLabel("—"); self.value.setStyleSheet("color:#FFFFFF;font-size:22px;font-weight:700;border:0;"); self.detail=QLabel(detail); self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:11px;border:0;")
@@ -55,10 +55,10 @@ class DashboardPage(QWidget):
         tables=QHBoxLayout(); self.operations=self.table(["ID","Símbolo","Dirección","Entrada","Salida","P/L","Estado","Hora cierre"]); self.signals=self.table(["Hora","Símbolo","Dirección","Entrada","TP1","SL","Estado"]); tables.addWidget(self.panel("Operaciones recientes",self.operations),1); tables.addWidget(self.panel("Señales recientes",self.signals),1); layout.addLayout(tables,2)
         configure_active_tables(self)
     def connectivity_panel(self):
-        box=QWidget(); box.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"); layout=QVBoxLayout(box); layout.setContentsMargins(12,10,12,10); layout.addWidget(QLabel("Conectividad"))
+        box=QWidget(); box.setObjectName("DashboardPanel"); box.setStyleSheet(f"#DashboardPanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;}}"); layout=QVBoxLayout(box); layout.setContentsMargins(12,10,12,10); layout.addWidget(QLabel("Conectividad"))
         self.connection_text=QLabel(); self.connection_text.setWordWrap(True); self.connection_text.setStyleSheet(f"color:{SECONDARY_TEXT};border:0;"); layout.addWidget(self.connection_text); diag=QPushButton("Diagnóstico"); diag.clicked.connect(lambda:self.navigate_requested.emit("MT5")); layout.addWidget(diag); return box
     def quick_panel(self):
-        box=QWidget(); box.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"); layout=QVBoxLayout(box); layout.setContentsMargins(12,10,12,10); layout.addWidget(QLabel("Acciones rápidas"))
+        box=QWidget(); box.setObjectName("DashboardQuickPanel"); box.setStyleSheet(f"#DashboardQuickPanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;}}"); layout=QVBoxLayout(box); layout.setContentsMargins(12,10,12,10); layout.addWidget(QLabel("Acciones rápidas"))
         for title,action in (("▷ Simulación","SIMULATION"),("↗ Paper Trading","Paper Trading"),("▦ Calendario","Calendario de Trading"),("◔ Analíticas","Analíticas"),("⚙ Configuración","Configuración")):
             button=QPushButton(title); button.clicked.connect(lambda checked=False,a=action:self._quick(a)); layout.addWidget(button)
         return box
@@ -67,7 +67,7 @@ class DashboardPage(QWidget):
         table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(270); return table
     @staticmethod
     def panel(title, widget):
-        panel=QWidget(); panel.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"); box=QVBoxLayout(panel); box.setContentsMargins(10,8,10,8); heading=QLabel(title); heading.setStyleSheet("font-weight:700;border:0;"); box.addWidget(heading); box.addWidget(widget); return panel
+        panel=QWidget(); panel.setObjectName("DashboardTablePanel"); panel.setStyleSheet(f"#DashboardTablePanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;}}"); box=QVBoxLayout(panel); box.setContentsMargins(10,8,10,8); heading=QLabel(title); heading.setStyleSheet("font-weight:700;border:0;background:transparent;"); box.addWidget(heading); box.addWidget(widget); return panel
     def _quick(self, action): self.action_requested.emit(action) if action=="SIMULATION" else self.navigate_requested.emit(action)
     def refresh(self,*args):
         active=profile_repository.get_active(); metrics=trading_analytics_service.metrics({"profile":active.id} if active else {}); rows=metrics["rows"]; open_count=sum(r["status"]=="OPEN" for r in rows); pending=sum(r["status"] in ("PENDING","QUEUED") for r in rows)
