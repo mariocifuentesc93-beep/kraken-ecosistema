@@ -11,6 +11,9 @@ def application_style():
     return f"""
     QMainWindow, QWidget {{ background:{BACKGROUND_COLOR}; font-family:'Segoe UI'; font-size:12px; }}
     QToolBar {{ background:{PANEL_COLOR}; border:0; border-bottom:1px solid {BORDER_COLOR}; spacing:6px; padding:5px; }}
+    QToolButton {{ background:#111820; color:#F4F7FA; border:1px solid #263442; border-radius:5px; padding:6px 10px; font-weight:600; }}
+    QToolButton:hover {{ background:#1B2A35; border-color:#00C853; }}
+    QToolButton:pressed {{ background:#123422; }}
     QStatusBar {{ background:{PANEL_COLOR}; border-top:1px solid {BORDER_COLOR}; color:{SECONDARY_TEXT}; }}
     QListWidget {{ background:{PANEL_COLOR}; border:0; outline:0; padding:8px; }}
     QListWidget::item {{ border-radius:7px; margin:2px 0; padding:9px 10px; color:{SECONDARY_TEXT}; }}

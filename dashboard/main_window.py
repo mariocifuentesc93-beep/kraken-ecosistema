@@ -128,6 +128,16 @@ class MainWindow(QMainWindow):
 
         self.actAbout = QAction("Acerca de", self)
 
+        toolbar_icons = (
+            (self.actStart, QStyle.SP_MediaPlay), (self.actStop, QStyle.SP_MediaStop),
+            (self.actSimulation, QStyle.SP_ComputerIcon), (self.actLive, QStyle.SP_BrowserStop),
+            (self.actRefresh, QStyle.SP_BrowserReload), (self.actBackup, QStyle.SP_DialogSaveButton),
+            (self.actRestore, QStyle.SP_DialogOpenButton), (self.actSettings, QStyle.SP_FileDialogDetailedView),
+            (self.actAbout, QStyle.SP_MessageBoxInformation),
+        )
+        for action, icon in toolbar_icons:
+            action.setIcon(self.style().standardIcon(icon))
+
         self.toolbar.addAction(self.actStart)
 
         self.toolbar.addAction(self.actStop)
