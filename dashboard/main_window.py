@@ -2,8 +2,8 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 
-from PySide6.QtCore import Qt, QSize, QSettings, QTimer
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QEasingCurve, Qt, QSize, QSettings, QTimer, QPropertyAnimation
+from PySide6.QtGui import QAction, QFont, QIcon, QImage, QKeySequence, QPainter, QPainterPath, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QFrame,
-    QStyledItemDelegate,
+    QGraphicsOpacityEffect,
 )
 
 from dashboard.pages.dashboard_page import DashboardPage
@@ -62,27 +62,8 @@ from repositories.profile_repository import profile_repository
 from dashboard.widgets.enterprise import decorate_enterprise_page
 from dashboard.layout_manager import enterprise_layout
 from dashboard.professional_forms import professional_forms
-
-
-class NavigationHeaderDelegate(QStyledItemDelegate):
-    """Paint section captions with a subtle line extending to the rail edge."""
-
-    def paint(self, painter, option, index):
-        if index.data(Qt.UserRole) != -1:
-            return super().paint(painter, option, index)
-        painter.save()
-        painter.setFont(QFont("Segoe UI", 8, QFont.DemiBold))
-        painter.setPen(QColor("#B7C4CF"))
-        title = str(index.data(Qt.DisplayRole) or "")
-        title_rect = option.rect.adjusted(8, 0, -6, 0)
-        painter.drawText(title_rect, Qt.AlignVCenter | Qt.AlignLeft, title)
-        title_width = painter.fontMetrics().horizontalAdvance(title)
-        line_left = option.rect.left() + 8 + title_width + 8
-        line_right = option.rect.right() - 6
-        if line_left < line_right:
-            painter.setPen(QPen(QColor("#263442"), 1))
-            painter.drawLine(line_left, option.rect.center().y(), line_right, option.rect.center().y())
-        painter.restore()
+from dashboard.navigation import (EnterpriseNavigationDelegate, EnterpriseNavigationList,
+                                  FULL_TEXT_ROLE, GROUP_ROLE)
 
 
 class ResponsiveStack(QStackedWidget):
@@ -296,20 +277,18 @@ class MainWindow(QMainWindow):
         brand_subtitle.setAlignment(Qt.AlignHCenter)
         brand_subtitle.setStyleSheet("font-size:11px;font-weight:700;letter-spacing:3px;color:#00C853;padding:0 0 6px 0;")
         brand_row = QVBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.setSpacing(1); brand_row.setAlignment(Qt.AlignHCenter); brand_row.addWidget(brand, alignment=Qt.AlignHCenter); brand_row.addWidget(brand_name, alignment=Qt.AlignHCenter); brand_row.addWidget(brand_subtitle, alignment=Qt.AlignHCenter)
+        self.sidebar_brand_widgets = (brand, brand_name, brand_subtitle)
         sidebar_layout.addLayout(brand_row)
         self.sidebar_toggle = QPushButton("‹  Contraer navegación")
         sidebar_layout.addWidget(self.sidebar_toggle)
-        self.sidebar_toggle.hide()
-        self.menu = QListWidget()
+        self.menu = EnterpriseNavigationList()
         self.menu.setSpacing(0)
         self.menu.setIconSize(QSize(13, 13))
-        self.menu.setItemDelegate(NavigationHeaderDelegate(self.menu))
+        self.menu.setItemDelegate(EnterpriseNavigationDelegate(self.menu))
         self.menu.setToolTip("Navegación principal")
         sidebar_layout.addWidget(self.menu)
         self.sidebar = sidebar
         self.sidebar_toggle.clicked.connect(self.toggle_sidebar)
-        if False and QSettings("KrakenBot", "EnterpriseUI").value("sidebar/collapsed", False, type=bool):
-            self.toggle_sidebar()
 
         pages = [
 
@@ -355,30 +334,37 @@ class MainWindow(QMainWindow):
                     "activity", "send", "radio-tower", "tags", "scroll-text", "search-check",
                     "history", "chart-spline", "circle-check", "briefcase-business", "calendar-days",
                     "chart-no-axes-combined", "play", "settings"]
-        groups = (("OPERACIÓN", range(0, 4)), ("TRADING", (12, 13, 16, 14, 15)),
-                  ("MERCADO", range(4, 8)), ("ANÁLISIS", (9, 10, 11, 8)),
-                  ("CONFIGURACIÓN", (3, 17)))
+        groups = (("OPERATION", range(0, 4)), ("TRADING", (12, 13, 16, 14, 15)),
+                  ("MARKET", range(4, 8)), ("ANALYSIS", (9, 10, 11, 8)),
+                  ("CONFIGURATION", (3, 17)))
         # Perfiles belongs to Operación; keep Configuración free of the duplicate.
         groups = groups[:-1] + ((groups[-1][0], (17,)),)
         self.page_items = {}
+        self.navigation_groups = {}
         for group, indices in groups:
             header = QListWidgetItem(group)
-            header.setFlags(Qt.NoItemFlags)
+            header.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             header.setData(Qt.UserRole, -1)
-            header.setSizeHint(QSize(0, 33))
+            header.setData(GROUP_ROLE, group)
+            header.setData(FULL_TEXT_ROLE, group)
+            header.setSizeHint(QSize(0, 38))
             header.setFont(QFont("Segoe UI", 8, QFont.DemiBold))
             header.setForeground(Qt.GlobalColor.lightGray)
             self.menu.addItem(header)
+            self.navigation_groups[group] = (header, [])
             for index in indices:
                 page = pages[index]; icon = icon_map[index] if index < len(icon_map) else "circle-check"
                 item = QListWidgetItem(colored_icon(icon, "#C7D2DC"), page)
-                item.setData(Qt.UserRole, index); item.setToolTip(page); self.menu.addItem(item); self.page_items[page] = item
+                item.setData(Qt.UserRole, index); item.setData(GROUP_ROLE, group); item.setData(FULL_TEXT_ROLE, page); item.setToolTip(page); self.menu.addItem(item); self.page_items[page] = item; self.navigation_groups[group][1].append(item)
             if tuple(indices) == (17,):
                 for title, action_code, icon in (("Backup", -2, "database-backup"), ("Restaurar", -3, "folder-open")):
                     action_item = QListWidgetItem(colored_icon(icon, "#C7D2DC"), title)
                     action_item.setData(Qt.UserRole, action_code)
+                    action_item.setData(GROUP_ROLE, group)
+                    action_item.setData(FULL_TEXT_ROLE, title)
                     action_item.setToolTip(title)
                     self.menu.addItem(action_item)
+                    self.navigation_groups[group][1].append(action_item)
 
         layout.addWidget(sidebar)
 
@@ -521,8 +507,11 @@ class MainWindow(QMainWindow):
             professional_forms.configure(form_page)
 
         self.menu.currentRowChanged.connect(self.select_navigation_page)
-
-        self.menu.setCurrentItem(self.page_items["Dashboard"])
+        self.menu.itemClicked.connect(self._handle_navigation_click)
+        self.menu.group_toggle_requested.connect(self.toggle_navigation_group)
+        self.navigation_shortcut = QShortcut(QKeySequence("Alt+N"), self)
+        self.navigation_shortcut.activated.connect(self.menu.setFocus)
+        self._restore_navigation_state()
 
         self.dashboardPage.navigate_requested.connect(self.navigate_to_page)
         self.dashboardPage.action_requested.connect(self.handle_dashboard_action)
@@ -718,9 +707,61 @@ class MainWindow(QMainWindow):
         self.topClock.setText(current)
 
     def toggle_sidebar(self):
-        # Enterprise layout keeps navigation fixed so the workspace proportion is
-        # stable at every supported resolution.
-        self.sidebar.setFixedWidth(enterprise_layout.SIDEBAR_WIDTH)
+        current = QSettings("KrakenBot", "EnterpriseUI").value(
+            "sidebar/collapsed", False, type=bool
+        )
+        self.set_sidebar_collapsed(not current)
+
+    def set_sidebar_collapsed(self, collapsed, persist=True):
+        width = 64 if collapsed else enterprise_layout.SIDEBAR_WIDTH
+        self.sidebar.setFixedWidth(width)
+        self.sidebar_toggle.setText("›" if collapsed else "‹  Contraer navegación")
+        self.sidebar_toggle.setToolTip(
+            "Expandir navegación" if collapsed else "Contraer navegación"
+        )
+        for widget in self.sidebar_brand_widgets:
+            widget.setVisible(not collapsed)
+        self.menu.setIconSize(QSize(18, 18) if collapsed else QSize(13, 13))
+        for row in range(self.menu.count()):
+            item = self.menu.item(row)
+            if item.data(Qt.UserRole) == -1:
+                item.setHidden(collapsed)
+            else:
+                item.setText("" if collapsed else str(item.data(FULL_TEXT_ROLE) or ""))
+        self._apply_group_visibility()
+        if persist:
+            QSettings("KrakenBot", "EnterpriseUI").setValue("sidebar/collapsed", collapsed)
+
+    def _restore_navigation_state(self):
+        settings = QSettings("KrakenBot", "EnterpriseUI")
+        for group in self.navigation_groups:
+            collapsed = settings.value(f"navigation/groups/{group}", False, type=bool)
+            self.navigation_groups[group][0].setData(Qt.UserRole + 3, collapsed)
+        self._apply_group_visibility()
+        last_page = settings.value("navigation/last_page", "Dashboard", type=str)
+        self.menu.setCurrentItem(self.page_items.get(last_page, self.page_items["Dashboard"]))
+        self.set_sidebar_collapsed(settings.value("sidebar/collapsed", False, type=bool), persist=False)
+
+    def _apply_group_visibility(self):
+        for header, items in self.navigation_groups.values():
+            collapsed = bool(header.data(Qt.UserRole + 3))
+            for item in items:
+                item.setHidden(collapsed)
+
+    def _handle_navigation_click(self, item):
+        if item.data(Qt.UserRole) == -1:
+            self.toggle_navigation_group(item)
+
+    def toggle_navigation_group(self, header):
+        group = header.data(GROUP_ROLE)
+        collapsed = not bool(header.data(Qt.UserRole + 3))
+        header.setData(Qt.UserRole + 3, collapsed)
+        for item in self.navigation_groups[group][1]:
+            item.setHidden(collapsed)
+        QSettings("KrakenBot", "EnterpriseUI").setValue(
+            f"navigation/groups/{group}", collapsed
+        )
+        self.menu.viewport().update()
 
     def navigate_to_page(self, title):
         item = self.page_items.get(title)
@@ -739,7 +780,22 @@ class MainWindow(QMainWindow):
             self.restore_database()
             return
         if isinstance(index, int) and index >= 0:
-            self.stack.setCurrentIndex(index)
+            if self.stack.currentIndex() != index:
+                page = self.stack.widget(index)
+                effect = QGraphicsOpacityEffect(page)
+                page.setGraphicsEffect(effect)
+                effect.setOpacity(0.0)
+                self.stack.setCurrentIndex(index)
+                self.page_transition = QPropertyAnimation(effect, b"opacity", self)
+                self.page_transition.setDuration(175)
+                self.page_transition.setStartValue(0.0)
+                self.page_transition.setEndValue(1.0)
+                self.page_transition.setEasingCurve(QEasingCurve.OutCubic)
+                self.page_transition.finished.connect(lambda current=page: current.setGraphicsEffect(None))
+                self.page_transition.start()
+            QSettings("KrakenBot", "EnterpriseUI").setValue(
+                "navigation/last_page", str(item.data(FULL_TEXT_ROLE) or "Dashboard")
+            )
 
     def handle_dashboard_action(self, action):
         if action == "SIMULATION":

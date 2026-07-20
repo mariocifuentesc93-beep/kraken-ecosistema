@@ -35,6 +35,7 @@ class DashboardPolishTests(unittest.TestCase):
         from dashboard.main_window import MainWindow
 
         window = MainWindow()
+        window.menu.setCurrentItem(window.page_items["Dashboard"])
         window.show()
         page = window.dashboardPage
         cards = list(page.kpis.values())
