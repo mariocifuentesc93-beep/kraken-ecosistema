@@ -61,6 +61,7 @@ from dashboard.icons import colored_icon
 from repositories.profile_repository import profile_repository
 from dashboard.widgets.enterprise import decorate_enterprise_page
 from dashboard.layout_manager import enterprise_layout
+from dashboard.professional_forms import professional_forms
 
 
 class NavigationHeaderDelegate(QStyledItemDelegate):
@@ -507,6 +508,17 @@ class MainWindow(QMainWindow):
         enterprise_layout.configure_page(self.liveReadinessPage)
         apply_standard_components(self.dashboardPage)
         apply_standard_components(self.liveReadinessPage)
+        for form_page in (
+            self.settingsPage,
+            self.paperTradingPage,
+            self.replayPage,
+            self.telegramPage,
+            self.mt5Page,
+            self.profilesPage,
+            self.tradingCalendarPage,
+            self.analyticsPage,
+        ):
+            professional_forms.configure(form_page)
 
         self.menu.currentRowChanged.connect(self.select_navigation_page)
 

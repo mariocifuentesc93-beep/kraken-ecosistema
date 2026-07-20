@@ -1,7 +1,7 @@
 from datetime import date
 
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtWidgets import (QComboBox, QDateEdit, QHBoxLayout, QLabel, QPushButton,
+from PySide6.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QPushButton,
                                QSlider, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QFileDialog)
 from repositories.profile_repository import profile_repository
 from repositories.symbol_repository import symbol_repository
@@ -12,15 +12,15 @@ class ReplayPage(QWidget):
     def __init__(self):
         super().__init__(); self.events=[]; self.index=0; self.timer=QTimer(self); self.timer.timeout.connect(self.next_event); self.build_ui(); self.load_session()
     def build_ui(self):
-        layout=QVBoxLayout(self); filters=QHBoxLayout(); self.day=QDateEdit(); self.day.setDate(date.today()); self.profile=QComboBox(); self.symbol=QComboBox(); self.mode=QComboBox(); self.speed=QComboBox(); self.mode.addItems(["All","Simulation","Paper","Demo","Live"]); self.speed.addItems(["x1","x2","x5","x10","x25","x50"])
-        for label,widget in (("Fecha",self.day),("Perfil",self.profile),("Símbolo",self.symbol),("Modo",self.mode),("Velocidad",self.speed)): filters.addWidget(QLabel(label)); filters.addWidget(widget)
-        load=QPushButton("Cargar replay"); load.clicked.connect(self.load_session); filters.addWidget(load); filters.addStretch()
+        layout=QVBoxLayout(self); filters=QGridLayout(); self.day=QDateEdit(); self.day.setDate(date.today()); self.profile=QComboBox(); self.symbol=QComboBox(); self.mode=QComboBox(); self.speed=QComboBox(); self.mode.addItems(["All","Simulation","Paper","Demo","Live"]); self.speed.addItems(["x1","x2","x5","x10","x25","x50"])
+        for column,(label,widget) in enumerate((("Fecha",self.day),("Perfil",self.profile),("Símbolo",self.symbol),("Modo",self.mode),("Velocidad",self.speed))): filters.addWidget(QLabel(label),0,column); filters.addWidget(widget,1,column); filters.setColumnStretch(column,1)
+        load=QPushButton("Cargar replay"); load.clicked.connect(self.load_session); filters.addWidget(load,2,0)
         for kind,label in (("json","JSON"),("pdf","PDF")):
-            button=QPushButton(label); button.clicked.connect(lambda checked=False,k=kind:self.export(k)); filters.addWidget(button)
-        layout.addLayout(filters); controls=QHBoxLayout()
-        for label,handler in (("Play",self.play),("Pause",self.pause),("Stop",self.stop),("Anterior",self.previous_event),("Siguiente",self.next_event)):
-            button=QPushButton(label); button.clicked.connect(handler); controls.addWidget(button)
-        self.state_jump=QComboBox(); self.state_jump.currentTextChanged.connect(self.jump_state); controls.addWidget(QLabel("Ir a estado")); controls.addWidget(self.state_jump); layout.addLayout(controls)
+            button=QPushButton(label); button.clicked.connect(lambda checked=False,k=kind:self.export(k)); filters.addWidget(button,2,1 if kind=="json" else 2)
+        layout.addLayout(filters); controls=QGridLayout()
+        for index,(label,handler) in enumerate((("Play",self.play),("Pause",self.pause),("Stop",self.stop),("Anterior",self.previous_event),("Siguiente",self.next_event))):
+            button=QPushButton(label); button.clicked.connect(handler); controls.addWidget(button,0,index)
+        self.state_jump=QComboBox(); self.state_jump.currentTextChanged.connect(self.jump_state); controls.addWidget(QLabel("Ir a estado"),1,0); controls.addWidget(self.state_jump,1,1,1,4); layout.addLayout(controls)
         self.slider=QSlider(Qt.Horizontal); self.slider.valueChanged.connect(self.scrub); layout.addWidget(self.slider); self.status=QLabel("Sin eventos"); layout.addWidget(self.status)
         self.timeline=QTableWidget(); self.timeline.setColumnCount(6); self.timeline.setHorizontalHeaderLabels(["Hora","Tipo","Estado","Símbolo","Precio","Descripción"]); self.timeline.setEditTriggers(QTableWidget.NoEditTriggers); layout.addWidget(self.timeline)
         panels=QHBoxLayout(); self.price=QLabel("Precio: —"); self.position=QLabel("Posición: —"); self.pnl=QLabel("P/L: 0.00"); self.balance=QLabel("Balance: 0.00")

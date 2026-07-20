@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -37,7 +38,7 @@ class MT5AccountsPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(9)
 
-        toolbar = QHBoxLayout()
+        toolbar = QGridLayout()
 
         layout.addLayout(toolbar)
 
@@ -55,16 +56,12 @@ class MT5AccountsPage(QWidget):
 
         self.btn_refresh = QPushButton("Actualizar")
 
-        toolbar.addWidget(self.btn_new)
-        toolbar.addWidget(self.btn_edit)
-        toolbar.addWidget(self.btn_delete)
-        toolbar.addWidget(self.btn_test)
-        toolbar.addWidget(self.btn_export_json)
-        toolbar.addWidget(self.btn_export_text)
-
-        toolbar.addStretch()
-
-        toolbar.addWidget(self.btn_refresh)
+        for index, button in enumerate((self.btn_new, self.btn_edit, self.btn_delete,
+                                        self.btn_test, self.btn_export_json,
+                                        self.btn_export_text, self.btn_refresh)):
+            toolbar.addWidget(button, index // 4, index % 4)
+        for column in range(4):
+            toolbar.setColumnStretch(column, 1)
 
         self.summary = QLabel("Sin cuentas MT5 configuradas. Agregue una cuenta para consultar su estado y diagnóstico.")
         self.summary.setWordWrap(True)

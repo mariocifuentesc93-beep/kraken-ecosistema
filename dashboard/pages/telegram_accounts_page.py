@@ -3,7 +3,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QHeaderView, QMessageBox, QFileDialog, QInputDialog, QLineEdit, QLabel,
 )
 
@@ -24,7 +24,7 @@ class TelegramAccountsPage(QWidget):
     def build_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(9)
-        toolbar = QHBoxLayout()
+        toolbar = QGridLayout()
         layout.addLayout(toolbar)
         self.btn_new = QPushButton("Nueva")
         self.btn_edit = QPushButton("Editar")
@@ -37,12 +37,14 @@ class TelegramAccountsPage(QWidget):
         self.btn_export_json = QPushButton("Exportar JSON")
         self.btn_export_text = QPushButton("Exportar TXT")
         self.btn_refresh = QPushButton("Actualizar")
-        for button in (self.btn_new, self.btn_edit, self.btn_delete, self.btn_login,
-                       self.btn_start_auth, self.btn_verify_auth, self.btn_logout,
-                       self.btn_delete_session, self.btn_export_json, self.btn_export_text):
-            toolbar.addWidget(button)
-        toolbar.addStretch()
-        toolbar.addWidget(self.btn_refresh)
+        toolbar_buttons = (self.btn_new, self.btn_edit, self.btn_delete, self.btn_login,
+                           self.btn_start_auth, self.btn_verify_auth, self.btn_logout,
+                           self.btn_delete_session, self.btn_export_json, self.btn_export_text,
+                           self.btn_refresh)
+        for index, button in enumerate(toolbar_buttons):
+            toolbar.addWidget(button, index // 4, index % 4)
+        for column in range(4):
+            toolbar.setColumnStretch(column, 1)
 
         self.summary = QLabel("Sin cuentas Telegram configuradas. Agregue una cuenta e inicie su autorización.")
         self.summary.setWordWrap(True)
