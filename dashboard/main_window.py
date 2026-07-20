@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 
 from PySide6.QtCore import Qt, QSize, QSettings, QTimer
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -235,7 +235,7 @@ class MainWindow(QMainWindow):
         sidebar.setMaximumWidth(310)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(10, 14, 10, 10)
-        brand = QLabel(); brand.setPixmap(logo_pixmap(52)); brand.setToolTip("Kraken Bot Enterprise"); brand.setFixedSize(62, 62); brand.setScaledContents(True)
+        brand = QLabel(); brand.setPixmap(QPixmap(str(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"))); brand.setToolTip("Kraken Bot Enterprise"); brand.setMinimumHeight(150); brand.setAlignment(Qt.AlignCenter); brand.setScaledContents(True)
         brand_name = QLabel("KRAKEN BOT\nENTERPRISE")
         brand_name.setStyleSheet("font-size:18px;font-weight:800;color:#00C853;padding:8px;")
         brand_row = QHBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.addWidget(brand); brand_row.addWidget(brand_name); brand_row.addStretch()
