@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from repositories.settings_repository import settings_repository
+from dashboard.ui_theme import set_visual_role
 
 
 class SettingsPage(QWidget):
@@ -64,10 +65,7 @@ class SettingsPage(QWidget):
         )
         profile_risk_notice.setWordWrap(True)
         profile_risk_notice.setObjectName("ProfileRiskNotice")
-        profile_risk_notice.setStyleSheet(
-            "#ProfileRiskNotice{background:#0C1B26;border:1px solid #263E50;"
-            "border-radius:8px;padding:11px;color:#AEBCC8;font-size:10px;}"
-        )
+        set_visual_role(profile_risk_notice, "information")
         layout.addWidget(profile_risk_notice)
 
         # ==================================================
@@ -158,11 +156,7 @@ class SettingsPage(QWidget):
         general_box = QGroupBox(
             "General"
         )
-        general_box.setStyleSheet(
-            "QGroupBox{background:#0B1821;border:1px solid #263E50;border-radius:8px;"
-            "margin-top:10px;padding:12px 10px 8px;font-weight:700;color:#EAF1F5;}"
-            "QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px;}"
-        )
+        set_visual_role(general_box, "panel")
 
         general = QGridLayout(general_box)
 

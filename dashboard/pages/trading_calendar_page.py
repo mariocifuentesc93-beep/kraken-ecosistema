@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QMes
                                QPushButton, QSpinBox, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget, QFileDialog, QDialog)
 
-from dashboard.styles import CARD_COLOR, ERROR_COLOR, SUCCESS_COLOR, table_style
+from dashboard.ui_theme import set_visual_role
 from repositories.profile_repository import profile_repository
 from services.trading_calendar_service import trading_calendar_service
 
@@ -27,9 +27,9 @@ class TradingCalendarPage(QWidget):
         filters.addStretch()
         for kind,label in (("csv","CSV"),("xlsx","Excel"),("pdf","PDF")):
             button=QPushButton(label); button.clicked.connect(partial(self.export,kind)); filters.addWidget(button)
-        layout.addLayout(filters); self.summary=QLabel(); self.summary.setWordWrap(True); self.summary.setStyleSheet("background:#0C1B26;border:1px solid #263E50;border-radius:8px;padding:9px;color:#C7D2DC;font-size:10px;"); layout.addWidget(self.summary)
-        workspace=QHBoxLayout(); calendar_widget=QWidget(); self.grid=QGridLayout(calendar_widget); self.grid.setSpacing(4); workspace.addWidget(calendar_widget,8); self.detail=QTableWidget(); self.detail.setColumnCount(11); self.detail.setHorizontalHeaderLabels(["Hora","Símbolo","Lado","Entrada","Salida","Lote","Riesgo","Bruto","Costes","Neto","Resultado"]); self.detail.setStyleSheet(table_style()); workspace.addWidget(self.detail,5); layout.addLayout(workspace,3)
-        self.list=QTableWidget(); self.list.setColumnCount(7); self.list.setHorizontalHeaderLabels(["Fecha","Símbolo","Lado","Neto","Resultado","Modo","Perfil"]); self.list.setStyleSheet(table_style()); self.list.setMaximumHeight(175); layout.addWidget(self.list,1)
+        layout.addLayout(filters); self.summary=QLabel(); self.summary.setWordWrap(True); set_visual_role(self.summary,"information"); layout.addWidget(self.summary)
+        workspace=QHBoxLayout(); calendar_widget=QWidget(); self.grid=QGridLayout(calendar_widget); self.grid.setSpacing(4); workspace.addWidget(calendar_widget,8); self.detail=QTableWidget(); self.detail.setColumnCount(11); self.detail.setHorizontalHeaderLabels(["Hora","Símbolo","Lado","Entrada","Salida","Lote","Riesgo","Bruto","Costes","Neto","Resultado"]); workspace.addWidget(self.detail,5); layout.addLayout(workspace,3)
+        self.list=QTableWidget(); self.list.setColumnCount(7); self.list.setHorizontalHeaderLabels(["Fecha","Símbolo","Lado","Neto","Resultado","Modo","Perfil"]); self.list.setMaximumHeight(175); layout.addWidget(self.list,1)
         self.previous.clicked.connect(lambda:self.shift(-1)); self.next.clicked.connect(lambda:self.set_date(date.today())); today.clicked.connect(lambda:self.set_date(date.today())); self.demo.clicked.connect(self.load_demo); self.delete_demo.clicked.connect(self.remove_demo); self.heatmap.clicked.connect(self.show_heatmap)
         self.month.currentIndexChanged.connect(self.refresh); self.year.valueChanged.connect(self.refresh)
         for field in (self.profile,self.symbol,self.account,self.mode,self.source): field.currentIndexChanged.connect(self.refresh)
@@ -48,7 +48,7 @@ class TradingCalendarPage(QWidget):
         for col,name in enumerate(("Lun","Mar","Mié","Jue","Vie","Sáb","Dom")): header=QLabel(name); header.setAlignment(Qt.AlignCenter); self.grid.addWidget(header,0,col)
         first=calendar.monthrange(self.current.year,self.current.month)[0]; days=calendar.monthrange(self.current.year,self.current.month)[1]
         for day in range(1,days+1):
-            bucket=daily[day]; current=(self.current.year,self.current.month,day)==(date.today().year,date.today().month,date.today().day); selected_day=day==self.selected_day; color=SUCCESS_COLOR if bucket['net']>0 else ERROR_COLOR if bucket['net']<0 else CARD_COLOR; border="#29B6F6" if selected_day else "#FFC107" if current else "#3B4252"; marker=" •" if bucket['open'] or bucket['pending'] else ""; button=QPushButton(f"{day}\n{bucket['net']:+.2f}\n{bucket['closed']} cerradas{marker}"); button.setToolTip("• indica operación abierta o pendiente"); button.setStyleSheet(f"QPushButton{{background:{color};border:2px solid {border};min-height:56px;color:white;font-weight:bold;}}") ; button.clicked.connect(partial(self.select_day,day,bucket)); self.grid.addWidget(button,1+(first+day-1)//7,(first+day-1)%7)
+            bucket=daily[day]; current=(self.current.year,self.current.month,day)==(date.today().year,date.today().month,date.today().day); selected_day=day==self.selected_day; marker=" •" if bucket['open'] or bucket['pending'] else ""; button=QPushButton(f"{day}\n{bucket['net']:+.2f}\n{bucket['closed']} cerradas{marker}"); button.setToolTip("• indica operación abierta o pendiente"); button.setMinimumHeight(56); button.setProperty("calendarState","positive" if bucket['net']>0 else "negative" if bucket['net']<0 else "neutral"); button.setProperty("calendarSelected",selected_day); button.setProperty("calendarCurrent",current); button.clicked.connect(partial(self.select_day,day,bucket)); self.grid.addWidget(button,1+(first+day-1)//7,(first+day-1)%7)
         rows=trading_calendar_service.records(self.current.year,self.current.month,self.filters()); self.list.setRowCount(len(rows))
         for row,trade in enumerate(rows):
             for col,value in enumerate((trade['date'],trade['symbol'],trade['direction'],trade['net'],trade['result'],trade['mode'],trade['profile_id'])): self.list.setItem(row,col,QTableWidgetItem(str(value)))
@@ -77,5 +77,5 @@ class TradingCalendarPage(QWidget):
         for month in range(1,13):
             grid.addWidget(QLabel(calendar.month_abbr[month]),month,0)
             for day in range(1,32):
-                value=data.get((month,day)); cell=QLabel("" if value is None else f"{value:+.0f}"); cell.setAlignment(Qt.AlignCenter); cell.setStyleSheet(f"background:{SUCCESS_COLOR if value and value>0 else ERROR_COLOR if value and value<0 else CARD_COLOR};padding:3px;"); grid.addWidget(cell,month,day)
+                value=data.get((month,day)); cell=QLabel("" if value is None else f"{value:+.0f}"); cell.setAlignment(Qt.AlignCenter); cell.setProperty("calendarState","positive" if value and value>0 else "negative" if value and value<0 else "neutral"); grid.addWidget(cell,month,day)
         dialog.exec()

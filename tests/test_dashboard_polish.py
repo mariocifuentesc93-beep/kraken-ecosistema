@@ -69,7 +69,8 @@ class DashboardPolishTests(unittest.TestCase):
             self.assertEqual(table.verticalHeader().defaultSectionSize(), 22)
             self.assertEqual(table.verticalHeader().minimumSectionSize(), 22)
             self.assertEqual(table.horizontalHeader().height(), 22)
-            self.assertIn("font-size:9px", table.styleSheet())
+            self.assertTrue(table.property("compact"))
+            self.assertEqual(table.styleSheet(), "")
         window.close()
 
 

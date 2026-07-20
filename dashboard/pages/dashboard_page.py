@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QPus
 
 from dashboard.styles import BORDER_COLOR, CARD_COLOR, ERROR_COLOR, INFO_COLOR, PRIMARY_COLOR, SECONDARY_TEXT, WARNING_COLOR
 from dashboard.ui_theme import configure_active_tables
+from dashboard.ui_theme import set_visual_role
 from dashboard.icons import colored_icon
 from repositories.profile_repository import profile_repository
 from repositories.signal_repository import signal_repository
@@ -14,7 +15,7 @@ from services.trading_analytics_service import trading_analytics_service
 
 
 class CurvePanel(QWidget):
-    def __init__(self): super().__init__(); self.points=[]; self.setMinimumHeight(205); self.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;")
+    def __init__(self): super().__init__(); self.points=[]; self.setMinimumHeight(205); set_visual_role(self,"panel")
     def set_points(self, points): self.points=points; self.update()
     def paintEvent(self, event):
         painter=QPainter(self); painter.setRenderHint(QPainter.Antialiasing); painter.setPen(QColor("#EAF1F5")); painter.drawText(14,24,"Curva de balance")
@@ -56,14 +57,11 @@ class KpiCard(QFrame):
     def __init__(self, icon, title, accent, detail):
         super().__init__()
         self.setObjectName("KpiCard")
+        accent_roles = {INFO_COLOR:"info", WARNING_COLOR:"warning", ERROR_COLOR:"danger", "#B64CFF":"purple"}
+        self.setProperty("accent", accent_roles.get(accent, "success"))
         self.setFrameShape(QFrame.StyledPanel)
         self.setFixedHeight(self.HEIGHT)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setStyleSheet(
-            f"QFrame#KpiCard{{background:rgba(10,25,37,225);border:1px solid {BORDER_COLOR};"
-            f"border-top:2px solid {accent};border-radius:{self.RADIUS}px;}} "
-            "QFrame#KpiCard QLabel{background:transparent;border:0;}"
-        )
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 7, 10, 7)
         row.setSpacing(8)
@@ -72,13 +70,13 @@ class KpiCard(QFrame):
         body.setSpacing(0)
         label = QLabel(title)
         label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        label.setStyleSheet("color:#F4F7FA;font-size:10px;font-weight:700;border:0;")
+        set_visual_role(label,"cardTitle")
         self.value = QLabel("—")
         self.value.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.value.setStyleSheet("color:#FFFFFF;font-size:15px;font-weight:700;border:0;")
+        set_visual_role(self.value,"cardValue")
         self.detail = QLabel(detail)
         self.detail.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:9px;border:0;")
+        set_visual_role(self.detail,"cardDetail")
         body.addWidget(label)
         body.addWidget(self.value)
         body.addWidget(self.detail)
@@ -99,13 +97,13 @@ class DashboardPage(QWidget):
         for event in (event_bus.dashboardRefreshRequested,event_bus.statisticsUpdated,event_bus.profitUpdated,event_bus.operationCreated,event_bus.operationOpened,event_bus.operationClosed,event_bus.profileFinished): event.connect(self.refresh)
     def build_ui(self):
         layout=QVBoxLayout(self); layout.setContentsMargins(12,8,12,10); layout.setSpacing(8)
-        head=QHBoxLayout(); title=QLabel("Centro de control"); title.setStyleSheet("font-size:18px;font-weight:700;"); self.subtitle=QLabel(); self.subtitle.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:11px;"); self.notifications_button=QPushButton("Notificaciones"); self.notifications_button.setObjectName("DashboardNotificationsButton"); self.notifications_button.setMinimumSize(120, 26); self.notifications_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred); self.notifications_button.setToolTip("Mostrar u ocultar notificaciones"); self.notifications_button.setStyleSheet("#DashboardNotificationsButton{background:rgba(24,15,39,220);color:#D56BFF;border:1px solid #7C3AAD;border-radius:9px;padding:4px 10px;font-size:10px;font-weight:700;} #DashboardNotificationsButton:hover{background:#32194B;color:#EDAFFF;border-color:#C65CFF;}"); self.notifications_button.clicked.connect(self.notifications_requested); head.addWidget(title); head.addWidget(self.subtitle); head.addStretch(); head.addWidget(self.notifications_button); layout.addLayout(head)
+        head=QHBoxLayout(); title=QLabel("Centro de control"); set_visual_role(title,"pageTitle"); self.subtitle=QLabel(); set_visual_role(self.subtitle,"subtitle"); self.notifications_button=QPushButton("Notificaciones"); self.notifications_button.setObjectName("DashboardNotificationsButton"); set_visual_role(self.notifications_button,variant="purple"); self.notifications_button.setMinimumSize(120, 26); self.notifications_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred); self.notifications_button.setToolTip("Mostrar u ocultar notificaciones"); self.notifications_button.clicked.connect(self.notifications_requested); head.addWidget(title); head.addWidget(self.subtitle); head.addStretch(); head.addWidget(self.notifications_button); layout.addLayout(head)
         self.subtitle.hide()
         self.profile_filter = QComboBox()
         self.profile_filter.setMinimumSize(120, 26)
         self.profile_filter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.profile_filter.setToolTip("Seleccione un perfil o el consolidado de todos los perfiles.")
-        self.profile_filter.setStyleSheet("QComboBox{background:rgba(24,15,39,220);color:#D56BFF;border:1px solid #7C3AAD;border-radius:9px;padding:3px 22px 3px 9px;font-size:10px;font-weight:700;} QComboBox:hover{background:#32194B;color:#EDAFFF;border-color:#C65CFF;} QComboBox::drop-down{border:0;width:19px;} QComboBox QAbstractItemView{background:#181027;color:#EAF1F5;border:1px solid #7C3AAD;selection-background-color:#32194B;}")
+        self.profile_filter.setProperty("variant", "purple")
         self.profile_filter.currentIndexChanged.connect(self.refresh)
         head.insertWidget(3, self.profile_filter)
         self.cards=QGridLayout(); self.cards.setHorizontalSpacing(9); self.cards.setVerticalSpacing(9)
@@ -148,23 +146,15 @@ class DashboardPage(QWidget):
         dashboard_grid.setRowStretch(2, 0)
         layout.addLayout(dashboard_grid, 1)
         configure_active_tables(self)
-    def _legacy_connectivity_panel(self):
-        box=QWidget(); box.setObjectName("DashboardPanel"); box.setStyleSheet(f"#DashboardPanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;}}"); layout=QVBoxLayout(box); layout.setContentsMargins(12,10,12,10); layout.addWidget(QLabel("Conectividad"))
-        self.connection_text=QLabel(); self.connection_text.setWordWrap(True); self.connection_text.setStyleSheet(f"color:{SECONDARY_TEXT};border:0;"); layout.addWidget(self.connection_text); diag=QPushButton("Diagnóstico"); diag.clicked.connect(lambda:self.navigate_requested.emit("MT5")); layout.addWidget(diag); return box
-    def _legacy_quick_panel(self):
-        box=QWidget(); box.setObjectName("DashboardQuickPanel"); box.setStyleSheet(f"#DashboardQuickPanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;}}"); layout=QVBoxLayout(box); layout.setContentsMargins(12,10,12,10); layout.addWidget(QLabel("Acciones rápidas"))
-        for title,action in (("▷ Simulación","SIMULATION"),("↗ Paper Trading","Paper Trading"),("▦ Calendario","Calendario de Trading"),("◔ Analíticas","Analíticas"),("⚙ Configuración","Configuración")):
-            button=QPushButton(title); button.clicked.connect(lambda checked=False,a=action:self._quick(a)); layout.addWidget(button)
-        return box
     def connectivity_panel(self):
         box = QFrame()
         box.setObjectName("DashboardPanel")
-        box.setStyleSheet(f"#DashboardPanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:7px;}} #DashboardPanel QLabel{{background:transparent;border:0;color:#EAF1F5;}}")
+        set_visual_role(box,"panel")
         layout = QVBoxLayout(box)
         layout.setContentsMargins(10, 9, 10, 8)
         layout.setSpacing(4)
         heading = QLabel("Conectividad")
-        heading.setStyleSheet("font-size:11px;font-weight:700;")
+        set_visual_role(heading,"panelTitle")
         layout.addWidget(heading)
         self.connection_rows = {}
         for service, status, page in (("MT5", "Conectado", "MT5"), ("Telegram", "Conectado", "Telegram"), ("SQLite", "Disponible", "Configuración")):
@@ -173,15 +163,15 @@ class DashboardPage(QWidget):
             layout.addWidget(row)
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet(f"background:{BORDER_COLOR};border:0;")
+        separator.setProperty("role", "separator")
         layout.addWidget(separator)
         footer = QHBoxLayout()
         footer.setContentsMargins(0, 1, 0, 0)
         self.connection_updated = QLabel(f"Última actualización:\n{datetime.now():%d/%m/%Y %I:%M:%S %p}")
-        self.connection_updated.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:9px;")
+        set_visual_role(self.connection_updated,"cardDetail")
         refresh = QLabel("⟳")
         refresh.setAlignment(Qt.AlignRight | Qt.AlignBottom)
-        refresh.setStyleSheet("color:#DCE7EF;font-size:18px;font-weight:400;")
+        set_visual_role(refresh,"panelTitle")
         footer.addWidget(self.connection_updated)
         footer.addStretch()
         footer.addWidget(refresh)
@@ -192,7 +182,7 @@ class DashboardPage(QWidget):
 
     def _connection_row(self, service, status, page):
         row = QWidget()
-        row.setStyleSheet("background:transparent;border:0;")
+        row.setProperty("role", "toolbar")
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
@@ -201,16 +191,16 @@ class DashboardPage(QWidget):
         icon.setPixmap(colored_icon("circle-check", "#00C853").pixmap(13, 13))
         name = QLabel(service)
         name.setMinimumWidth(52)
-        name.setStyleSheet("font-size:10px;")
+        set_visual_role(name,"cardTitle")
         dot = QLabel()
         dot.setMinimumSize(6, 6)
         dot.setMaximumSize(6, 6)
-        dot.setStyleSheet("background:#20C55A;border:0;border-radius:3px;")
+        set_visual_role(dot,"statusDot")
         status_label = QLabel(status)
-        status_label.setStyleSheet("font-size:10px;")
+        set_visual_role(status_label,"cardTitle")
         diagnostic = QPushButton("Diagnóstico")
         diagnostic.setMinimumSize(72, 22)
-        diagnostic.setStyleSheet(f"QPushButton{{background:#101D27;color:#EAF1F5;border:1px solid {BORDER_COLOR};border-radius:4px;padding:2px 6px;font-size:10px;}} QPushButton:hover{{border-color:#00C853;background:#153026;}}")
+        set_visual_role(diagnostic,variant="compact")
         diagnostic.clicked.connect(lambda checked=False, target=page: self.navigate_requested.emit(target))
         layout.addWidget(icon)
         layout.addWidget(name)
@@ -223,12 +213,12 @@ class DashboardPage(QWidget):
     def quick_panel(self):
         box = QFrame()
         box.setObjectName("DashboardQuickPanel")
-        box.setStyleSheet(f"#DashboardQuickPanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:7px;}} #DashboardQuickPanel QLabel{{background:transparent;border:0;color:#EAF1F5;}}")
+        set_visual_role(box,"panel")
         layout = QVBoxLayout(box)
         layout.setContentsMargins(10, 9, 10, 9)
         layout.setSpacing(6)
         heading = QLabel("Acciones rápidas")
-        heading.setStyleSheet("font-size:11px;font-weight:700;")
+        set_visual_role(heading,"panelTitle")
         layout.addWidget(heading)
         actions = QGridLayout()
         actions.setHorizontalSpacing(6)
@@ -250,19 +240,19 @@ class DashboardPage(QWidget):
         button.setIcon(colored_icon(icon, color))
         button.setIconSize(QSize(18, 18))
         button.setMinimumHeight(36)
-        button.setStyleSheet(f"QPushButton{{background:#101D27;color:{color};border:1px solid {BORDER_COLOR};border-radius:5px;padding:5px 7px;font-size:10px;font-weight:700;text-align:center;}} QPushButton:hover{{background:#182C3A;border-color:{color};}}")
+        variants = {"#00D47A":"success", "#45A3FF":"info", "#D279FF":"purple", "#FF9E28":"warning"}
+        set_visual_role(button,variant=variants.get(color,"compact"))
         button.clicked.connect(lambda checked=False, current=action: self._quick(current))
         return button
 
     @staticmethod
     def table(headers):
-        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        table=QTableWidget(); table.setProperty("compact",True); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         table.verticalHeader().setDefaultSectionSize(22); table.verticalHeader().setMinimumSectionSize(22); table.horizontalHeader().setFixedHeight(22); table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch); table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); table.setWordWrap(False)
-        table.setStyleSheet("QTableWidget{font-size:9px;} QTableWidget::item{padding:1px 3px;font-size:9px;} QHeaderView::section{padding:1px 3px;font-size:8px;font-weight:600;}")
         return table
     @staticmethod
     def panel(title, widget):
-        panel=QWidget(); panel.setObjectName("DashboardTablePanel"); panel.setFixedHeight(148); panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed); panel.setStyleSheet(f"#DashboardTablePanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:8px;}}"); box=QVBoxLayout(panel); box.setContentsMargins(9,6,9,7); box.setSpacing(4); heading=QLabel(title); heading.setStyleSheet("font-size:10px;font-weight:700;border:0;background:transparent;"); box.addWidget(heading); box.addWidget(widget); return panel
+        panel=QWidget(); panel.setObjectName("DashboardTablePanel"); panel.setProperty("role","panel"); panel.setFixedHeight(148); panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed); box=QVBoxLayout(panel); box.setContentsMargins(9,6,9,7); box.setSpacing(4); heading=QLabel(title); set_visual_role(heading,"panelTitle"); box.addWidget(heading); box.addWidget(widget); return panel
     def _refresh_profile_filter(self, active):
         current = self.profile_filter.currentData()
         profiles = profile_repository.get_active_profiles()

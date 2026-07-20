@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from dashboard.styles import BORDER_COLOR, CARD_COLOR, PRIMARY_COLOR, SECONDARY_TEXT, TEXT_COLOR
 from dashboard.widgets.enterprise import StatCard
+from dashboard.ui_theme import set_visual_role
 from repositories.profile_repository import profile_repository
 from trading.paper_trading_engine import paper_trading_engine
 
@@ -31,9 +32,7 @@ class PaperTradingPage(QWidget):
 
         top = QHBoxLayout()
         account = QFrame()
-        account.setStyleSheet(
-            f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"
-        )
+        set_visual_role(account, "panel")
         form = QGridLayout(account)
         form.setContentsMargins(12, 10, 12, 10)
         form.setHorizontalSpacing(10)
@@ -53,16 +52,14 @@ class PaperTradingPage(QWidget):
         top.addWidget(account, 2)
 
         summary_box = QFrame()
-        summary_box.setStyleSheet(
-            f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"
-        )
+        set_visual_role(summary_box, "panel")
         summary_layout = QVBoxLayout(summary_box)
         summary_layout.setContentsMargins(12, 10, 12, 10)
         title = QLabel("Resumen de cuenta virtual")
-        title.setStyleSheet(f"color:{TEXT_COLOR};font-weight:700;font-size:12px;")
+        set_visual_role(title, "panelTitle")
         self.summary = QLabel()
         self.summary.setWordWrap(True)
-        self.summary.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;")
+        set_visual_role(self.summary, "subtitle")
         summary_layout.addWidget(title)
         summary_layout.addWidget(self.summary)
         summary_layout.addStretch()

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QMessageBox,
     QFileDialog,
+    QLabel,
 )
 
 from repositories.mt5_account_repository import mt5_account_repository
@@ -16,6 +17,7 @@ from mt5.connector import mt5_connector
 from services.mt5_connection_diagnostics import mt5_connection_diagnostics
 from models.mt5_account import MT5Account
 from dashboard.dialogs.mt5_account_dialog import MT5AccountDialog
+from dashboard.ui_theme import set_visual_role
 
 
 class MT5AccountsPage(QWidget):
@@ -33,6 +35,7 @@ class MT5AccountsPage(QWidget):
     def build_ui(self):
 
         layout = QVBoxLayout(self)
+        layout.setSpacing(9)
 
         toolbar = QHBoxLayout()
 
@@ -62,6 +65,11 @@ class MT5AccountsPage(QWidget):
         toolbar.addStretch()
 
         toolbar.addWidget(self.btn_refresh)
+
+        self.summary = QLabel("Sin cuentas MT5 configuradas. Agregue una cuenta para consultar su estado y diagnóstico.")
+        self.summary.setWordWrap(True)
+        set_visual_role(self.summary, "information")
+        layout.addWidget(self.summary)
 
         self.table = QTableWidget()
 
@@ -124,6 +132,12 @@ class MT5AccountsPage(QWidget):
     def refresh(self):
 
         accounts = mt5_account_repository.get_all()
+
+        connected = sum(1 for account in accounts if mt5_connector.current_account == account.login and mt5_connector.is_connected())
+        self.summary.setText(
+            f"Cuentas configuradas: {len(accounts)} · Conectadas: {connected} · "
+            "Seleccione una cuenta y use Probar conexión para ver el diagnóstico."
+        )
 
         self.table.setRowCount(len(accounts))
 

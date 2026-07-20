@@ -4,10 +4,11 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox, QFileDialog, QInputDialog, QLineEdit,
+    QTableWidgetItem, QHeaderView, QMessageBox, QFileDialog, QInputDialog, QLineEdit, QLabel,
 )
 
 from dashboard.dialogs.telegram_account_dialog import TelegramAccountDialog
+from dashboard.ui_theme import set_visual_role
 from models.telegram_account import TelegramAccount
 from repositories.telegram_account_repository import telegram_account_repository
 from telegram.account_manager import telegram_account_manager
@@ -22,6 +23,7 @@ class TelegramAccountsPage(QWidget):
 
     def build_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(9)
         toolbar = QHBoxLayout()
         layout.addLayout(toolbar)
         self.btn_new = QPushButton("Nueva")
@@ -41,6 +43,11 @@ class TelegramAccountsPage(QWidget):
             toolbar.addWidget(button)
         toolbar.addStretch()
         toolbar.addWidget(self.btn_refresh)
+
+        self.summary = QLabel("Sin cuentas Telegram configuradas. Agregue una cuenta e inicie su autorización.")
+        self.summary.setWordWrap(True)
+        set_visual_role(self.summary, "information")
+        layout.addWidget(self.summary)
 
         self.table = QTableWidget()
         self.table.setColumnCount(8)
@@ -69,6 +76,12 @@ class TelegramAccountsPage(QWidget):
     def refresh(self):
         telegram_account_manager.reload()
         accounts = telegram_account_repository.get_all()
+        connected = sum(1 for account in accounts if account.connected)
+        authorized = sum(1 for account in accounts if account.authorized)
+        self.summary.setText(
+            f"Cuentas configuradas: {len(accounts)} · Conectadas: {connected} · "
+            f"Autorizadas: {authorized}."
+        )
         self.table.setRowCount(len(accounts))
         for row, account in enumerate(accounts):
             values = [

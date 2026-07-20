@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from dashboard.icons import colored_icon
+from dashboard.ui_theme import apply_standard_components, set_visual_role
 from dashboard.styles import (
     BORDER_COLOR,
     CARD_COLOR,
@@ -27,19 +28,16 @@ class StatCard(QFrame):
     def __init__(self, title, value="—", detail="", color=PRIMARY_COLOR, parent=None):
         super().__init__(parent)
         self.setObjectName("EnterpriseStatCard")
-        self.setStyleSheet(
-            f"#EnterpriseStatCard{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};"
-            f"border-left:3px solid {color};border-radius:9px;}}"
-        )
+        set_visual_role(self, "card")
         box = QVBoxLayout(self)
         box.setContentsMargins(12, 9, 12, 9)
         box.setSpacing(2)
         self.title = QLabel(title.upper())
-        self.title.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;font-weight:700;")
+        set_visual_role(self.title, "cardTitle")
         self.value = QLabel(str(value))
-        self.value.setStyleSheet(f"color:{color};font-size:21px;font-weight:700;")
+        set_visual_role(self.value, "cardValue")
         self.detail = QLabel(detail)
-        self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;")
+        set_visual_role(self.detail, "cardDetail")
         box.addWidget(self.title)
         box.addWidget(self.value)
         box.addWidget(self.detail)
@@ -56,10 +54,7 @@ class EmptyState(QFrame):
     def __init__(self, module, guidance, icon_name="chart-spline", parent=None):
         super().__init__(parent)
         self.setObjectName("EnterpriseEmptyState")
-        self.setStyleSheet(
-            f"#EnterpriseEmptyState{{background:#0B1821;border:1px dashed {BORDER_COLOR};"
-            "border-radius:9px;}}"
-        )
+        set_visual_role(self, "panel")
         box = QVBoxLayout(self)
         box.setContentsMargins(18, 14, 18, 14)
         box.setSpacing(4)
@@ -68,11 +63,11 @@ class EmptyState(QFrame):
         icon.setPixmap(colored_icon(icon_name, "#607080").pixmap(24, 24))
         title = QLabel(module)
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet(f"color:{TEXT_COLOR};font-weight:700;font-size:12px;")
+        set_visual_role(title, "panelTitle")
         help_text = QLabel(guidance)
         help_text.setAlignment(Qt.AlignCenter)
         help_text.setWordWrap(True)
-        help_text.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;")
+        set_visual_role(help_text, "subtitle")
         box.addWidget(icon)
         box.addWidget(title)
         box.addWidget(help_text)
@@ -81,12 +76,12 @@ class EmptyState(QFrame):
 class LoadingOverlay(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet("background:rgba(27,29,34,205);border-radius:8px;")
+        set_visual_role(self, "panel")
         self.hide()
         box = QVBoxLayout(self)
         label = QLabel("Actualizando datos…")
         label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet(f"color:{TEXT_COLOR};font-weight:700;")
+        set_visual_role(label, "panelTitle")
         box.addWidget(label)
 
     def set_loading(self, value):
@@ -107,7 +102,7 @@ class EnterpriseToolbar(QWidget):
         box = QHBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 4)
         heading = QLabel(f"{icon}  {title}")
-        heading.setStyleSheet(f"color:{TEXT_COLOR};font-size:18px;font-weight:700;")
+        set_visual_role(heading, "pageTitle")
         box.addWidget(heading)
         box.addStretch()
 
@@ -118,27 +113,24 @@ class EnterpriseIconToolbar(QFrame):
     def __init__(self, title, icon_name, parent=None):
         super().__init__(parent)
         self.setObjectName("EnterprisePageHeader")
+        set_visual_role(self, "panel")
         self.setMinimumHeight(64)
         self.setMaximumHeight(70)
-        self.setStyleSheet(
-            f"#EnterprisePageHeader{{background:#0C1B26;border:1px solid {BORDER_COLOR};"
-            "border-radius:9px;}}"
-        )
         box = QHBoxLayout(self)
         box.setContentsMargins(14, 10, 14, 10)
         box.setSpacing(10)
         glyph = QLabel()
         glyph.setFixedSize(30, 30)
         glyph.setAlignment(Qt.AlignCenter)
-        glyph.setStyleSheet("background:#112633;border-radius:7px;")
+        set_visual_role(glyph, "iconBadge")
         glyph.setPixmap(colored_icon(icon_name, PRIMARY_COLOR).pixmap(18, 18))
         text_box = QVBoxLayout()
         text_box.setContentsMargins(0, 0, 0, 0)
         text_box.setSpacing(1)
         heading = QLabel(title)
-        heading.setStyleSheet(f"color:{TEXT_COLOR};font-size:16px;font-weight:700;")
+        set_visual_role(heading, "pageTitle")
         self.guidance = QLabel()
-        self.guidance.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;")
+        set_visual_role(self.guidance, "subtitle")
         text_box.addWidget(heading)
         text_box.addWidget(self.guidance)
         box.addWidget(glyph)
@@ -152,6 +144,7 @@ class EnterpriseIconToolbar(QFrame):
 class EnterpriseFilterBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        set_visual_role(self, "toolbar")
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(7)
@@ -163,15 +156,13 @@ class EnterpriseFilterBar(QWidget):
 class EnterpriseSection(QFrame):
     def __init__(self, title, subtitle="", parent=None):
         super().__init__(parent)
-        self.setStyleSheet(
-            f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"
-        )
+        set_visual_role(self, "panel")
         box = QVBoxLayout(self)
         box.setContentsMargins(12, 9, 12, 9)
         head = QLabel(title)
-        head.setStyleSheet(f"color:{TEXT_COLOR};font-weight:700;font-size:14px;")
+        set_visual_role(head, "panelTitle")
         sub = QLabel(subtitle)
-        sub.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;")
+        set_visual_role(sub, "subtitle")
         sub.setWordWrap(True)
         box.addWidget(head)
         box.addWidget(sub)
@@ -254,4 +245,5 @@ def decorate_enterprise_page(page, title, guidance, icon_name="circle-check"):
         configure_enterprise_table(table, f"{page.__class__.__name__}_{index}")
     from dashboard.layout_manager import enterprise_layout
     enterprise_layout.configure_page(page)
+    apply_standard_components(page)
     page._enterprise_decorated = True

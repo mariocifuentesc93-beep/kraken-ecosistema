@@ -86,6 +86,8 @@ class OperationsPage(QWidget):
         toolbar.addWidget(QLabel("Buscar"))
 
         self.txt_search = QLineEdit()
+        self.txt_search.setObjectName("EnterpriseSearch")
+        self.txt_search.setPlaceholderText("Buscar operaciones")
 
         self.txt_search.textChanged.connect(
             self.refresh

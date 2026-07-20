@@ -54,7 +54,8 @@ from repositories.settings_repository import settings_repository
 from engine.kraken_engine import kraken_engine
 from utils.live_readiness import live_mode_issues
 from dashboard.ui_theme import (NEGATIVE, POSITIVE, WARNING, application_style,
-                                apply_terminal_palette, configure_active_tables, status_chip)
+                                apply_standard_components, apply_terminal_palette,
+                                configure_active_tables, status_chip)
 from dashboard.branding import application_icon, logo_pixmap
 from dashboard.icons import colored_icon
 from repositories.profile_repository import profile_repository
@@ -469,6 +470,7 @@ class MainWindow(QMainWindow):
             (self.signalInspectorPage, "Inspector de señales", "Las señales procesadas aparecerán al recibir mensajes."),
             (self.tradeTimelinePage, "Línea de tiempo", "Las transiciones aparecerán al simular operaciones."),
             (self.marketDataPage, "Datos de mercado", "Actualice la vista para consultar precios."),
+            (self.liveReadinessPage, "Certificación LIVE", "Valide conectividad, riesgo y protecciones antes de operar en LIVE."),
             (self.paperTradingPage, "Paper Trading", "Simule señales para crear posiciones virtuales."),
             (self.tradingCalendarPage, "Calendario de Trading", "Cargue demostración o cierre operaciones para ver rendimiento."),
             (self.analyticsPage, "Analíticas", "Las métricas se generan con operaciones simuladas o paper trading."),
@@ -487,6 +489,7 @@ class MainWindow(QMainWindow):
             "Inspector de señales": "search-check",
             "Línea de tiempo": "history",
             "Datos de mercado": "chart-spline",
+            "Certificación LIVE": "circle-check",
             "Paper Trading": "briefcase-business",
             "Calendario de Trading": "calendar-days",
             "Analíticas": "chart-no-axes-combined",
@@ -502,6 +505,8 @@ class MainWindow(QMainWindow):
             )
         enterprise_layout.configure_page(self.dashboardPage)
         enterprise_layout.configure_page(self.liveReadinessPage)
+        apply_standard_components(self.dashboardPage)
+        apply_standard_components(self.liveReadinessPage)
 
         self.menu.currentRowChanged.connect(self.select_navigation_page)
 
