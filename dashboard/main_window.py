@@ -231,11 +231,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(splitter)
 
         sidebar = QWidget()
-        sidebar.setMinimumWidth(220)
-        sidebar.setMaximumWidth(240)
+        sidebar.setMinimumWidth(195)
+        sidebar.setMaximumWidth(215)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(10, 14, 10, 10)
-        brand = QLabel(); brand.setPixmap(QPixmap(str(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"))); brand.setToolTip("Kraken Bot Enterprise"); brand.setFixedSize(220,180); brand.setAlignment(Qt.AlignCenter); brand.setScaledContents(True)
+        brand = QLabel(); brand.setPixmap(QPixmap(str(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"))); brand.setToolTip("Kraken Bot Enterprise"); brand.setFixedSize(145,117); brand.setAlignment(Qt.AlignCenter); brand.setScaledContents(True)
         brand_name = QLabel("KRAKEN BOT\nENTERPRISE")
         brand_name.setStyleSheet("font-size:18px;font-weight:800;color:#00C853;padding:8px;")
         brand_row = QVBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.addWidget(brand, alignment=Qt.AlignCenter); brand_row.addWidget(brand_name, alignment=Qt.AlignCenter)
@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.stack)
 
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([230, 1200])
+        splitter.setSizes([205, 1200])
 
         self.dashboardPage = DashboardPage()
 
@@ -598,8 +598,8 @@ class MainWindow(QMainWindow):
     def toggle_sidebar(self):
         collapsed = not self.menu.isHidden()
         self.menu.setVisible(not collapsed)
-        self.sidebar.setMaximumWidth(80 if collapsed else 240)
-        self.sidebar.setMinimumWidth(72 if collapsed else 220)
+        self.sidebar.setMaximumWidth(78 if collapsed else 215)
+        self.sidebar.setMinimumWidth(72 if collapsed else 195)
         self.sidebar_toggle.setText("›  Expandir navegación" if collapsed else "‹  Contraer navegación")
         QSettings("KrakenBot", "EnterpriseUI").setValue("sidebar/collapsed", collapsed)
 

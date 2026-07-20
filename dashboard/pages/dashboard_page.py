@@ -30,10 +30,10 @@ class CurvePanel(QWidget):
 
 class KpiCard(QWidget):
     def __init__(self, icon, title, accent, detail):
-        super().__init__(); self.setMinimumHeight(92); self.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-top:2px solid {accent};border-radius:8px;")
-        row=QHBoxLayout(self); row.setContentsMargins(13,10,13,9); row.setSpacing(10)
-        glyph=QLabel(icon); glyph.setFixedSize(40,40); glyph.setAlignment(Qt.AlignCenter); glyph.setStyleSheet(f"background:{accent}22;color:{accent};border:0;border-radius:8px;font-size:21px;")
-        body=QVBoxLayout(); body.setSpacing(2); label=QLabel(title); label.setStyleSheet("color:#F4F7FA;font-weight:700;border:0;"); self.value=QLabel("—"); self.value.setStyleSheet("color:#FFFFFF;font-size:18px;font-weight:700;border:0;"); self.detail=QLabel(detail); self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;border:0;")
+        super().__init__(); self.setMinimumHeight(116); self.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-top:2px solid {accent};border-radius:8px;")
+        row=QHBoxLayout(self); row.setContentsMargins(15,13,15,12); row.setSpacing(12)
+        glyph=QLabel(icon); glyph.setFixedSize(46,46); glyph.setAlignment(Qt.AlignCenter); glyph.setStyleSheet(f"background:{accent}22;color:{accent};border:0;border-radius:8px;font-size:24px;")
+        body=QVBoxLayout(); body.setSpacing(3); label=QLabel(title); label.setStyleSheet("color:#F4F7FA;font-weight:700;border:0;"); self.value=QLabel("—"); self.value.setStyleSheet("color:#FFFFFF;font-size:22px;font-weight:700;border:0;"); self.detail=QLabel(detail); self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:11px;border:0;")
         body.addWidget(label); body.addWidget(self.value); body.addWidget(self.detail); row.addWidget(glyph); row.addLayout(body,1)
     def set_value(self, value, detail=None): self.value.setText(str(value)); self.detail.setText(str(detail)) if detail is not None else None
 
@@ -45,7 +45,7 @@ class DashboardPage(QWidget):
         from core.event_bus import event_bus
         for event in (event_bus.dashboardRefreshRequested,event_bus.statisticsUpdated,event_bus.profitUpdated,event_bus.operationCreated,event_bus.operationOpened,event_bus.operationClosed,event_bus.profileFinished): event.connect(self.refresh)
     def build_ui(self):
-        layout=QVBoxLayout(self); layout.setContentsMargins(14,12,14,12); layout.setSpacing(10)
+        layout=QVBoxLayout(self); layout.setContentsMargins(12,8,12,10); layout.setSpacing(8)
         head=QHBoxLayout(); title=QLabel("Centro de control"); title.setStyleSheet("font-size:21px;font-weight:700;"); self.subtitle=QLabel(); self.subtitle.setStyleSheet(f"color:{SECONDARY_TEXT};"); head.addWidget(title); head.addWidget(self.subtitle); head.addStretch(); layout.addLayout(head)
         self.cards=QGridLayout(); self.cards.setHorizontalSpacing(9); self.cards.setVerticalSpacing(9); layout.addLayout(self.cards)
         specs=(("▣","Balance",PRIMARY_COLOR,"Respecto al inicial"),("▥","Equity",INFO_COLOR,"Flotante: $0.00"),("▦","P/L diario",PRIMARY_COLOR,"Hoy"),("▦","P/L mensual",PRIMARY_COLOR,"Este mes"),("◎","Win rate",PRIMARY_COLOR,"Operaciones cerradas"),("⚖","Profit factor",WARNING_COLOR,"Relación beneficio/riesgo"),("⌁","Drawdown",ERROR_COLOR,"Máx. histórico"),("▣","Abiertas",WARNING_COLOR,"Posiciones abiertas"),("⌛","Pendientes",WARNING_COLOR,"Órdenes pendientes"),("⚙","Modo",INFO_COLOR,"Ejecución actual"),("●","Perfil",INFO_COLOR,"Perfil activo"),("$","Capital",WARNING_COLOR,"Capital disponible"))
@@ -64,7 +64,7 @@ class DashboardPage(QWidget):
         return box
     @staticmethod
     def table(headers):
-        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(210); return table
+        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(270); return table
     @staticmethod
     def panel(title, widget):
         panel=QWidget(); panel.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"); box=QVBoxLayout(panel); box.setContentsMargins(10,8,10,8); heading=QLabel(title); heading.setStyleSheet("font-weight:700;border:0;"); box.addWidget(heading); box.addWidget(widget); return panel
