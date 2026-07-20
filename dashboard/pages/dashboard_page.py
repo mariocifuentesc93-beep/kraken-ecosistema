@@ -1,9 +1,9 @@
 from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget,
-                               QTableWidgetItem, QVBoxLayout, QWidget)
+                               QTableWidgetItem, QVBoxLayout, QWidget, QStyle, QFrame)
 
 from dashboard.styles import BORDER_COLOR, CARD_COLOR, ERROR_COLOR, INFO_COLOR, PRIMARY_COLOR, SECONDARY_TEXT, WARNING_COLOR
 from dashboard.ui_theme import configure_active_tables
@@ -27,13 +27,29 @@ class CurvePanel(QWidget):
             if previous: painter.drawLine(previous[0],previous[1],int(x),int(y))
             previous=(int(x),int(y))
 
+class KpiGlyph(QWidget):
+    def __init__(self, kind, color): super().__init__(); self.kind=kind; self.color=QColor(color); self.setFixedSize(40,40)
+    def paintEvent(self,event):
+        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing); p.setBrush(QColor(self.color.red(),self.color.green(),self.color.blue(),35)); p.setPen(QPen(QColor(self.color.red(),self.color.green(),self.color.blue(),90),1)); p.drawRoundedRect(self.rect().adjusted(1,1,-1,-1),8,8); p.setPen(QPen(self.color,2)); r=self.rect().adjusted(10,10,-10,-10)
+        if self.kind=="wallet": p.drawRoundedRect(r,3,3); p.drawLine(r.left(),r.top()+5,r.right(),r.top()+5)
+        elif self.kind=="chart": p.drawLine(r.left(),r.bottom(),r.left(),r.top()); p.drawLine(r.left(),r.bottom(),r.right(),r.bottom()); p.drawLine(r.left()+2,r.bottom()-3,r.center().x(),r.center().y()); p.drawLine(r.center().x(),r.center().y(),r.right(),r.top()+2)
+        elif self.kind=="calendar": p.drawRect(r); p.drawLine(r.left(),r.top()+5,r.right(),r.top()+5); p.drawPoint(r.center())
+        elif self.kind=="target": p.drawEllipse(r); p.drawEllipse(r.adjusted(4,4,-4,-4)); p.drawLine(r.center().x(),r.top()-2,r.center().x(),r.bottom()+2)
+        elif self.kind=="scale": p.drawLine(r.center().x(),r.top(),r.center().x(),r.bottom()); p.drawLine(r.left(),r.top()+5,r.right(),r.top()+5); p.drawEllipse(r.left(),r.top()+5,6,6); p.drawEllipse(r.right()-6,r.top()+5,6,6)
+        elif self.kind=="draw": p.drawLine(r.left(),r.top(),r.left(),r.bottom()); p.drawLine(r.left(),r.bottom(),r.right(),r.bottom()); p.drawLine(r.left()+2,r.top()+3,r.center().x(),r.bottom()-5); p.drawLine(r.center().x(),r.bottom()-5,r.right(),r.bottom()-2)
+        elif self.kind=="brief": p.drawRoundedRect(r,3,3); p.drawLine(r.left(),r.center().y(),r.right(),r.center().y())
+        elif self.kind=="hour": p.drawLine(r.left(),r.top(),r.right(),r.top()); p.drawLine(r.left(),r.bottom(),r.right(),r.bottom()); p.drawLine(r.left(),r.top(),r.right(),r.bottom()); p.drawLine(r.right(),r.top(),r.left(),r.bottom())
+        elif self.kind=="person": p.drawEllipse(r.center().x()-4,r.top(),8,8); p.drawRoundedRect(r.left()+2,r.center().y(),r.width()-4,r.height()//2,4,4)
+        elif self.kind=="capital": p.drawText(self.rect(),Qt.AlignCenter,"$")
+        else: p.drawEllipse(r)
 
-class KpiCard(QWidget):
+
+class KpiCard(QFrame):
     def __init__(self, icon, title, accent, detail):
-        super().__init__(); self.setObjectName("KpiCard"); self.setMinimumHeight(74); self.setMaximumHeight(82); self.setStyleSheet(f"QWidget#KpiCard{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-top:2px solid {accent};border-radius:8px;}} QWidget{{background:transparent;border:0;}}")
+        super().__init__(); self.setObjectName("KpiCard"); self.setFrameShape(QFrame.StyledPanel); self.setMinimumHeight(74); self.setMaximumHeight(82); self.setStyleSheet(f"QFrame#KpiCard{{background:rgba(10,25,37,225);border:1px solid {BORDER_COLOR};border-top:2px solid {accent};border-radius:8px;}} QFrame#KpiCard QLabel{{background:transparent;border:0;}}")
         row=QHBoxLayout(self); row.setContentsMargins(15,13,15,12); row.setSpacing(12)
-        glyph=QLabel(icon); glyph.setFixedSize(40,40); glyph.setAlignment(Qt.AlignCenter); glyph.setStyleSheet(f"background:{accent}22;color:{accent};border:0;border-radius:8px;font-size:21px;")
-        body=QVBoxLayout(); body.setSpacing(1); label=QLabel(title); label.setStyleSheet("color:#F4F7FA;font-weight:700;border:0;"); self.value=QLabel("—"); self.value.setStyleSheet("color:#FFFFFF;font-size:18px;font-weight:700;border:0;"); self.detail=QLabel(detail); self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;border:0;")
+        glyph=KpiGlyph(icon,accent)
+        body=QVBoxLayout(); body.setSpacing(1); label=QLabel(title); label.setStyleSheet("color:#F4F7FA;font-weight:700;border:0;"); self.value=QLabel("—"); self.value.setStyleSheet("color:#FFFFFF;font-size:16px;font-weight:700;border:0;"); self.detail=QLabel(detail); self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;border:0;")
         body.addWidget(label); body.addWidget(self.value); body.addWidget(self.detail); row.addWidget(glyph); row.addLayout(body,1)
     def set_value(self, value, detail=None): self.value.setText(str(value)); self.detail.setText(str(detail)) if detail is not None else None
 
@@ -46,9 +62,9 @@ class DashboardPage(QWidget):
         for event in (event_bus.dashboardRefreshRequested,event_bus.statisticsUpdated,event_bus.profitUpdated,event_bus.operationCreated,event_bus.operationOpened,event_bus.operationClosed,event_bus.profileFinished): event.connect(self.refresh)
     def build_ui(self):
         layout=QVBoxLayout(self); layout.setContentsMargins(12,8,12,10); layout.setSpacing(8)
-        head=QHBoxLayout(); title=QLabel("Centro de control"); title.setStyleSheet("font-size:21px;font-weight:700;"); self.subtitle=QLabel(); self.subtitle.setStyleSheet(f"color:{SECONDARY_TEXT};"); head.addWidget(title); head.addWidget(self.subtitle); head.addStretch(); layout.addLayout(head)
+        head=QHBoxLayout(); title=QLabel("Centro de control"); title.setStyleSheet("font-size:18px;font-weight:700;"); self.subtitle=QLabel(); self.subtitle.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:11px;"); head.addWidget(title); head.addWidget(self.subtitle); head.addStretch(); layout.addLayout(head)
         self.cards=QGridLayout(); self.cards.setHorizontalSpacing(9); self.cards.setVerticalSpacing(9); layout.addLayout(self.cards)
-        specs=(("▣","Balance",PRIMARY_COLOR,"Respecto al inicial"),("▥","Equity",INFO_COLOR,"Flotante: $0.00"),("▦","P/L diario",PRIMARY_COLOR,"Hoy"),("▦","P/L mensual",PRIMARY_COLOR,"Este mes"),("◎","Win rate",PRIMARY_COLOR,"Operaciones cerradas"),("⚖","Profit factor",WARNING_COLOR,"Relación beneficio/riesgo"),("⌁","Drawdown",ERROR_COLOR,"Máx. histórico"),("▣","Abiertas",WARNING_COLOR,"Posiciones abiertas"),("⌛","Pendientes",WARNING_COLOR,"Órdenes pendientes"),("⚙","Modo",INFO_COLOR,"Ejecución actual"),("●","Perfil",INFO_COLOR,"Perfil activo"),("$","Capital",WARNING_COLOR,"Capital disponible"))
+        specs=(("wallet","Balance",PRIMARY_COLOR,"Respecto al inicial"),("chart","Equity",INFO_COLOR,"Flotante: $0.00"),("calendar","P/L diario",INFO_COLOR,"Hoy"),("calendar","P/L mensual",PRIMARY_COLOR,"Este mes"),("target","Win rate",PRIMARY_COLOR,"Operaciones cerradas"),("scale","Profit factor",WARNING_COLOR,"Relación beneficio/riesgo"),("draw","Drawdown",ERROR_COLOR,"Máx. histórico"),("brief","Abiertas",WARNING_COLOR,"Posiciones abiertas"),("hour","Pendientes",WARNING_COLOR,"Órdenes pendientes"),("gear","Modo",INFO_COLOR,"Ejecución actual"),("person","Perfil",INFO_COLOR,"Perfil activo"),("capital","Capital","#B64CFF","Capital disponible"))
         self.kpis={}
         for index,(icon,name,color,detail) in enumerate(specs): card=KpiCard(icon,name,color,detail); self.cards.addWidget(card,index//4,index%4); self.kpis[name]=card
         middle=QHBoxLayout(); self.curve=CurvePanel(); middle.addWidget(self.curve,7); right=QVBoxLayout(); right.setSpacing(9); right.addWidget(self.connectivity_panel(),1); right.addWidget(self.quick_panel(),1); middle.addLayout(right,3); layout.addLayout(middle,3)
@@ -64,7 +80,7 @@ class DashboardPage(QWidget):
         return box
     @staticmethod
     def table(headers):
-        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(125)
+        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(92); table.setMaximumHeight(110)
         table.verticalHeader().setDefaultSectionSize(21); table.horizontalHeader().setFixedHeight(25)
         table.setStyleSheet("QTableWidget::item{padding:2px 4px;font-size:10px;} QHeaderView::section{padding:3px 4px;font-size:10px;font-weight:600;}")
         return table

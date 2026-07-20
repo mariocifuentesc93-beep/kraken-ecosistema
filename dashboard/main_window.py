@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStyle,
     QPushButton,
+    QSizePolicy,
 )
 
 from dashboard.pages.dashboard_page import DashboardPage
@@ -241,14 +242,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(splitter)
 
         sidebar = QWidget()
-        sidebar.setMinimumWidth(185)
-        sidebar.setMaximumWidth(200)
+        sidebar.setMinimumWidth(200)
+        sidebar.setMaximumWidth(215)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(10, 14, 10, 10)
-        brand = KrakenLogo(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"); brand.setToolTip("Kraken Bot Enterprise")
+        brand = KrakenLogo(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"); brand.setToolTip("Kraken Bot Enterprise"); brand.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         brand_name = QLabel("KRAKEN BOT\nENTERPRISE")
+        brand_name.setAlignment(Qt.AlignHCenter)
         brand_name.setStyleSheet("font-size:18px;font-weight:800;color:#00C853;padding:8px;")
-        brand_row = QVBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.addWidget(brand, alignment=Qt.AlignCenter); brand_row.addWidget(brand_name, alignment=Qt.AlignCenter)
+        brand_row = QVBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.setAlignment(Qt.AlignHCenter); brand_row.addWidget(brand, alignment=Qt.AlignHCenter); brand_row.addWidget(brand_name, alignment=Qt.AlignHCenter)
         section = QLabel("OPERACIÓN  ·  DATOS  ·  SISTEMA")
         section.setStyleSheet("color:#B0BEC5;font-size:10px;padding:0 8px 6px 8px;")
         sidebar_layout.addLayout(brand_row)
@@ -322,7 +324,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.stack)
 
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([192, 1200])
+        splitter.setSizes([207, 1200])
 
         self.dashboardPage = DashboardPage()
 
@@ -608,8 +610,8 @@ class MainWindow(QMainWindow):
     def toggle_sidebar(self):
         collapsed = not self.menu.isHidden()
         self.menu.setVisible(not collapsed)
-        self.sidebar.setMaximumWidth(78 if collapsed else 200)
-        self.sidebar.setMinimumWidth(72 if collapsed else 185)
+        self.sidebar.setMaximumWidth(78 if collapsed else 215)
+        self.sidebar.setMinimumWidth(72 if collapsed else 200)
         self.sidebar_toggle.setText("›  Expandir navegación" if collapsed else "‹  Contraer navegación")
         QSettings("KrakenBot", "EnterpriseUI").setValue("sidebar/collapsed", collapsed)
 
