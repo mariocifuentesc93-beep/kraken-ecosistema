@@ -83,6 +83,13 @@ class NavigationHeaderDelegate(QStyledItemDelegate):
         painter.restore()
 
 
+class ResponsiveStack(QStackedWidget):
+    """Let the active page adapt instead of inheriting the widest page minimum."""
+
+    def minimumSizeHint(self):
+        return QSize(0, 0)
+
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -373,7 +380,7 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(sidebar)
 
-        self.stack = QStackedWidget()
+        self.stack = ResponsiveStack()
 
         self.stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.stack, 1)

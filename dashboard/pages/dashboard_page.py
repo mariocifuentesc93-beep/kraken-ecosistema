@@ -30,7 +30,7 @@ class CurvePanel(QWidget):
 
 class KpiGlyph(QWidget):
     def __init__(self, kind, color):
-        super().__init__(); self.kind=kind; self.color=QColor(color); self.setMinimumSize(32,32); self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        super().__init__(); self.kind=kind; self.color=QColor(color); self.setFixedSize(34,34); self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         names={"wallet":"wallet","chart":"chart-spline","calendar":"calendar-days","target":"target","scale":"scale","draw":"trending-down","brief":"briefcase-business","hour":"hourglass","gear":"settings","person":"user-round","capital":"circle-dollar-sign"}
         self.svg_icon=colored_icon(names.get(kind, "circle-check"), color)
     def paintEvent(self,event):
@@ -49,13 +49,46 @@ class KpiGlyph(QWidget):
 
 
 class KpiCard(QFrame):
+    HEIGHT = 66
+    ICON_SIZE = 34
+    RADIUS = 8
+
     def __init__(self, icon, title, accent, detail):
-        super().__init__(); self.setObjectName("KpiCard"); self.setFrameShape(QFrame.StyledPanel); self.setMinimumHeight(64); self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred); self.setStyleSheet(f"QFrame#KpiCard{{background:rgba(10,25,37,225);border:1px solid {BORDER_COLOR};border-top:2px solid {accent};border-radius:8px;}} QFrame#KpiCard QLabel{{background:transparent;border:0;}}")
-        row=QHBoxLayout(self); row.setContentsMargins(12,9,12,8); row.setSpacing(10)
-        glyph=KpiGlyph(icon,accent)
-        body=QVBoxLayout(); body.setSpacing(1); label=QLabel(title); label.setStyleSheet("color:#F4F7FA;font-weight:700;border:0;"); self.value=QLabel("—"); self.value.setStyleSheet("color:#FFFFFF;font-size:16px;font-weight:700;border:0;"); self.detail=QLabel(detail); self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:10px;border:0;")
-        body.addWidget(label); body.addWidget(self.value); body.addWidget(self.detail); row.addWidget(glyph); row.addLayout(body,1)
-    def set_value(self, value, detail=None): self.value.setText(str(value)); self.detail.setText(str(detail)) if detail is not None else None
+        super().__init__()
+        self.setObjectName("KpiCard")
+        self.setFrameShape(QFrame.StyledPanel)
+        self.setFixedHeight(self.HEIGHT)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setStyleSheet(
+            f"QFrame#KpiCard{{background:rgba(10,25,37,225);border:1px solid {BORDER_COLOR};"
+            f"border-top:2px solid {accent};border-radius:{self.RADIUS}px;}} "
+            "QFrame#KpiCard QLabel{background:transparent;border:0;}"
+        )
+        row = QHBoxLayout(self)
+        row.setContentsMargins(10, 7, 10, 7)
+        row.setSpacing(8)
+        glyph = KpiGlyph(icon, accent)
+        body = QVBoxLayout()
+        body.setSpacing(0)
+        label = QLabel(title)
+        label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        label.setStyleSheet("color:#F4F7FA;font-size:10px;font-weight:700;border:0;")
+        self.value = QLabel("—")
+        self.value.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.value.setStyleSheet("color:#FFFFFF;font-size:15px;font-weight:700;border:0;")
+        self.detail = QLabel(detail)
+        self.detail.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.detail.setStyleSheet(f"color:{SECONDARY_TEXT};font-size:9px;border:0;")
+        body.addWidget(label)
+        body.addWidget(self.value)
+        body.addWidget(self.detail)
+        row.addWidget(glyph)
+        row.addLayout(body, 1)
+
+    def set_value(self, value, detail=None):
+        self.value.setText(str(value))
+        if detail is not None:
+            self.detail.setText(str(detail))
 
 
 class DashboardPage(QWidget):
@@ -81,27 +114,38 @@ class DashboardPage(QWidget):
         for column in range(4): self.cards.setColumnStretch(column, 1)
         for index,(icon,name,color,detail) in enumerate(specs): card=KpiCard(icon,name,color,detail); self.cards.addWidget(card,index//4,index%4); self.kpis[name]=card
         self.curve=CurvePanel()
-        tables=QHBoxLayout(); self.operations=self.table(["ID","Símbolo","Dirección","Entrada","Salida","P/L","Estado","Hora cierre"]); self.signals=self.table(["Hora","Símbolo","Dirección","Entrada","TP1","SL","Estado"]); tables.addWidget(self.panel("Operaciones recientes",self.operations),1); tables.addWidget(self.panel("Señales recientes",self.signals),1)
+        self.curve.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        tables=QHBoxLayout(); self.operations=self.table(["ID","Símbolo","Dirección","Entrada","Salida","P/L","Estado","Hora cierre"]); self.signals=self.table(["Hora","Símbolo","Dirección","Entrada","TP1","SL","Estado"])
+        self.operations_panel=self.panel("Operaciones recientes",self.operations); self.signals_panel=self.panel("Señales recientes",self.signals)
+        tables.addWidget(self.operations_panel,1); tables.addWidget(self.signals_panel,1)
         dashboard_grid = QGridLayout()
         dashboard_grid.setHorizontalSpacing(10)
         dashboard_grid.setVerticalSpacing(9)
         dashboard_grid.addLayout(self.cards, 0, 0)
         dashboard_grid.addWidget(self.curve, 1, 0)
-        dashboard_grid.addLayout(tables, 2, 0)
+        dashboard_grid.addLayout(tables, 2, 0, 1, 2)
         self.connectivity = self.connectivity_panel()
-        self.connectivity.setMinimumHeight(190)
-        self.connectivity.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.connectivity.setFixedHeight(190)
+        self.connectivity.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.quick_actions = self.quick_panel()
+        self.quick_actions.setFixedHeight(166)
+        self.quick_actions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.side_column = QWidget()
+        self.side_column.setFixedWidth(350)
+        self.side_column.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         side = QVBoxLayout()
+        side.setContentsMargins(0, 0, 0, 0)
         side.setSpacing(9)
         side.addWidget(self.connectivity)
-        side.addWidget(self.quick_actions, 1)
-        dashboard_grid.addLayout(side, 0, 1, 3, 1)
-        dashboard_grid.setColumnStretch(0, 7)
-        dashboard_grid.setColumnStretch(1, 3)
+        side.addWidget(self.quick_actions)
+        side.addStretch(1)
+        self.side_column.setLayout(side)
+        dashboard_grid.addWidget(self.side_column, 0, 1, 2, 1)
+        dashboard_grid.setColumnStretch(0, 1)
+        dashboard_grid.setColumnStretch(1, 0)
         dashboard_grid.setRowStretch(0, 0)
-        dashboard_grid.setRowStretch(1, 3)
-        dashboard_grid.setRowStretch(2, 2)
+        dashboard_grid.setRowStretch(1, 1)
+        dashboard_grid.setRowStretch(2, 0)
         layout.addLayout(dashboard_grid, 1)
         configure_active_tables(self)
     def _legacy_connectivity_panel(self):
@@ -212,13 +256,13 @@ class DashboardPage(QWidget):
 
     @staticmethod
     def table(headers):
-        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(92); table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        table.verticalHeader().setDefaultSectionSize(21); table.horizontalHeader().setMinimumHeight(24); table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch); table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); table.setWordWrap(False)
-        table.setStyleSheet("QTableWidget::item{padding:2px 3px;font-size:10px;} QHeaderView::section{padding:2px 3px;font-size:9px;font-weight:600;}")
+        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        table.verticalHeader().setDefaultSectionSize(22); table.verticalHeader().setMinimumSectionSize(22); table.horizontalHeader().setFixedHeight(22); table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch); table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); table.setWordWrap(False)
+        table.setStyleSheet("QTableWidget{font-size:9px;} QTableWidget::item{padding:1px 3px;font-size:9px;} QHeaderView::section{padding:1px 3px;font-size:8px;font-weight:600;}")
         return table
     @staticmethod
     def panel(title, widget):
-        panel=QWidget(); panel.setObjectName("DashboardTablePanel"); panel.setStyleSheet(f"#DashboardTablePanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;}}"); box=QVBoxLayout(panel); box.setContentsMargins(10,8,10,8); heading=QLabel(title); heading.setStyleSheet("font-weight:700;border:0;background:transparent;"); box.addWidget(heading); box.addWidget(widget); return panel
+        panel=QWidget(); panel.setObjectName("DashboardTablePanel"); panel.setFixedHeight(148); panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed); panel.setStyleSheet(f"#DashboardTablePanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:8px;}}"); box=QVBoxLayout(panel); box.setContentsMargins(9,6,9,7); box.setSpacing(4); heading=QLabel(title); heading.setStyleSheet("font-size:10px;font-weight:700;border:0;background:transparent;"); box.addWidget(heading); box.addWidget(widget); return panel
     def _refresh_profile_filter(self, active):
         current = self.profile_filter.currentData()
         profiles = profile_repository.get_active_profiles()

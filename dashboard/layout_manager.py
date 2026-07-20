@@ -42,6 +42,7 @@ class EnterpriseLayoutManager:
                 if widget.sizePolicy().horizontalPolicy() not in (
                     QSizePolicy.Fixed,
                     QSizePolicy.Maximum,
+                    QSizePolicy.Ignored,
                 ):
                     widget.setSizePolicy(
                         QSizePolicy.Expanding,
