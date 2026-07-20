@@ -106,10 +106,14 @@ class MainWindow(QMainWindow):
         self.toolbar.setMovable(False)
 
         self.toolbar.setIconSize(
-            QSize(16, 16)
+            QSize(14, 14)
         )
 
         self.addToolBar(self.toolbar)
+
+        self.toolbar_sidebar_spacer = QWidget()
+        self.toolbar_sidebar_spacer.setFixedWidth(190)
+        self.toolbar.addWidget(self.toolbar_sidebar_spacer)
 
         self.actStart = QAction("Iniciar", self)
 
@@ -214,9 +218,7 @@ class MainWindow(QMainWindow):
 
         self.status.addPermanentWidget(self.lblVersion)
 
-        self.topStatus = QToolBar("Estado", self)
-        self.topStatus.setMovable(False)
-        self.addToolBar(Qt.TopToolBarArea, self.topStatus)
+        self.topStatus = self.toolbar
         self.topProfile = QLabel("Perfil: sin activo")
         self.topMode = QLabel("Modo: OFF")
         self.topMT5 = QLabel("MT5: desconectado")
@@ -245,7 +247,7 @@ class MainWindow(QMainWindow):
         sidebar.setMinimumWidth(200)
         sidebar.setMaximumWidth(215)
         sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(10, 14, 10, 10)
+        sidebar_layout.setContentsMargins(8, 0, 8, 6)
         brand = KrakenLogo(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"); brand.setToolTip("Kraken Bot Enterprise"); brand.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         brand_name = QLabel("KRAKEN BOT\nENTERPRISE")
         brand_name.setAlignment(Qt.AlignHCenter)
@@ -311,11 +313,20 @@ class MainWindow(QMainWindow):
                     QStyle.SP_FileDialogInfoView, QStyle.SP_BrowserReload, QStyle.SP_DriveNetIcon,
                     QStyle.SP_MessageBoxWarning, QStyle.SP_MediaPlay, QStyle.SP_FileDialogListView,
                     QStyle.SP_FileDialogDetailedView, QStyle.SP_FileDialogContentsView]
-        for index, page in enumerate(pages):
-            icon = icon_map[index] if index < len(icon_map) else QStyle.SP_MediaSeekForward
-            item = QListWidgetItem(self.style().standardIcon(icon), page)
-            item.setToolTip(page)
-            self.menu.addItem(item)
+        groups = (("OPERACIÓN", range(0, 4)), ("TRADING", (13, 16, 14, 15)),
+                  ("MERCADO", range(4, 8)), ("ANÁLISIS", (9, 10, 11, 8)),
+                  ("CONFIGURACIÓN", (3, 17)))
+        self.page_items = {}
+        for group, indices in groups:
+            header = QListWidgetItem(group)
+            header.setFlags(Qt.NoItemFlags)
+            header.setData(Qt.UserRole, -1)
+            header.setForeground(Qt.gray)
+            self.menu.addItem(header)
+            for index in indices:
+                page = pages[index]; icon = icon_map[index] if index < len(icon_map) else QStyle.SP_MediaSeekForward
+                item = QListWidgetItem(self.style().standardIcon(icon), page)
+                item.setData(Qt.UserRole, index); item.setToolTip(page); self.menu.addItem(item); self.page_items[page] = item
 
         splitter.addWidget(sidebar)
 
@@ -417,9 +428,9 @@ class MainWindow(QMainWindow):
         for page, title, guidance in page_details:
             decorate_enterprise_page(page, title, guidance)
 
-        self.menu.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.menu.currentRowChanged.connect(self.select_navigation_page)
 
-        self.menu.setCurrentRow(0)
+        self.menu.setCurrentItem(self.page_items["Dashboard"])
 
         self.dashboardPage.navigate_requested.connect(self.navigate_to_page)
         self.dashboardPage.action_requested.connect(self.handle_dashboard_action)
@@ -616,10 +627,17 @@ class MainWindow(QMainWindow):
         QSettings("KrakenBot", "EnterpriseUI").setValue("sidebar/collapsed", collapsed)
 
     def navigate_to_page(self, title):
-        for row in range(self.menu.count()):
-            if self.menu.item(row).text() == title:
-                self.menu.setCurrentRow(row)
-                return
+        item = self.page_items.get(title)
+        if item is not None:
+            self.menu.setCurrentItem(item)
+
+    def select_navigation_page(self, row):
+        item = self.menu.item(row)
+        if item is None:
+            return
+        index = item.data(Qt.UserRole)
+        if isinstance(index, int) and index >= 0:
+            self.stack.setCurrentIndex(index)
 
     def handle_dashboard_action(self, action):
         if action == "SIMULATION":

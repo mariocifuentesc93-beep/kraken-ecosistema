@@ -11,7 +11,7 @@ def application_style():
     return f"""
     QMainWindow, QWidget {{ background:{BACKGROUND_COLOR}; font-family:'Segoe UI'; font-size:12px; }}
     QToolBar {{ background:{PANEL_COLOR}; border:0; border-bottom:1px solid {BORDER_COLOR}; spacing:6px; padding:5px; }}
-    QToolButton {{ background:#111820; color:#F4F7FA; border:1px solid #263442; border-radius:5px; padding:4px 7px; font-size:11px; font-weight:600; }}
+    QToolButton {{ background:#111820; color:#F4F7FA; border:1px solid #263442; border-radius:4px; padding:3px 5px; font-size:10px; font-weight:600; }}
     QToolButton:hover {{ background:#1B2A35; border-color:#00C853; }}
     QToolButton:pressed {{ background:#123422; }}
     QStatusBar {{ background:{PANEL_COLOR}; border-top:1px solid {BORDER_COLOR}; color:{SECONDARY_TEXT}; }}
@@ -54,7 +54,7 @@ def configure_active_tables(root):
 
 
 def status_chip(color):
-    return f"background:{CARD_COLOR}; color:{color}; border:1px solid {BORDER_COLOR}; border-radius:9px; padding:5px 9px; font-weight:600;"
+    return f"background:{CARD_COLOR}; color:{color}; border:1px solid {BORDER_COLOR}; border-radius:8px; padding:3px 6px; font-size:10px; font-weight:600;"
 
 
 def dashboard_card(accent=PRIMARY_COLOR):
