@@ -64,7 +64,7 @@ class DashboardPage(QWidget):
         return box
     @staticmethod
     def table(headers):
-        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(270); return table
+        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(170); return table
     @staticmethod
     def panel(title, widget):
         panel=QWidget(); panel.setObjectName("DashboardTablePanel"); panel.setStyleSheet(f"#DashboardTablePanel{{background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;}}"); box=QVBoxLayout(panel); box.setContentsMargins(10,8,10,8); heading=QLabel(title); heading.setStyleSheet("font-weight:700;border:0;background:transparent;"); box.addWidget(heading); box.addWidget(widget); return panel
