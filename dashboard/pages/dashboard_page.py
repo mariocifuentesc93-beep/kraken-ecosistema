@@ -48,10 +48,10 @@ class DashboardPage(QWidget):
         layout=QVBoxLayout(self); layout.setContentsMargins(14,12,14,12); layout.setSpacing(10)
         head=QHBoxLayout(); title=QLabel("Centro de control"); title.setStyleSheet("font-size:21px;font-weight:700;"); self.subtitle=QLabel(); self.subtitle.setStyleSheet(f"color:{SECONDARY_TEXT};"); head.addWidget(title); head.addWidget(self.subtitle); head.addStretch(); layout.addLayout(head)
         self.cards=QGridLayout(); self.cards.setHorizontalSpacing(9); self.cards.setVerticalSpacing(9); layout.addLayout(self.cards)
-        specs=(("▣","Balance",PRIMARY_COLOR,"Respecto al inicial"),("▥","Equity",INFO_COLOR,"Flotante: $0.00"),("▦","P/L diario",PRIMARY_COLOR,"Hoy"),("▦","P/L mensual",PRIMARY_COLOR,"Este mes"),("◎","Win rate",PRIMARY_COLOR,"Operaciones cerradas"),("⚖","Profit factor",WARNING_COLOR,"Relación beneficio/riesgo"),("⌁","Drawdown",ERROR_COLOR,"Máx. histórico"),("▣","Abiertas",WARNING_COLOR,"Posiciones abiertas"),("⌛","Pendientes",WARNING_COLOR,"Órdenes pendientes"),("⚙","Modo",INFO_COLOR,"Ejecución actual"),("●","Perfil",INFO_COLOR,"Perfil activo"))
+        specs=(("▣","Balance",PRIMARY_COLOR,"Respecto al inicial"),("▥","Equity",INFO_COLOR,"Flotante: $0.00"),("▦","P/L diario",PRIMARY_COLOR,"Hoy"),("▦","P/L mensual",PRIMARY_COLOR,"Este mes"),("◎","Win rate",PRIMARY_COLOR,"Operaciones cerradas"),("⚖","Profit factor",WARNING_COLOR,"Relación beneficio/riesgo"),("⌁","Drawdown",ERROR_COLOR,"Máx. histórico"),("▣","Abiertas",WARNING_COLOR,"Posiciones abiertas"),("⌛","Pendientes",WARNING_COLOR,"Órdenes pendientes"),("⚙","Modo",INFO_COLOR,"Ejecución actual"),("●","Perfil",INFO_COLOR,"Perfil activo"),("$","Capital",WARNING_COLOR,"Capital disponible"))
         self.kpis={}
         for index,(icon,name,color,detail) in enumerate(specs): card=KpiCard(icon,name,color,detail); self.cards.addWidget(card,index//4,index%4); self.kpis[name]=card
-        middle=QHBoxLayout(); self.curve=CurvePanel(); middle.addWidget(self.curve,3); middle.addWidget(self.connectivity_panel(),1); middle.addWidget(self.quick_panel(),1); layout.addLayout(middle,2)
+        middle=QHBoxLayout(); self.curve=CurvePanel(); middle.addWidget(self.curve,7); right=QVBoxLayout(); right.setSpacing(9); right.addWidget(self.connectivity_panel(),1); right.addWidget(self.quick_panel(),1); middle.addLayout(right,3); layout.addLayout(middle,3)
         tables=QHBoxLayout(); self.operations=self.table(["ID","Símbolo","Dirección","Entrada","Salida","P/L","Estado","Hora cierre"]); self.signals=self.table(["Hora","Símbolo","Dirección","Entrada","TP1","SL","Estado"]); tables.addWidget(self.panel("Operaciones recientes",self.operations),1); tables.addWidget(self.panel("Señales recientes",self.signals),1); layout.addLayout(tables,2)
         configure_active_tables(self)
     def connectivity_panel(self):
@@ -64,14 +64,14 @@ class DashboardPage(QWidget):
         return box
     @staticmethod
     def table(headers):
-        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(150); return table
+        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setMinimumHeight(210); return table
     @staticmethod
     def panel(title, widget):
         panel=QWidget(); panel.setStyleSheet(f"background:{CARD_COLOR};border:1px solid {BORDER_COLOR};border-radius:9px;"); box=QVBoxLayout(panel); box.setContentsMargins(10,8,10,8); heading=QLabel(title); heading.setStyleSheet("font-weight:700;border:0;"); box.addWidget(heading); box.addWidget(widget); return panel
     def _quick(self, action): self.action_requested.emit(action) if action=="SIMULATION" else self.navigate_requested.emit(action)
     def refresh(self,*args):
         active=profile_repository.get_active(); metrics=trading_analytics_service.metrics({"profile":active.id} if active else {}); rows=metrics["rows"]; open_count=sum(r["status"]=="OPEN" for r in rows); pending=sum(r["status"] in ("PENDING","QUEUED") for r in rows)
-        values={"Balance":(f"{metrics['net']:,.2f}","Respecto al inicial"),"Equity":(f"{metrics['net']:,.2f}","Flotante: $0.00"),"P/L diario":(f"{metrics['net']:,.2f}","Hoy"),"P/L mensual":(f"{metrics['net']:,.2f}","Este mes"),"Win rate":(f"{metrics['win_rate']}%",f"{len(rows)} operaciones"),"Profit factor":(metrics['profit_factor'],"—"),"Drawdown":(f"{metrics['maximum_drawdown']:,.2f}","Máx. histórico"),"Abiertas":(open_count,"Posiciones abiertas"),"Pendientes":(pending,"Órdenes pendientes"),"Modo":(getattr(active,'execution_mode','OFF'),"Ejecución actual"),"Perfil":(getattr(active,'name','Sin perfil activo'),"Perfil activo")}
+        values={"Balance":(f"{metrics['net']:,.2f}","Respecto al inicial"),"Equity":(f"{metrics['net']:,.2f}","Flotante: $0.00"),"P/L diario":(f"{metrics['net']:,.2f}","Hoy"),"P/L mensual":(f"{metrics['net']:,.2f}","Este mes"),"Win rate":(f"{metrics['win_rate']}%",f"{len(rows)} operaciones"),"Profit factor":(metrics['profit_factor'],"—"),"Drawdown":(f"{metrics['maximum_drawdown']:,.2f}","Máx. histórico"),"Abiertas":(open_count,"Posiciones abiertas"),"Pendientes":(pending,"Órdenes pendientes"),"Modo":(getattr(active,'execution_mode','OFF'),"Ejecución actual"),"Perfil":(getattr(active,'name','Sin perfil activo'),"Perfil activo"),"Capital":(f"{metrics['net']:,.2f}","Capital disponible")}
         for key,(value,detail) in values.items(): self.kpis[key].set_value(value,detail)
         self.subtitle.setText(f"Perfil activo: {active.name}" if active else "Configure un perfil para comenzar"); self.curve.set_points(metrics["curve"]); self.connection_text.setText(f"MT5   • Desconectado\nTelegram   • Desconectado\nSQLite   • Disponible\n\nActualizado: {datetime.now():%H:%M:%S}")
         operations=list(reversed(rows[-6:])); self.operations.setRowCount(len(operations))

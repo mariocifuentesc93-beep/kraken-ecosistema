@@ -231,14 +231,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(splitter)
 
         sidebar = QWidget()
-        sidebar.setMinimumWidth(300)
-        sidebar.setMaximumWidth(310)
+        sidebar.setMinimumWidth(220)
+        sidebar.setMaximumWidth(240)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(10, 14, 10, 10)
-        brand = QLabel(); brand.setPixmap(QPixmap(str(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"))); brand.setToolTip("Kraken Bot Enterprise"); brand.setMinimumHeight(150); brand.setAlignment(Qt.AlignCenter); brand.setScaledContents(True)
+        brand = QLabel(); brand.setPixmap(QPixmap(str(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"))); brand.setToolTip("Kraken Bot Enterprise"); brand.setFixedSize(220,180); brand.setAlignment(Qt.AlignCenter); brand.setScaledContents(True)
         brand_name = QLabel("KRAKEN BOT\nENTERPRISE")
         brand_name.setStyleSheet("font-size:18px;font-weight:800;color:#00C853;padding:8px;")
-        brand_row = QHBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.addWidget(brand); brand_row.addWidget(brand_name); brand_row.addStretch()
+        brand_row = QVBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.addWidget(brand, alignment=Qt.AlignCenter); brand_row.addWidget(brand_name, alignment=Qt.AlignCenter)
         section = QLabel("OPERACIÓN  ·  DATOS  ·  SISTEMA")
         section.setStyleSheet("color:#B0BEC5;font-size:10px;padding:0 8px 6px 8px;")
         sidebar_layout.addLayout(brand_row)
@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.stack)
 
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([300, 1200])
+        splitter.setSizes([230, 1200])
 
         self.dashboardPage = DashboardPage()
 
@@ -437,6 +437,11 @@ class MainWindow(QMainWindow):
             self.consoleDock
 
         )
+        self.consoleDock.hide()
+        view_menu = self.menuBar().addMenu("Ver")
+        view_menu.addAction(self.consoleDock.toggleViewAction())
+        self.consoleDock.visibilityChanged.connect(lambda visible: QSettings("KrakenBot", "EnterpriseUI").setValue("docks/console_visible", visible))
+        self.consoleDock.setVisible(QSettings("KrakenBot", "EnterpriseUI").value("docks/console_visible", False, type=bool))
 
     def build_notifications(self):
 
@@ -593,8 +598,8 @@ class MainWindow(QMainWindow):
     def toggle_sidebar(self):
         collapsed = not self.menu.isHidden()
         self.menu.setVisible(not collapsed)
-        self.sidebar.setMaximumWidth(88 if collapsed else 310)
-        self.sidebar.setMinimumWidth(76 if collapsed else 300)
+        self.sidebar.setMaximumWidth(80 if collapsed else 240)
+        self.sidebar.setMinimumWidth(72 if collapsed else 220)
         self.sidebar_toggle.setText("›  Expandir navegación" if collapsed else "‹  Contraer navegación")
         QSettings("KrakenBot", "EnterpriseUI").setValue("sidebar/collapsed", collapsed)
 
