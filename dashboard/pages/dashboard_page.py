@@ -3,7 +3,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget,
-                               QTableWidgetItem, QVBoxLayout, QWidget, QStyle, QFrame, QHeaderView, QSizePolicy)
+                               QTableWidgetItem, QVBoxLayout, QWidget, QStyle, QFrame, QSizePolicy)
 
 from dashboard.styles import BORDER_COLOR, CARD_COLOR, ERROR_COLOR, INFO_COLOR, PRIMARY_COLOR, SECONDARY_TEXT, WARNING_COLOR
 from dashboard.ui_theme import configure_active_tables
@@ -247,8 +247,8 @@ class DashboardPage(QWidget):
 
     @staticmethod
     def table(headers):
-        table=QTableWidget(); table.setProperty("compact",True); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        table.verticalHeader().setDefaultSectionSize(22); table.verticalHeader().setMinimumSectionSize(22); table.horizontalHeader().setFixedHeight(22); table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch); table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); table.setWordWrap(False)
+        table=QTableWidget(); table.setColumnCount(len(headers)); table.setHorizontalHeaderLabels(headers); table.setEditTriggers(QTableWidget.NoEditTriggers); table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        table.setWordWrap(False)
         return table
     @staticmethod
     def panel(title, widget):

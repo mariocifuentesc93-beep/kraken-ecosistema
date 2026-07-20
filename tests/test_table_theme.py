@@ -5,7 +5,8 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QHeaderView,
+                               QTableWidget, QTableWidgetItem)
 
 from dashboard.styles import CARD_COLOR, TEXT_COLOR
 from dashboard.ui_theme import application_style, apply_terminal_palette
@@ -62,6 +63,42 @@ class TableThemeTests(unittest.TestCase):
             tables = page.findChildren(QTableWidget)
             self.assertTrue(tables, page.__class__.__name__)
             self.assertTrue(all(table.alternatingRowColors() and table.hasMouseTracking() for table in tables))
+        window.close()
+
+    def test_all_required_tables_use_professional_geometry_and_behavior(self):
+        from dashboard.main_window import MainWindow
+
+        window = MainWindow()
+        required = {
+            "Operations": window.operationsPage.findChildren(QTableWidget),
+            "Profiles": window.profilesPage.findChildren(QTableWidget),
+            "Paper Trading": window.paperTradingPage.findChildren(QTableWidget),
+            "Replay": window.replayPage.findChildren(QTableWidget),
+            "Analytics": window.analyticsPage.findChildren(QTableWidget),
+            "MT5": window.mt5Page.findChildren(QTableWidget),
+            "Telegram": window.telegramPage.findChildren(QTableWidget),
+            "Channels": window.channelsPage.findChildren(QTableWidget),
+            "Symbols": window.symbolsPage.findChildren(QTableWidget),
+            "Timeline": window.tradeTimelinePage.findChildren(QTableWidget),
+            "Signal Inspector": window.signalInspectorPage.findChildren(QTableWidget),
+            "Calendar": window.tradingCalendarPage.findChildren(QTableWidget),
+            "Dashboard": window.dashboardPage.findChildren(QTableWidget),
+        }
+        for area, tables in required.items():
+            self.assertTrue(tables, area)
+            for table in tables:
+                self.assertTrue(table.property("enterpriseTable"), area)
+                self.assertEqual(table.verticalHeader().defaultSectionSize(), 28, area)
+                self.assertEqual(table.verticalHeader().sectionResizeMode(0), QHeaderView.Fixed, area)
+                self.assertEqual(table.horizontalHeader().height(), 32, area)
+                self.assertEqual(table.horizontalHeader().sectionResizeMode(0), QHeaderView.Interactive, area)
+                self.assertTrue(table.horizontalHeader().property("stickyHeader"), area)
+                self.assertTrue(table.isSortingEnabled(), area)
+                self.assertTrue(table.alternatingRowColors(), area)
+                self.assertTrue(table.hasMouseTracking(), area)
+                self.assertEqual(table.selectionBehavior(), QAbstractItemView.SelectRows, area)
+                self.assertEqual(table.verticalScrollMode(), QAbstractItemView.ScrollPerPixel, area)
+        self.assertIn("QScrollBar::handle:vertical:hover", application_style())
         window.close()
 
 

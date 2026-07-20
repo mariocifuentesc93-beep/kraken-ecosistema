@@ -66,10 +66,10 @@ class DashboardPolishTests(unittest.TestCase):
 
         window = MainWindow()
         for table in (window.dashboardPage.operations, window.dashboardPage.signals):
-            self.assertEqual(table.verticalHeader().defaultSectionSize(), 22)
-            self.assertEqual(table.verticalHeader().minimumSectionSize(), 22)
-            self.assertEqual(table.horizontalHeader().height(), 22)
-            self.assertTrue(table.property("compact"))
+            self.assertEqual(table.verticalHeader().defaultSectionSize(), 28)
+            self.assertEqual(table.verticalHeader().minimumSectionSize(), 28)
+            self.assertEqual(table.horizontalHeader().height(), 32)
+            self.assertTrue(table.property("enterpriseTable"))
             self.assertEqual(table.styleSheet(), "")
         window.close()
 

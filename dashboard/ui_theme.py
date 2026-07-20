@@ -1,8 +1,9 @@
 """Centralized terminal-style theme for the Kraken Bot shell and dashboard."""
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtCore import QEvent, QObject, QPropertyAnimation
-from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsDropShadowEffect,
-                               QGroupBox, QLineEdit, QPushButton, QTableView, QWidget)
+from PySide6.QtCore import QEvent, QObject, QPropertyAnimation, QTimer, Qt
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFrame,
+                               QGraphicsDropShadowEffect, QGroupBox, QHeaderView,
+                               QLineEdit, QPushButton, QTableView, QWidget)
 
 from dashboard.styles import (ACCENT_COLOR, BACKGROUND_COLOR, BORDER_COLOR, CARD_COLOR,
                               ERROR_COLOR, INFO_COLOR, PANEL_COLOR, PRIMARY_COLOR, SECONDARY_TEXT,
@@ -90,9 +91,9 @@ def application_style():
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0; background:transparent; border:0; }}
     QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background:transparent; }}
     {table_style()}
-    QTableView[compact="true"], QTableWidget[compact="true"] {{ font-size:9px; }}
-    QTableView[compact="true"]::item, QTableWidget[compact="true"]::item {{ padding:1px 3px; font-size:9px; }}
-    QTableView[compact="true"] QHeaderView::section, QTableWidget[compact="true"] QHeaderView::section {{ padding:1px 3px; font-size:8px; }}
+    QTableView, QTableWidget {{ font-size:10px; }}
+    QTableView::item, QTableWidget::item {{ padding:2px 5px; }}
+    QHeaderView::section {{ padding:3px 6px; font-size:9px; }}
     """
 
 
@@ -116,13 +117,43 @@ def apply_terminal_palette(application=None):
 
 
 def configure_active_tables(root):
-    """Enable shared readability behaviour without changing page business logic."""
+    """Apply the professional table contract to every table under ``root``."""
     for table in root.findChildren(QTableView):
-        table.setAlternatingRowColors(True)
-        table.setMouseTracking(True)
-        if not table.property("compact"):
-            table.verticalHeader().setDefaultSectionSize(26)
-            table.horizontalHeader().setMinimumHeight(28)
+        configure_professional_table(table)
+
+
+def configure_professional_table(table, auto_size=True):
+    """Configure one compact, sortable, user-resizable enterprise table."""
+    table.setProperty("enterpriseTable", True)
+    table.setAlternatingRowColors(True)
+    table.setMouseTracking(True)
+    table.setSelectionBehavior(QAbstractItemView.SelectRows)
+    table.setSelectionMode(QAbstractItemView.SingleSelection)
+    table.setShowGrid(False)
+    table.setWordWrap(False)
+    table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+    table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+    if hasattr(table, "setSortingEnabled"):
+        table.setSortingEnabled(True)
+    vertical = table.verticalHeader()
+    vertical.setVisible(False)
+    vertical.setMinimumSectionSize(28)
+    vertical.setDefaultSectionSize(28)
+    vertical.setSectionResizeMode(QHeaderView.Fixed)
+    header = table.horizontalHeader()
+    header.setProperty("stickyHeader", True)
+    header.setProperty("stickyHeader", True)
+    header.setProperty("stickyHeader", True)
+    header.setVisible(True)
+    header.setFixedHeight(32)
+    header.setMinimumSectionSize(48)
+    header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    header.setStretchLastSection(False)
+    header.setSectionsClickable(True)
+    header.setSectionsMovable(False)
+    header.setSectionResizeMode(QHeaderView.Interactive)
+    if auto_size:
+        QTimer.singleShot(0, table.resizeColumnsToContents)
 
 
 class _EnterpriseHoverAnimator(QObject):

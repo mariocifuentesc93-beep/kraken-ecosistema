@@ -3,10 +3,8 @@
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QTableWidget,
     QVBoxLayout,
@@ -14,7 +12,8 @@ from PySide6.QtWidgets import (
 )
 
 from dashboard.icons import colored_icon
-from dashboard.ui_theme import apply_standard_components, set_visual_role
+from dashboard.ui_theme import (apply_standard_components, configure_professional_table,
+                                set_visual_role)
 from dashboard.styles import (
     BORDER_COLOR,
     CARD_COLOR,
@@ -204,21 +203,10 @@ def configure_enterprise_table(table, key=None):
     """Apply shared table behavior without touching model or repository code."""
     key = key or table.objectName() or f"{table.parent().__class__.__name__}_{id(table)}"
     table.setObjectName(key)
-    table.setAlternatingRowColors(True)
-    table.setMouseTracking(True)
-    table.setSortingEnabled(True)
-    table.setSelectionBehavior(QAbstractItemView.SelectRows)
-    table.setSelectionMode(QAbstractItemView.SingleSelection)
-    table.setShowGrid(False)
-    table.setWordWrap(False)
-    table.verticalHeader().setVisible(False)
-    table.verticalHeader().setDefaultSectionSize(30)
-    header = table.horizontalHeader()
-    header.setMinimumHeight(34)
-    header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-    header.setSectionResizeMode(QHeaderView.Interactive)
     settings = QSettings("KrakenBot", "EnterpriseUI")
     widths = settings.value(f"tables/{key}/widths")
+    configure_professional_table(table, auto_size=not bool(widths))
+    header = table.horizontalHeader()
     if widths:
         for index, width in enumerate(widths):
             table.setColumnWidth(index, int(width))
