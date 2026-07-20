@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QSettings, QTimer
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QMessageBox,
     QStyle,
+    QPushButton,
 )
 
 from dashboard.pages.dashboard_page import DashboardPage
@@ -54,6 +55,7 @@ from dashboard.ui_theme import (NEGATIVE, POSITIVE, WARNING, application_style,
                                 apply_terminal_palette, configure_active_tables, status_chip)
 from dashboard.branding import application_icon, logo_pixmap
 from repositories.profile_repository import profile_repository
+from dashboard.widgets.enterprise import decorate_enterprise_page
 
 
 class MainWindow(QMainWindow):
@@ -192,6 +194,13 @@ class MainWindow(QMainWindow):
 
         self.status.addPermanentWidget(self.lblProfit)
 
+        self.lblPaper = QLabel("Paper: listo")
+        self.lblReplay = QLabel("Replay: listo")
+        self.lblClock = QLabel()
+        self.status.addPermanentWidget(self.lblPaper)
+        self.status.addPermanentWidget(self.lblReplay)
+        self.status.addPermanentWidget(self.lblClock)
+
         self.status.addPermanentWidget(self.lblVersion)
 
         self.topStatus = QToolBar("Estado", self)
@@ -203,8 +212,11 @@ class MainWindow(QMainWindow):
         self.topTelegram = QLabel("Telegram: desconectado")
         self.topDatabase = QLabel("SQLite: disponible")
         self.topVersion = QLabel(f"v{VERSION}")
+        self.topClock = QLabel()
         for widget, color in ((self.topProfile, WARNING), (self.topMode, WARNING), (self.topMT5, NEGATIVE), (self.topTelegram, NEGATIVE), (self.topDatabase, POSITIVE), (self.topVersion, POSITIVE)):
             widget.setStyleSheet(status_chip(color)); self.topStatus.addWidget(widget)
+        self.topClock.setStyleSheet(status_chip(POSITIVE)); self.topStatus.addWidget(self.topClock)
+        self.clock_timer = QTimer(self); self.clock_timer.timeout.connect(self.update_clock); self.clock_timer.start(1000); self.update_clock()
 
     def build_central(self):
 
@@ -231,9 +243,15 @@ class MainWindow(QMainWindow):
         section.setStyleSheet("color:#B0BEC5;font-size:10px;padding:0 8px 6px 8px;")
         sidebar_layout.addLayout(brand_row)
         sidebar_layout.addWidget(section)
+        self.sidebar_toggle = QPushButton("‹  Contraer navegación")
+        sidebar_layout.addWidget(self.sidebar_toggle)
         self.menu = QListWidget()
         self.menu.setToolTip("Navegación principal")
         sidebar_layout.addWidget(self.menu)
+        self.sidebar = sidebar
+        self.sidebar_toggle.clicked.connect(self.toggle_sidebar)
+        if QSettings("KrakenBot", "EnterpriseUI").value("sidebar/collapsed", False, type=bool):
+            self.toggle_sidebar()
 
         pages = [
 
@@ -367,6 +385,25 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.replayPage)
 
         self.stack.addWidget(self.settingsPage)
+
+        page_details = (
+            (self.profilesPage, "Perfiles", "Cree y active un perfil para definir operación y riesgo."),
+            (self.mt5Page, "Cuentas MT5", "Agregue una cuenta y ejecute el diagnóstico de conexión."),
+            (self.telegramPage, "Cuentas Telegram", "Configure una cuenta y complete su autorización."),
+            (self.channelsPage, "Canales", "Asigne canales a un perfil de Telegram para monitorizarlos."),
+            (self.symbolsPage, "Símbolos", "Agregue símbolos habilitados al perfil activo."),
+            (self.logsPage, "Logs", "Los eventos del sistema aparecerán aquí mientras opera."),
+            (self.signalInspectorPage, "Inspector de señales", "Las señales procesadas aparecerán al recibir mensajes."),
+            (self.tradeTimelinePage, "Línea de tiempo", "Las transiciones aparecerán al simular operaciones."),
+            (self.marketDataPage, "Datos de mercado", "Actualice la vista para consultar precios."),
+            (self.paperTradingPage, "Paper Trading", "Simule señales para crear posiciones virtuales."),
+            (self.tradingCalendarPage, "Calendario de Trading", "Cargue demostración o cierre operaciones para ver rendimiento."),
+            (self.analyticsPage, "Analíticas", "Las métricas se generan con operaciones simuladas o paper trading."),
+            (self.replayPage, "Replay", "Seleccione una fecha con operaciones para reproducir su línea de tiempo."),
+            (self.settingsPage, "Configuración", "Ajuste el modo y protecciones antes de iniciar el motor."),
+        )
+        for page, title, guidance in page_details:
+            decorate_enterprise_page(page, title, guidance)
 
         self.menu.currentRowChanged.connect(self.stack.setCurrentIndex)
 
@@ -547,6 +584,19 @@ class MainWindow(QMainWindow):
         self.topMT5.setText("MT5: conectado" if self.mt5_online else "MT5: desconectado")
         self.topTelegram.setText("Telegram: conectado" if self.telegram_online else "Telegram: desconectado")
         self.topDatabase.setText("SQLite: disponible" if database_manager.table_exists("profiles") else "SQLite: error")
+
+    def update_clock(self):
+        current = datetime.now().strftime("%H:%M:%S")
+        self.lblClock.setText(current)
+        self.topClock.setText(current)
+
+    def toggle_sidebar(self):
+        collapsed = not self.menu.isHidden()
+        self.menu.setVisible(not collapsed)
+        self.sidebar.setMaximumWidth(88 if collapsed else 310)
+        self.sidebar.setMinimumWidth(76 if collapsed else 300)
+        self.sidebar_toggle.setText("›  Expandir navegación" if collapsed else "‹  Contraer navegación")
+        QSettings("KrakenBot", "EnterpriseUI").setValue("sidebar/collapsed", collapsed)
 
     def navigate_to_page(self, title):
         for row in range(self.menu.count()):
