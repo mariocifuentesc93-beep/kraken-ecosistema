@@ -1,9 +1,9 @@
-from database.schema import create_tables
+from database.database_manager import database_manager
 
 
 def migrate():
 
-    create_tables()
+    database_manager.initialize()
 
     print("[DATABASE] Base de datos creada correctamente.")
 

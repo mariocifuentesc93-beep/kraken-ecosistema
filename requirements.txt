@@ -1,4 +1,5 @@
-MetaTrader5
-PySide6
-Telethon
+PySide6==6.11.1
+telethon==1.44.0
+MetaTrader5==5.0.5735
+PyYAML==6.0.3
 pytest

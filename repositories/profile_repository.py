@@ -1,7 +1,22 @@
 from datetime import datetime
+from dataclasses import fields
 
 from models.profile import Profile
 from database.database_manager import database_manager
+
+
+PROFILE_FIELDS = {item.name for item in fields(Profile)}
+
+
+def _profile_from_row(row):
+    values = dict(row)
+    return Profile(
+        **{
+            key: value
+            for key, value in values.items()
+            if key in PROFILE_FIELDS
+        }
+    )
 
 
 class ProfileRepository:
@@ -51,22 +66,34 @@ class ProfileRepository:
 
                 max_daily_loss,
                 max_daily_profit,
+                max_drawdown,
                 max_open_trades,
+                min_signal_score,
 
                 execution_mode,
                 tp_level,
+                tp1_management,
                 execute_market,
 
                 magic_number,
                 comment,
                 deviation,
 
+                total_operations,
+                winning_operations,
+                losing_operations,
+                breakeven_operations,
+                total_profit,
+                total_loss,
+                net_profit,
+                win_rate,
+
                 created_at,
                 updated_at
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -96,15 +123,27 @@ class ProfileRepository:
 
                 profile.max_daily_loss,
                 profile.max_daily_profit,
+                profile.max_drawdown,
                 profile.max_open_trades,
+                profile.min_signal_score,
 
                 profile.execution_mode,
                 profile.tp_level,
+                profile.tp1_management,
                 int(profile.execute_market),
 
                 profile.magic_number,
                 profile.comment,
                 profile.deviation,
+
+                profile.total_operations,
+                profile.winning_operations,
+                profile.losing_operations,
+                profile.breakeven_operations,
+                profile.total_profit,
+                profile.total_loss,
+                profile.net_profit,
+                profile.win_rate,
 
                 profile.created_at,
                 profile.updated_at,
@@ -161,15 +200,27 @@ class ProfileRepository:
 
                 max_daily_loss=?,
                 max_daily_profit=?,
+                max_drawdown=?,
                 max_open_trades=?,
+                min_signal_score=?,
 
                 execution_mode=?,
                 tp_level=?,
+                tp1_management=?,
                 execute_market=?,
 
                 magic_number=?,
                 comment=?,
                 deviation=?,
+
+                total_operations=?,
+                winning_operations=?,
+                losing_operations=?,
+                breakeven_operations=?,
+                total_profit=?,
+                total_loss=?,
+                net_profit=?,
+                win_rate=?,
 
                 updated_at=?
 
@@ -203,15 +254,27 @@ class ProfileRepository:
 
                 profile.max_daily_loss,
                 profile.max_daily_profit,
+                profile.max_drawdown,
                 profile.max_open_trades,
+                profile.min_signal_score,
 
                 profile.execution_mode,
                 profile.tp_level,
+                profile.tp1_management,
                 int(profile.execute_market),
 
                 profile.magic_number,
                 profile.comment,
                 profile.deviation,
+
+                profile.total_operations,
+                profile.winning_operations,
+                profile.losing_operations,
+                profile.breakeven_operations,
+                profile.total_profit,
+                profile.total_loss,
+                profile.net_profit,
+                profile.win_rate,
 
                 profile.updated_at,
 
@@ -254,11 +317,19 @@ class ProfileRepository:
         if row is None:
             return None
 
-        return Profile(**dict(row))
+        return _profile_from_row(row)
 
     # ---------------------------------------------------------
 
     def get_active(self):
+
+        profiles = self.get_active_profiles()
+        return profiles[0] if profiles else None
+
+    # ---------------------------------------------------------
+
+    def get_active_profiles(self):
+        """Return every profile currently eligible to process a signal."""
 
         cursor = database_manager.cursor()
 
@@ -272,16 +343,11 @@ class ProfileRepository:
                 active=1
                 AND enabled=1
 
-            LIMIT 1
+            ORDER BY name
             """
         )
 
-        row = cursor.fetchone()
-
-        if row is None:
-            return None
-
-        return Profile(**dict(row))
+        return [_profile_from_row(row) for row in cursor.fetchall()]
 
     # ---------------------------------------------------------
 
@@ -300,7 +366,7 @@ class ProfileRepository:
         )
 
         return [
-            Profile(**dict(row))
+            _profile_from_row(row)
             for row in cursor.fetchall()
         ]
 
@@ -323,7 +389,7 @@ class ProfileRepository:
         )
 
         return [
-            Profile(**dict(row))
+            _profile_from_row(row)
             for row in cursor.fetchall()
         ]
 
@@ -346,6 +412,7 @@ class ProfileRepository:
             WHERE
                 ptc.chat_id=?
                 AND ptc.enabled=1
+                AND p.active=1
                 AND p.enabled=1
 
             ORDER BY p.name
@@ -354,7 +421,7 @@ class ProfileRepository:
         )
 
         return [
-            Profile(**dict(row))
+            _profile_from_row(row)
             for row in cursor.fetchall()
         ]
 
@@ -363,7 +430,6 @@ class ProfileRepository:
     def get_internal_profiles(self):
 
         cursor = database_manager.cursor()
-
         cursor.execute(
             """
             SELECT *
@@ -374,11 +440,7 @@ class ProfileRepository:
             ORDER BY name
             """
         )
-
-        return [
-            Profile(**dict(row))
-            for row in cursor.fetchall()
-        ]
+        return [_profile_from_row(row) for row in cursor.fetchall()]
 
     # ---------------------------------------------------------
 

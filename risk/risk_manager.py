@@ -7,6 +7,7 @@ from risk.break_even import break_even
 from risk.trailing_stop import trailing_stop
 from risk.partial_tp import partial_tp
 from risk.risk_rules import risk_rules
+from repositories.daily_statistics_repository import daily_statistics_repository
 
 
 class RiskManager:
@@ -39,6 +40,36 @@ class RiskManager:
 
         if profile is not None:
             self.money_management.load_profile(profile)
+
+            if account is not None and getattr(account, "balance", 0) > 0:
+                self.drawdown_manager.update(
+                    float(account.balance),
+                    float(getattr(account, "equity", account.balance)),
+                )
+            profile_drawdown_limit = float(
+                getattr(profile, "max_drawdown", 0.0) or 0.0
+            )
+            if (
+                profile_drawdown_limit
+                and self.drawdown_manager.current_drawdown >= profile_drawdown_limit
+            ):
+                return False, "Drawdown máximo alcanzado para el perfil."
+
+            daily_loss_limit = float(
+                getattr(profile, "max_daily_loss", 0.0) or 0.0
+            )
+            daily_profit_limit = float(
+                getattr(profile, "max_daily_profit", 0.0) or 0.0
+            )
+            if daily_loss_limit or daily_profit_limit:
+                statistics = daily_statistics_repository.today(profile.id)
+                daily_profit = float(
+                    statistics["net_profit"] if statistics else 0.0
+                )
+                if daily_loss_limit and daily_profit <= -daily_loss_limit:
+                    return False, "Límite diario de pérdidas alcanzado para el perfil."
+                if daily_profit_limit and daily_profit >= daily_profit_limit:
+                    return False, "Límite diario de ganancias alcanzado para el perfil."
 
         # -----------------------------------------------------
         # Drawdown

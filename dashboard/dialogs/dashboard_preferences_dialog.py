@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from dashboard.widgets.section_widget import SectionWidget
+from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
 
 
 class DashboardPreferencesDialog(QDialog):
@@ -25,7 +26,7 @@ class DashboardPreferencesDialog(QDialog):
 
         self.setWindowTitle("Preferencias del Dashboard")
 
-        self.resize(1200, 850)
+        fit_dialog_to_screen(self, 1200, 700)
 
         self.build_ui()
 

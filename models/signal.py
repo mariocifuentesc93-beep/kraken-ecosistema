@@ -95,11 +95,14 @@ class Signal:
     entry: float = 0.0
     stop_loss: float = 0.0
     take_profits: List[float] = field(default_factory=list)
+    market_execution: bool = False
 
     raw_message: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
     status: str = "NEW"
     score: float = 0.0
+    rejection_reason: str = ""
+    execution_decision: str = ""
 
     # Contexto de ejecución heredado. No forma parte de la identidad persistente.
     profile_id: Optional[int] = None
@@ -118,6 +121,12 @@ class Signal:
             if value is not None
         ]
         self.metadata = dict(self.metadata or {})
+        if "market_execution" in self.metadata:
+            self.market_execution = bool(
+                self.metadata["market_execution"]
+            )
+        elif self.market_execution:
+            self.metadata["market_execution"] = self.market_execution
         self.received_at = self._as_datetime(
             self.received_at,
             default=datetime.now(),
@@ -241,15 +250,6 @@ class Signal:
     @created_at.setter
     def created_at(self, value) -> None:
         self.received_at = self._as_datetime(value, default=datetime.now())
-
-    @property
-    def market_execution(self) -> bool:
-        """Compatibilidad con consumidores heredados sin duplicar columnas."""
-        return bool(self.metadata.get("market_execution", False))
-
-    @market_execution.setter
-    def market_execution(self, value) -> None:
-        self.metadata["market_execution"] = bool(value)
 
     @property
     def risk(self) -> float:

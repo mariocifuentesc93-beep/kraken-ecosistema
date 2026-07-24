@@ -1,11 +1,53 @@
 from types import SimpleNamespace
 import sqlite3
 
+import sys
+
 import pytest
 
 from database.signal_contract_migration import upgrade
 from models.signal import Signal
 from repositories.signal_repository import SignalRepository
+
+
+@pytest.fixture(autouse=True)
+def isolate_phase_tests_from_prior_mt5_imports(request):
+    """Keep no-MT5 contract checks independent of collection order.
+
+    The professional visual suite also contains explicit MT5 integration
+    tests, which import the adapter during collection. The signal-flow tests
+    below validate a separate injected path and must observe a clean module
+    registry to prove that path does not import MT5 itself.
+    """
+
+    isolated_files = {
+        "test_internal_execution_guard.py",
+        "test_telegram_ingestion_flow.py",
+        "test_telegram_signal_flow.py",
+    }
+    if request.path.name not in isolated_files:
+        yield
+        return
+
+    isolated_modules = ["MetaTrader5"]
+    if request.path.name == "test_telegram_signal_flow.py":
+        isolated_modules.append("database.database_manager")
+    previous = {
+        name: sys.modules.pop(name, None)
+        for name in isolated_modules
+    }
+    try:
+        yield
+    finally:
+        for name, module in previous.items():
+            if module is not None:
+                sys.modules[name] = module
+from database.telegram_publication_migration import (
+    upgrade as upgrade_publication,
+)
+from repositories.telegram_publication_repository import (
+    TelegramPublicationRepository,
+)
 
 
 @pytest.fixture
@@ -36,6 +78,36 @@ def valid_signal():
 @pytest.fixture
 def temporary_signal_repository(unified_database):
     return SignalRepository(unified_database)
+
+
+@pytest.fixture
+def publication_repository(tmp_path):
+    connection = sqlite3.connect(tmp_path / "publications.db")
+    connection.row_factory = sqlite3.Row
+    connection.executescript(
+        """
+        CREATE TABLE profiles(
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            operation_mode TEXT DEFAULT 'telegram'
+        );
+        CREATE TABLE signals(
+            id INTEGER PRIMARY KEY,
+            idempotency_key TEXT NOT NULL UNIQUE
+        );
+        CREATE TABLE telegram_accounts(
+            id INTEGER PRIMARY KEY,
+            enabled INTEGER DEFAULT 1
+        );
+        INSERT INTO signals(id, idempotency_key)
+        VALUES (10, 'INTERNAL:LIONX100:12305');
+        INSERT INTO telegram_accounts(id, enabled) VALUES (7, 1);
+        """
+    )
+    upgrade_publication(connection)
+    repository = TelegramPublicationRepository(connection)
+    yield repository
+    connection.close()
 
 
 @pytest.fixture

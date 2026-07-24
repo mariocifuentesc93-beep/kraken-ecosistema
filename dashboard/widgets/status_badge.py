@@ -7,7 +7,10 @@ class StatusBadge(QLabel):
 
     COLORS = {
         "ONLINE": "#27AE60",
-        "OFFLINE": "#E74C3C",
+        "OFFLINE": "#7F8C8D",
+        "DESCONECTADO": "#7F8C8D",
+        "CONECTANDO": "#FFC107",
+        "CONECTADO": "#00C853",
         "SIMULATION": "#F39C12",
         "DEMO": "#3498DB",
         "LIVE": "#27AE60",

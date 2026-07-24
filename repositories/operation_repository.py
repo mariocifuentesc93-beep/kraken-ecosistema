@@ -1,264 +1,241 @@
+from datetime import datetime
+
+from database.database_manager import database_manager
 from models.operation import Operation
 
 
 class OperationRepository:
+    """SQLite-backed operation storage with the legacy public API."""
 
-    def __init__(self):
-
-        self.operations = {}
-
-    # =====================================================
-    # CRUD
-    # =====================================================
-
-    def add(
-        self,
-        operation: Operation,
-    ):
-
-        self.operations[operation.operation_id] = operation
-
+    def create(self, operation: Operation):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            INSERT INTO operations (
+                signal_id, profile_id, mt5_account_id,
+                ticket, magic, symbol, direction, volume, entry_price,
+                exit_price, stop_loss, take_profit, profit, result, status,
+                rr, partial_closed, break_even, trailing_stop,
+                opened_at, closed_at, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            self._values(operation),
+        )
+        database_manager.commit()
+        operation.id = cursor.lastrowid
         return operation
 
-    def get(
-        self,
-        operation_id,
-    ):
+    def add(self, operation: Operation):
+        return self.update(operation) if operation.id else self.create(operation)
 
-        return self.operations.get(operation_id)
+    def get(self, operation_id):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM operations
+            WHERE id=?
+            LIMIT 1
+            """,
+            (int(operation_id),),
+        )
+        row = cursor.fetchone()
+        return self._to_operation(row) if row else None
 
-    def update(
-        self,
-        operation: Operation,
-    ):
+    def update(self, operation: Operation):
+        if not operation.id:
+            return self.create(operation)
 
-        self.operations[operation.operation_id] = operation
-
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            UPDATE operations SET
+                signal_id=?, profile_id=?, mt5_account_id=?, ticket=?, magic=?,
+                symbol=?, direction=?, volume=?,
+                entry_price=?, exit_price=?, stop_loss=?, take_profit=?,
+                profit=?, result=?, status=?, rr=?, partial_closed=?,
+                break_even=?, trailing_stop=?, opened_at=?, closed_at=?,
+                updated_at=?
+            WHERE id=?
+            """,
+            (*self._values(operation), operation.id),
+        )
+        database_manager.commit()
         return operation
 
-    def remove(
-        self,
-        operation_id,
-    ):
-
-        return self.operations.pop(operation_id, None)
+    def remove(self, operation_id):
+        cursor = database_manager.cursor()
+        cursor.execute(
+            "DELETE FROM operations WHERE id=?",
+            (int(operation_id),),
+        )
+        database_manager.commit()
+        return cursor.rowcount > 0
 
     def clear(self):
+        database_manager.execute("DELETE FROM operations")
+        database_manager.commit()
 
-        self.operations.clear()
-
-    def exists(
-        self,
-        operation_id,
-    ):
-
-        return operation_id in self.operations
-
-    # =====================================================
-    # LISTS
-    # =====================================================
+    def exists(self, operation_id):
+        return self.get(operation_id) is not None
 
     def get_all(self):
-
-        return sorted(
-            self.operations.values(),
-            key=lambda x: getattr(x, "created_at", None),
-            reverse=True,
-        )
+        return self._fetch("SELECT * FROM operations ORDER BY id DESC")
 
     def get_pending(self):
-
-        return [
-            op
-            for op in self.operations.values()
-            if getattr(op, "status", "") == "PENDING"
-        ]
+        return self._by_status("PENDING")
 
     def get_created(self):
-
-        return [
-            op
-            for op in self.operations.values()
-            if getattr(op, "status", "") == "CREATED"
-        ]
+        return self._by_status("CREATED")
 
     def get_open(self):
-
-        return [
-            op
-            for op in self.operations.values()
-            if getattr(op, "status", "") == "OPEN"
-        ]
+        return self._by_status("OPEN")
 
     def get_closed(self):
+        return self._by_status("CLOSED")
 
-        return [
-            op
-            for op in self.operations.values()
-            if getattr(op, "status", "") == "CLOSED"
-        ]
+    def get_by_ticket(self, ticket):
+        matches = self._fetch(
+            "SELECT * FROM operations WHERE ticket=? ORDER BY id DESC",
+            (ticket,),
+        )
+        return matches[0] if matches else None
 
-    # =====================================================
-    # SEARCH
-    # =====================================================
+    def get_by_profile(self, profile_id):
+        return self._fetch(
+            "SELECT * FROM operations WHERE profile_id=? ORDER BY id DESC",
+            (profile_id,),
+        )
 
-    def get_by_ticket(
-        self,
-        ticket,
-    ):
+    def get_by_account(self, account_id):
+        return self._fetch(
+            "SELECT * FROM operations WHERE mt5_account_id=? ORDER BY id DESC",
+            (account_id,),
+        )
 
-        for op in self.operations.values():
+    def get_by_symbol(self, symbol):
+        return self._fetch(
+            "SELECT * FROM operations WHERE symbol=? ORDER BY id DESC",
+            (symbol,),
+        )
 
-            if getattr(op, "ticket", None) == ticket:
-
-                return op
-
-        return None
-
-    def get_by_profile(
-        self,
-        profile_id,
-    ):
-
-        return [
-            op
-            for op in self.operations.values()
-            if getattr(op, "profile_id", None) == profile_id
-        ]
-
-    def get_by_account(
-        self,
-        account_id,
-    ):
-
-        return [
-            op
-            for op in self.operations.values()
-            if getattr(op, "mt5_account_id", None) == account_id
-        ]
-
-    def get_by_symbol(
-        self,
-        symbol,
-    ):
-
-        return [
-            op
-            for op in self.operations.values()
-            if getattr(op, "symbol", None) == symbol
-        ]
-
-    def get_by_magic(
-        self,
-        magic,
-    ):
-
-        return [
-            op
-            for op in self.operations.values()
-            if getattr(op, "magic", None) == magic
-        ]
-
-    # =====================================================
-    # COUNTERS
-    # =====================================================
+    def get_by_magic(self, magic):
+        return self._fetch(
+            "SELECT * FROM operations WHERE magic=? ORDER BY id DESC",
+            (magic,),
+        )
 
     def count(self):
-
-        return len(self.operations)
+        return self._count("SELECT COUNT(*) FROM operations")
 
     def count_open(self):
-
-        return len(self.get_open())
+        return self._count("SELECT COUNT(*) FROM operations WHERE status='OPEN'")
 
     def count_closed(self):
-
-        return len(self.get_closed())
+        return self._count("SELECT COUNT(*) FROM operations WHERE status='CLOSED'")
 
     def count_pending(self):
-
-        return len(self.get_pending())
-
-    # =====================================================
-    # RESULTS
-    # =====================================================
+        return self._count("SELECT COUNT(*) FROM operations WHERE status='PENDING'")
 
     def get_wins(self):
-
-        return [
-            op
-            for op in self.get_closed()
-            if getattr(op, "profit", 0) > 0
-        ]
+        return self._fetch("SELECT * FROM operations WHERE status='CLOSED' AND profit>0")
 
     def get_losses(self):
-
-        return [
-            op
-            for op in self.get_closed()
-            if getattr(op, "profit", 0) < 0
-        ]
+        return self._fetch("SELECT * FROM operations WHERE status='CLOSED' AND profit<0")
 
     def get_breakeven(self):
-
-        return [
-            op
-            for op in self.get_closed()
-            if getattr(op, "profit", 0) == 0
-        ]
+        return self._fetch("SELECT * FROM operations WHERE status='CLOSED' AND profit=0")
 
     def win_rate(self):
-
-        closed = self.get_closed()
-
-        if not closed:
-            return 0.0
-
-        return round(
-            (len(self.get_wins()) / len(closed)) * 100,
-            2,
-        )
-
-    # =====================================================
-    # PROFIT
-    # =====================================================
+        closed = self.count_closed()
+        return round(len(self.get_wins()) / closed * 100, 2) if closed else 0.0
 
     def total_profit(self):
+        return self._total_profit()
 
-        return round(
-            sum(
-                getattr(op, "profit", 0)
-                for op in self.get_closed()
-            ),
-            2,
+    def total_profit_by_profile(self, profile_id):
+        return self._total_profit("WHERE profile_id=?", (profile_id,))
+
+    def total_profit_by_account(self, account_id):
+        return self._total_profit("WHERE mt5_account_id=?", (account_id,))
+
+    def _by_status(self, status):
+        return self._fetch(
+            "SELECT * FROM operations WHERE status=? ORDER BY id DESC",
+            (status,),
         )
 
-    def total_profit_by_profile(
-        self,
-        profile_id,
-    ):
+    def _fetch(self, sql, params=()):
+        cursor = database_manager.cursor()
+        cursor.execute(sql, params)
+        return [self._to_operation(row) for row in cursor.fetchall()]
 
-        return round(
-            sum(
-                getattr(op, "profit", 0)
-                for op in self.get_closed()
-                if getattr(op, "profile_id", None) == profile_id
-            ),
-            2,
+    def _count(self, sql):
+        return database_manager.execute(sql).fetchone()[0]
+
+    def _total_profit(self, where="", params=()):
+        row = database_manager.execute(
+            f"SELECT COALESCE(SUM(profit), 0) FROM operations {where}",
+            params,
+        ).fetchone()
+        return round(float(row[0]), 2)
+
+    @staticmethod
+    def _timestamp(value):
+        if isinstance(value, datetime):
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        return value
+
+    def _values(self, operation):
+        return (
+            getattr(operation, "signal_id", None) or getattr(operation.signal, "id", None),
+            operation.profile_id,
+            operation.mt5_account_id,
+            operation.ticket,
+            operation.magic,
+            operation.symbol,
+            operation.direction,
+            operation.volume,
+            operation.entry_price,
+            operation.exit_price,
+            operation.stop_loss,
+            operation.take_profit,
+            operation.profit,
+            operation.result,
+            operation.status,
+            operation.rr,
+            int(bool(operation.partial_closed)),
+            int(bool(operation.break_even)),
+            int(bool(operation.trailing_stop)),
+            self._timestamp(operation.opened_at),
+            self._timestamp(operation.closed_at),
+            self._timestamp(operation.updated_at or datetime.now()),
         )
 
-    def total_profit_by_account(
-        self,
-        account_id,
-    ):
-
-        return round(
-            sum(
-                getattr(op, "profit", 0)
-                for op in self.get_closed()
-                if getattr(op, "mt5_account_id", None) == account_id
-            ),
-            2,
+    @staticmethod
+    def _to_operation(row):
+        return Operation(
+            id=row["id"],
+            profile_id=row["profile_id"],
+            mt5_account_id=row["mt5_account_id"],
+            ticket=row["ticket"],
+            magic=row["magic"] or 0,
+            symbol=row["symbol"] or "",
+            direction=row["direction"] or "",
+            volume=row["volume"] or 0.0,
+            entry_price=row["entry_price"] or 0.0,
+            exit_price=row["exit_price"] or 0.0,
+            stop_loss=row["stop_loss"] or 0.0,
+            take_profit=row["take_profit"] or 0.0,
+            profit=row["profit"] or 0.0,
+            result=row["result"] or "",
+            status=row["status"] or "CREATED",
+            rr=row["rr"] or 0.0,
+            partial_closed=bool(row["partial_closed"]),
+            break_even=bool(row["break_even"]),
+            trailing_stop=bool(row["trailing_stop"]),
+            opened_at=row["opened_at"],
+            closed_at=row["closed_at"],
+            updated_at=row["updated_at"],
         )
 
 

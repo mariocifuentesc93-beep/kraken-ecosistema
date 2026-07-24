@@ -1,4 +1,5 @@
 from copy import deepcopy
+from inspect import signature
 
 from core.event_bus import event_bus
 from core.events import (
@@ -25,7 +26,7 @@ class SignalEngine:
         self._validator = validator
         self._source_router = source_router
 
-    def _get_profiles(self, signal, chat_id):
+    def _get_profiles(self, signal, account_id, chat_id):
         if signal.source == "INTERNAL":
             if self._internal_profiles_provider is None:
                 from repositories.profile_repository import (
@@ -40,11 +41,17 @@ class SignalEngine:
             return []
 
         if self._profiles_provider is None:
-            from repositories.profile_repository import profile_repository
+            from repositories.profile_telegram_repository import (
+                profile_telegram_channel_repository,
+            )
             self._profiles_provider = (
-                profile_repository.get_profiles_by_chat
+                profile_telegram_channel_repository.get_profiles
             )
 
+        parameters = signature(self._profiles_provider).parameters
+        if len(parameters) >= 2:
+            return self._profiles_provider(account_id, chat_id)
+        # Compatibility for injected Phase 0 test doubles.
         return self._profiles_provider(chat_id)
 
     def _get_source_router(self):
@@ -80,6 +87,7 @@ class SignalEngine:
         signal,
         chat_id,
         account_id=None,
+        routed_profiles=None,
     ):
         """
         Procesa una señal normalizada y ya persistida.
@@ -105,7 +113,7 @@ class SignalEngine:
             )
         )
 
-        profiles = self._get_profiles(signal, chat_id)
+        profiles = self._get_profiles(signal, account_id, chat_id)
         profiles = self._get_source_router().filter(profiles, signal)
 
         if not profiles:
@@ -152,6 +160,8 @@ class SignalEngine:
 
             if result:
                 executed = True
+                if routed_profiles is not None:
+                    routed_profiles.append(profile)
 
         if executed:
             event_bus.signalProcessed.emit(

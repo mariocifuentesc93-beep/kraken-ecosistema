@@ -50,8 +50,8 @@ migración se prueba con SQLite temporal y no se ejecuta sobre
 `database/kraken.db`.
 
 ```powershell
-python -m database.profile_source_migration upgrade C:\ruta\temporal.db
-python -m database.profile_source_migration rollback C:\ruta\temporal.db
+python -m database.profile_source_migration upgrade <ruta_temporal.db>
+python -m database.profile_source_migration rollback <ruta_temporal.db>
 ```
 
 ## Routing Telegram

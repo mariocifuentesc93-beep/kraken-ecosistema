@@ -25,6 +25,8 @@ class InternalCsvWatcher:
         self._emitted = {}
         self._stop_event = threading.Event()
         self._thread = None
+        self.state = "STOPPED"
+        self.last_error = ""
 
     @property
     def running(self):
@@ -58,18 +60,24 @@ class InternalCsvWatcher:
         return stable
 
     def _run(self):
-        while not self._stop_event.is_set():
-            for path in self.scan_once():
-                if self.callback is not None:
-                    try:
+        try:
+            while not self._stop_event.is_set():
+                for path in self.scan_once():
+                    if self.callback is not None:
                         self.callback(path)
-                    except Exception:
-                        pass
-            self._stop_event.wait(self.interval)
+                self._stop_event.wait(self.interval)
+        except Exception as error:
+            self.last_error = str(error)
+            self.state = "ERROR"
+        finally:
+            if self.state != "ERROR":
+                self.state = "STOPPED"
 
     def start(self):
         if self.running:
             return False
+        self.state = "STARTING"
+        self.last_error = ""
         self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run,
@@ -77,11 +85,17 @@ class InternalCsvWatcher:
             daemon=True,
         )
         self._thread.start()
+        self.state = "RUNNING"
         return True
 
     def stop(self, timeout=5.0):
         if self._thread is None:
-            return
+            self.state = "STOPPED"
+            return False
+        self.state = "STOPPING"
         self._stop_event.set()
         self._thread.join(timeout)
         self._thread = None
+        if self.state != "ERROR":
+            self.state = "STOPPED"
+        return True

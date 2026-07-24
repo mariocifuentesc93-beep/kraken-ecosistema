@@ -18,9 +18,9 @@ class ProfileMT5Service:
         priority=1,
     ):
 
-        profile_mt5_repository.add_account(
+        return profile_mt5_repository.create(
             profile_id=profile_id,
-            account_id=account_id,
+            mt5_account_id=account_id,
             priority=priority,
         )
 
@@ -32,9 +32,9 @@ class ProfileMT5Service:
         account_id,
     ):
 
-        profile_mt5_repository.remove_account(
-            profile_id=profile_id,
-            account_id=account_id,
+        return profile_mt5_repository.delete_by_profile_account(
+            profile_id,
+            account_id,
         )
 
 

@@ -1,11 +1,13 @@
 import threading
 import time
+from datetime import datetime
 
 import MetaTrader5 as mt5
 
 from repositories.operation_repository import (
     operation_repository,
 )
+from database.database_manager import database_manager
 
 
 class OperationMonitor:
@@ -50,6 +52,11 @@ class OperationMonitor:
 
         self.running = False
 
+        thread = self.thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join()
+        self.thread = None
+
         print(
 
             "[OperationMonitor] detenido."
@@ -59,22 +66,15 @@ class OperationMonitor:
     # -------------------------------------------------
 
     def _loop(self):
-
-        while self.running:
-
-            try:
-
-                self.update()
-
-            except Exception as e:
-
-                print(
-
-                    f"[OperationMonitor] {e}"
-
-                )
-
-            time.sleep(self.interval)
+        try:
+            while self.running:
+                try:
+                    self.update()
+                except Exception as error:
+                    print(f"[OperationMonitor] {error}")
+                time.sleep(self.interval)
+        finally:
+            database_manager.close()
 
     # -------------------------------------------------
 

@@ -22,12 +22,14 @@ class SymbolService:
         min_lot=0.01,
         max_lot=100.0,
         action="trade",
+        mt5_symbol=None,
     ):
 
         return symbol_repository.create(
             profile_id=profile_id,
             enabled=enabled,
             symbol=symbol,
+            mt5_symbol=mt5_symbol or symbol,
             description=description,
             aliases=aliases,
             risk=risk,

@@ -11,9 +11,9 @@ FONT = "Segoe UI"
 PRIMARY_COLOR = "#00C853"
 ACCENT_COLOR = "#00E676"
 
-BACKGROUND_COLOR = "#1B1D22"
-PANEL_COLOR = "#252932"
-CARD_COLOR = "#2E3440"
+BACKGROUND_COLOR = "#060D13"
+PANEL_COLOR = "#09131D"
+CARD_COLOR = "#0D1A25"
 
 BUTTON_COLOR = "#363D4D"
 BUTTON_HOVER = "#465066"
@@ -27,7 +27,7 @@ WARNING_COLOR = "#FFC107"
 ERROR_COLOR = "#E53935"
 INFO_COLOR = "#29B6F6"
 
-BORDER_COLOR = "#3B4252"
+BORDER_COLOR = "#1E3445"
 
 # ============================================================
 # TAMAÑOS
@@ -133,22 +133,26 @@ def status_style(color):
 def table_style():
 
     return f"""
-    QTableWidget {{
-        background:{CARD_COLOR};
-        color:{TEXT_COLOR};
-        border:1px solid {BORDER_COLOR};
-        gridline-color:{BORDER_COLOR};
-        selection-background-color:{ACCENT_COLOR};
-        selection-color:black;
+    QTableView, QTableWidget {{
+        background:{CARD_COLOR}; color:{TEXT_COLOR};
+        border:1px solid {BORDER_COLOR}; border-radius:7px;
+        gridline-color:#343C49; alternate-background-color:#292F39;
+        selection-background-color:#1E4F78; selection-color:{TEXT_COLOR};
+        outline:0;
     }}
-
-    QHeaderView::section {{
-        background:{PANEL_COLOR};
-        color:{TEXT_COLOR};
-        border:none;
-        padding:6px;
-        font-weight:bold;
+    QTableView::item, QTableWidget::item {{
+        background:{CARD_COLOR}; color:{TEXT_COLOR}; padding:6px;
+        border:0; border-bottom:1px solid #343C49;
     }}
+    QTableView::item:alternate, QTableWidget::item:alternate {{ background:#292F39; color:{TEXT_COLOR}; }}
+    QTableView::item:hover, QTableWidget::item:hover {{ background:#364252; color:{TEXT_COLOR}; }}
+    QTableView::item:selected, QTableWidget::item:selected {{ background:#1E4F78; color:{TEXT_COLOR}; }}
+    QTableView::item:disabled, QTableWidget::item:disabled {{ background:#242A33; color:#AAB3BE; }}
+    QTableView:disabled, QTableWidget:disabled {{ background:#242A33; color:#AAB3BE; }}
+    QTableCornerButton::section {{ background:{PANEL_COLOR}; border:0; border-right:1px solid {BORDER_COLOR}; border-bottom:1px solid {BORDER_COLOR}; }}
+    QHeaderView {{ background:{PANEL_COLOR}; }}
+    QHeaderView::section {{ background:#20252E; color:{TEXT_COLOR}; border:0; border-right:1px solid {BORDER_COLOR}; border-bottom:1px solid {BORDER_COLOR}; padding:7px; font-weight:700; }}
+    QHeaderView::section:hover {{ background:#2E3947; color:{TEXT_COLOR}; }}
     """
 
 

@@ -89,3 +89,20 @@ class ConnectionIndicator(QWidget):
     def setStatus(self, status):
 
         self.badge.setStatus(status)
+
+    def setConnectionState(self, state):
+        """Keep the visible status and action button synchronized."""
+        normalized = str(state or "DISCONNECTED").strip().upper()
+        labels = {
+            "DISCONNECTED": ("Desconectado", "Conectar", True),
+            "CONNECTING": ("Conectando", "Conectando...", False),
+            "CONNECTED": ("Conectado", "Desconectar", True),
+            "ERROR": ("Error", "Reintentar", True),
+        }
+        status, button, enabled = labels.get(
+            normalized,
+            labels["ERROR"],
+        )
+        self.badge.setStatus(status)
+        self.btnTest.setText(button)
+        self.btnTest.setEnabled(enabled)

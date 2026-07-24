@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from dashboard.widgets.section_widget import SectionWidget
 from dashboard.widgets.statistics_panel import StatisticsPanel
+from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
 
 
 class OperationDetailsDialog(QDialog):
@@ -27,7 +28,7 @@ class OperationDetailsDialog(QDialog):
 
         self.setWindowTitle("Detalle de Operación")
 
-        self.resize(1400, 900)
+        fit_dialog_to_screen(self, 1200, 700)
 
         self.build_ui()
 
@@ -375,4 +376,3 @@ class OperationDetailsDialog(QDialog):
 
             )
 
-        

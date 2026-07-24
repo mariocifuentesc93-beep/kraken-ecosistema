@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from dashboard.widgets.section_widget import SectionWidget
 from dashboard.widgets.risk_widget import RiskWidget
 from dashboard.widgets.statistics_panel import StatisticsPanel
+from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
 
 
 class SymbolDialog(QDialog):
@@ -29,7 +30,7 @@ class SymbolDialog(QDialog):
 
         self.setWindowTitle("Configuración del Símbolo")
 
-        self.resize(1100, 800)
+        fit_dialog_to_screen(self, 1100, 700)
 
         self.build_ui()
 

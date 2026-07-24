@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QLabel,
     QVBoxLayout,
+    QHBoxLayout,
 )
 
 from dashboard.styles import (
@@ -11,6 +12,7 @@ from dashboard.styles import (
     subtitle_style,
     value_style,
 )
+from dashboard.icons import ICON_INFO, ICON_SIZE_CARD, colored_icon
 
 
 class MetricCard(QWidget):
@@ -20,7 +22,7 @@ class MetricCard(QWidget):
         title,
         value="0",
         subtitle="",
-        icon="📊",
+        icon="chart-no-axes-combined",
         parent=None,
     ):
 
@@ -46,11 +48,19 @@ class MetricCard(QWidget):
 
         layout.setSpacing(8)
 
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(8)
+        self.icon_label = QLabel()
+        self.icon_label.setPixmap(colored_icon(self.icon, ICON_INFO).pixmap(ICON_SIZE_CARD, ICON_SIZE_CARD))
+        self.icon_label.setFixedSize(ICON_SIZE_CARD, ICON_SIZE_CARD)
         self.title = QLabel()
 
         self.title.setStyleSheet(title_style())
 
-        self.title.setText(f"{self.icon}  {self.card_title}")
+        self.title.setText(self.card_title)
+        title_row.addWidget(self.icon_label)
+        title_row.addWidget(self.title, 1)
 
         self.value = QLabel(str(value))
 
@@ -64,7 +74,7 @@ class MetricCard(QWidget):
 
         self.subtitle.setStyleSheet(subtitle_style())
 
-        layout.addWidget(self.title)
+        layout.addLayout(title_row)
 
         layout.addStretch()
 
@@ -78,7 +88,7 @@ class MetricCard(QWidget):
 
         self.card_title = text
 
-        self.title.setText(f"{self.icon}  {text}")
+        self.title.setText(text)
 
     # ---------------------------------------------------------
 
@@ -86,7 +96,7 @@ class MetricCard(QWidget):
 
         self.icon = icon
 
-        self.title.setText(f"{self.icon}  {self.card_title}")
+        self.icon_label.setPixmap(colored_icon(self.icon, ICON_INFO).pixmap(ICON_SIZE_CARD, ICON_SIZE_CARD))
 
     # ---------------------------------------------------------
 

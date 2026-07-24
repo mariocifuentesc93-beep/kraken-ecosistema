@@ -1,0 +1,2 @@
+# Never render historical local credentials in ordinary text diffs.
+config.yaml -diff

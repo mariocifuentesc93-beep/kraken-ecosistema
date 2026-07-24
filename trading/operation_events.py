@@ -41,7 +41,7 @@ class OperationEvents:
             "🆕",
             (
                 f"Operación creada | "
-                f"ID={operation.operation_id} | "
+                f"ID={operation.id} | "
                 f"Perfil={getattr(profile,'name','-')} | "
                 f"Cuenta={getattr(account,'name','-')} | "
                 f"Símbolo={getattr(signal,'symbol','-')} | "

@@ -1,14 +1,4 @@
 from core.execution_modes import ExecutionMode
-from core.config_service import get_execution_mode
-
-from core.simulation import simulation_engine
-
-from mt5.executor import mt5_executor
-
-from risk.risk_manager import risk_manager
-
-from trading.operation_manager import operation_manager
-
 from core.event_bus import event_bus
 from core.events import (
     OperationCreatedEvent,
@@ -23,24 +13,18 @@ class TradeManager:
     def __init__(self):
 
         self.execution_mode = ExecutionMode.OFF
-        self.reload()
 
     # ---------------------------------------------------------
 
     def _load_execution_mode(self):
 
-        mode = get_execution_mode()
-
-        try:
-            return ExecutionMode(str(mode).upper())
-        except Exception:
-            return ExecutionMode.OFF
+        return self.execution_mode
 
     # ---------------------------------------------------------
 
     def reload(self):
 
-        self.execution_mode = self._load_execution_mode()
+        return self.execution_mode
 
     # ---------------------------------------------------------
 
@@ -50,6 +34,8 @@ class TradeManager:
         profile,
         account,
     ):
+        from risk.risk_manager import risk_manager
+        from trading.operation_manager import operation_manager
 
         print()
         print("=" * 60)
@@ -61,6 +47,22 @@ class TradeManager:
 
         signal.mt5_account_id = account.id
         signal.mt5_account_name = account.name
+
+        mode_value = str(
+            getattr(profile, "execution_mode", "OFF") or "OFF"
+        ).strip().upper()
+        try:
+            self.execution_mode = ExecutionMode(mode_value)
+        except ValueError:
+            self.execution_mode = ExecutionMode.OFF
+
+        if (
+            str(getattr(signal, "source", "")).strip().upper()
+            == "INTERNAL"
+            and self.execution_mode
+            not in (ExecutionMode.OFF, ExecutionMode.SIMULATION)
+        ):
+            return False
 
         operation = operation_manager.create(
             signal=signal,
@@ -155,7 +157,19 @@ class TradeManager:
                 )
             )
 
-            return self._simulation(signal)
+            return self._simulation(
+                signal,
+                profile,
+                account,
+                operation,
+            )
+
+        if self.execution_mode == ExecutionMode.PAPER:
+            from trading.paper_trading_engine import paper_trading_engine
+
+            return paper_trading_engine.execute(
+                signal, profile, account
+            ) is not None
 
         # -----------------------------------------------------
         # DEMO / LIVE
@@ -242,9 +256,17 @@ class TradeManager:
 
     # ---------------------------------------------------------
 
-    def _simulation(self, signal):
+    def _simulation(self, signal, profile, account, operation):
+        from core.simulation_engine import simulation_engine
 
-        return simulation_engine.execute(signal)
+        simulation_engine.execute(
+            signal=signal,
+            profile=profile,
+            account=account,
+            operation=operation,
+        )
+
+        return True
 
     # ---------------------------------------------------------
 
@@ -254,6 +276,7 @@ class TradeManager:
         volume,
         account,
     ):
+        from mt5.executor import mt5_executor
 
         return mt5_executor.execute_market_order(
             signal=signal,
@@ -269,6 +292,7 @@ class TradeManager:
         volume,
         account,
     ):
+        from mt5.executor import mt5_executor
 
         return mt5_executor.execute_market_order(
             signal=signal,

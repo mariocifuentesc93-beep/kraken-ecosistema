@@ -132,15 +132,15 @@ La ruta predeterminada es:
 Puede reemplazarse:
 
 ```powershell
-python -m internal.source --directory "C:\ruta\Common\Files"
+python -m internal.source --directory "<directorio_common_files>"
 ```
 
 Checkpoint opcional:
 
 ```powershell
 python -m internal.source `
-  --directory "C:\ruta\Common\Files" `
-  --checkpoint "C:\ruta\internal-checkpoint.json"
+  --directory "<directorio_common_files>" `
+  --checkpoint "<ruta_checkpoint.json>"
 ```
 
 Salida:

@@ -1,0 +1,61 @@
+from importlib.util import find_spec
+from pathlib import Path
+
+import yaml
+
+from database.database_manager import database_manager
+from repositories.mt5_account_repository import mt5_account_repository
+from repositories.telegram_account_repository import telegram_account_repository
+
+
+REQUIRED_TABLES = {
+    "profiles", "telegram_accounts", "mt5_accounts", "profile_mt5_accounts",
+    "profile_telegram_channels", "symbols", "signals", "operations",
+    "operation_events", "settings", "logs",
+}
+
+
+def validate_startup():
+    """Return actionable startup errors without opening the main window."""
+    errors = []
+    try:
+        database_manager.connect()
+        missing = database_manager.validate_schema(REQUIRED_TABLES)
+        if missing:
+            errors.append("Faltan tablas requeridas: " + ", ".join(missing))
+    except Exception as error:
+        errors.append(f"La base de datos no está disponible: {error}")
+
+    config_path = Path(__file__).resolve().parent.parent / "config" / "app.yaml"
+    try:
+        with config_path.open(encoding="utf-8") as config_file:
+            config = yaml.safe_load(config_file)
+        if config is not None and not isinstance(config, dict):
+            errors.append("El archivo config/app.yaml debe contener un objeto YAML.")
+    except (OSError, yaml.YAMLError) as error:
+        errors.append(f"No se pudo leer config/app.yaml: {error}")
+
+    for module, label in (("MetaTrader5", "MetaTrader5"), ("telethon", "Telethon")):
+        if find_spec(module) is None:
+            errors.append(f"La dependencia requerida {label} no está instalada.")
+    return errors
+
+
+def get_setup_warnings():
+    """Return non-blocking first-run setup guidance for local users."""
+    warnings = []
+    try:
+        mt5_accounts = mt5_account_repository.get_all()
+        if not any(account.terminal_path for account in mt5_accounts):
+            warnings.append(
+                "No hay una terminal MT5 configurada. Agregue una cuenta MT5 y su ruta de terminal antes de operar."
+            )
+
+        telegram_accounts = telegram_account_repository.get_all()
+        if not any(account.api_id and account.api_hash for account in telegram_accounts):
+            warnings.append(
+                "No hay credenciales de Telegram configuradas. Agregue API ID y API hash antes de recibir señales."
+            )
+    except Exception as error:
+        warnings.append(f"No se pudo revisar la configuración inicial: {error}")
+    return warnings

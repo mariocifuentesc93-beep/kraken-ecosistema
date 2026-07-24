@@ -37,6 +37,7 @@ class SignalRepository:
     @staticmethod
     def _row_to_signal(row) -> Signal:
         values = dict(row)
+        metadata = json.loads(values.get("metadata") or "{}")
         return Signal(
             id=values.get("id"),
             source=values.get("source") or "TELEGRAM",
@@ -53,9 +54,19 @@ class SignalRepository:
             stop_loss=values.get("stop_loss") or 0.0,
             take_profits=json.loads(values.get("take_profits") or "[]"),
             raw_message=values.get("raw_message") or "",
-            metadata=json.loads(values.get("metadata") or "{}"),
+            metadata=metadata,
             status=values.get("status") or "NEW",
             score=values.get("score") or 0.0,
+            rejection_reason=(
+                values.get("rejection_reason")
+                or metadata.get("rejection_reason")
+                or ""
+            ),
+            execution_decision=(
+                values.get("execution_decision")
+                or metadata.get("execution_decision")
+                or ""
+            ),
             profile_id=values.get("profile_id"),
         )
 

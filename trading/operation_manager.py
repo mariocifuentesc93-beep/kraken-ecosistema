@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime
 
 from models.operation import Operation
@@ -35,7 +34,6 @@ class OperationManager:
     ):
 
         operation = Operation(
-            operation_id=str(uuid.uuid4()),
             signal=signal,
             profile=profile,
             account=account,
@@ -63,7 +61,7 @@ class OperationManager:
         print("=" * 60)
         print(f"Perfil : {profile.name}")
         print(f"Cuenta : {account.name}")
-        print(f"ID     : {operation.operation_id}")
+        print(f"ID     : {operation.id}")
 
         return operation
 
@@ -206,7 +204,7 @@ class OperationManager:
     ):
 
         operation_repository.remove(
-            operation.operation_id
+            operation.id
         )
 
     # =====================================================

@@ -22,6 +22,7 @@ class SignalIngestionResult:
     reason: str
     routed: bool
     error: Optional[str] = None
+    routed_profiles: tuple = ()
 
 
 class SignalIngestionService:
@@ -143,11 +144,13 @@ class SignalIngestionService:
             )
 
         try:
+            routed_profiles = []
             routed = bool(
                 self._get_signal_engine().process(
                     signal=persisted_signal,
                     chat_id=persisted_signal.chat_id,
                     account_id=persisted_signal.telegram_account_id,
+                    routed_profiles=routed_profiles,
                 )
             )
         except Exception as error:
@@ -187,6 +190,7 @@ class SignalIngestionService:
             reason=reason,
             routed=True,
             error=status_error,
+            routed_profiles=tuple(routed_profiles),
         )
 
 

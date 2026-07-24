@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from dashboard.widgets.section_widget import SectionWidget
 from dashboard.widgets.connection_indicator import ConnectionIndicator
+from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
 
 
 class TelegramAccountDialog(QDialog):
@@ -27,9 +28,12 @@ class TelegramAccountDialog(QDialog):
 
         self.setWindowTitle("Cuenta Telegram")
 
-        self.resize(950, 720)
+        fit_dialog_to_screen(self, 950, 680)
 
         self.build_ui()
+
+        if account is not None:
+            self.load_account(account)
 
     # --------------------------------------------------------
 
@@ -90,6 +94,7 @@ class TelegramAccountDialog(QDialog):
         self.chkEnabled = QCheckBox(
             "Cuenta habilitada"
         )
+        self.chkEnabled.setChecked(True)
 
         form.addRow(
             "Nombre",
@@ -365,7 +370,7 @@ class TelegramAccountDialog(QDialog):
             getattr(account, "receive_messages", True)
         )
 
-        if getattr(account, "logged_in", False):
+        if getattr(account, "connected", False):
 
             self.lblStatus.setText(
                 "Sesión iniciada"

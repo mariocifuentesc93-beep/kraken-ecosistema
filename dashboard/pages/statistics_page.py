@@ -193,27 +193,27 @@ class StatisticsPage(QWidget):
         )
 
         self.lbl_wins.setText(
-            str(active.total_wins)
+            str(active.winning_operations)
         )
 
         self.lbl_losses.setText(
-            str(active.total_losses)
+            str(active.losing_operations)
         )
 
         self.lbl_be.setText(
-            str(active.total_breakeven)
+            str(active.breakeven_operations)
         )
 
         self.lbl_profit.setText(
-            f"${active.gross_profit:,.2f}"
+            f"${active.total_profit:,.2f}"
         )
 
         self.lbl_loss.setText(
-            f"${active.gross_loss:,.2f}"
+            f"${active.total_loss:,.2f}"
         )
 
         self.lbl_net.setText(
-            f"${active.total_profit:,.2f}"
+            f"${active.net_profit:,.2f}"
         )
 
         self.lbl_wr.setText(

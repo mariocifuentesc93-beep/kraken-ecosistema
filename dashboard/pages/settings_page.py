@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QFormLayout,
+    QGridLayout,
     QGroupBox,
     QLabel,
     QComboBox,
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from repositories.settings_repository import settings_repository
+from dashboard.ui_theme import set_visual_role
 
 
 class SettingsPage(QWidget):
@@ -32,6 +33,8 @@ class SettingsPage(QWidget):
     def build_ui(self):
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
 
         # ==================================================
         # EJECUCIÓN
@@ -39,7 +42,7 @@ class SettingsPage(QWidget):
 
         execution_box = QGroupBox("Modo de ejecución")
 
-        execution_layout = QFormLayout(execution_box)
+        execution_layout = QGridLayout(execution_box)
 
         self.cbo_execution = QComboBox()
 
@@ -50,12 +53,20 @@ class SettingsPage(QWidget):
             "LIVE",
         ])
 
-        execution_layout.addRow(
-            QLabel("Modo"),
-            self.cbo_execution,
-        )
+        execution_layout.addWidget(QLabel("Modo"), 0, 0)
+        execution_layout.addWidget(self.cbo_execution, 0, 1)
 
         layout.addWidget(execution_box)
+        execution_box.hide()
+
+        profile_risk_notice = QLabel(
+            "El modo de ejecución y la gestión de riesgo se definen por perfil en Perfiles. "
+            "Cada perfil puede tener su propio modo, riesgo, límite diario y máximo de operaciones simultáneas."
+        )
+        profile_risk_notice.setWordWrap(True)
+        profile_risk_notice.setObjectName("ProfileRiskNotice")
+        set_visual_role(profile_risk_notice, "information")
+        layout.addWidget(profile_risk_notice)
 
         # ==================================================
         # RIESGO
@@ -63,7 +74,7 @@ class SettingsPage(QWidget):
 
         risk_box = QGroupBox("Gestión de Riesgo")
 
-        risk_layout = QFormLayout(risk_box)
+        risk_layout = QGridLayout(risk_box)
 
         self.cbo_risk = QComboBox()
 
@@ -93,27 +104,13 @@ class SettingsPage(QWidget):
 
         self.spn_lot.setRange(0.01, 100)
 
-        risk_layout.addRow(
-            "Modo",
-            self.cbo_risk,
-        )
-
-        risk_layout.addRow(
-            "Porcentaje",
-            self.spn_percent,
-        )
-
-        risk_layout.addRow(
-            "Monto",
-            self.spn_amount,
-        )
-
-        risk_layout.addRow(
-            "Lote",
-            self.spn_lot,
-        )
+        for row, (label, field) in enumerate((("Modo", self.cbo_risk), ("Porcentaje", self.spn_percent), ("Monto", self.spn_amount), ("Lote", self.spn_lot))):
+            risk_layout.addWidget(QLabel(label), row, 0)
+            risk_layout.addWidget(field, row, 1)
+        risk_layout.setColumnStretch(1, 1)
 
         layout.addWidget(risk_box)
+        risk_box.hide()
 
         # ==================================================
         # PROTECCIÓN
@@ -123,7 +120,7 @@ class SettingsPage(QWidget):
             "Protección"
         )
 
-        protection = QFormLayout(
+        protection = QGridLayout(
             protection_box
         )
 
@@ -144,32 +141,13 @@ class SettingsPage(QWidget):
 
         self.spn_drawdown.setSuffix("%")
 
-        protection.addRow(
-            "Break Even",
-            self.chk_break_even,
-        )
-
-        protection.addRow(
-            "Trailing Stop",
-            self.chk_trailing,
-        )
-
-        protection.addRow(
-            "TP Parcial",
-            self.chk_partial,
-        )
-
-        protection.addRow(
-            "Límite Diario",
-            self.chk_daily,
-        )
-
-        protection.addRow(
-            "Drawdown Máximo",
-            self.spn_drawdown,
-        )
+        for row, (label, field) in enumerate((("Break Even", self.chk_break_even), ("Trailing Stop", self.chk_trailing), ("TP Parcial", self.chk_partial), ("Límite Diario", self.chk_daily), ("Drawdown Máximo", self.spn_drawdown))):
+            protection.addWidget(QLabel(label), row, 0)
+            protection.addWidget(field, row, 1)
+        protection.setColumnStretch(1, 1)
 
         layout.addWidget(protection_box)
+        protection_box.hide()
 
         # ==================================================
         # GENERAL
@@ -178,8 +156,9 @@ class SettingsPage(QWidget):
         general_box = QGroupBox(
             "General"
         )
+        set_visual_role(general_box, "panel")
 
-        general = QFormLayout(general_box)
+        general = QGridLayout(general_box)
 
         self.spn_interval = QSpinBox()
 
@@ -194,20 +173,10 @@ class SettingsPage(QWidget):
 
         self.chk_sound = QCheckBox()
 
-        general.addRow(
-            "Intervalo Monitor",
-            self.spn_interval,
-        )
-
-        general.addRow(
-            "Guardar Logs",
-            self.chk_logs,
-        )
-
-        general.addRow(
-            "Sonidos",
-            self.chk_sound,
-        )
+        for row, (label, field) in enumerate((("Intervalo Monitor", self.spn_interval), ("Guardar Logs", self.chk_logs), ("Sonidos", self.chk_sound))):
+            general.addWidget(QLabel(label), row, 0)
+            general.addWidget(field, row, 1)
+        general.setColumnStretch(1, 1)
 
         layout.addWidget(general_box)
 
@@ -248,13 +217,6 @@ class SettingsPage(QWidget):
     # ======================================================
 
     def load(self):
-
-        self.cbo_execution.setCurrentText(
-            settings_repository.get(
-                "execution_mode",
-                "OFF",
-            )
-        )
 
         self.cbo_risk.setCurrentText(
             settings_repository.get(
@@ -343,11 +305,6 @@ class SettingsPage(QWidget):
     # ======================================================
 
     def save(self):
-
-        settings_repository.set(
-            "execution_mode",
-            self.cbo_execution.currentText(),
-        )
 
         settings_repository.set(
             "risk_mode",

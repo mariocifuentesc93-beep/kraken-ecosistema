@@ -1,4 +1,7 @@
+from datetime import datetime, timedelta
+
 from config.symbols import symbol_exists
+from core.config_service import is_symbol_enabled
 
 
 def _enabled_for_profile(signal, profile, enabled_symbols=None):
@@ -17,8 +20,6 @@ def _enabled_for_profile(signal, profile, enabled_symbols=None):
             str(getattr(item, "symbol", item)).upper() == signal_symbol
             for item in enabled_symbols
         )
-
-    from core.config_service import is_symbol_enabled
 
     return is_symbol_enabled(signal.symbol)
 
@@ -42,6 +43,10 @@ def validate_signal(
     if signal is None:
 
         return False, ["Señal vacía"]
+
+    now = datetime.now()
+    if getattr(signal, "received_at", now) < now - timedelta(minutes=5):
+        errors.append("Señal expirada")
 
     # ---------------------------------------------------------
     # Símbolo
@@ -118,6 +123,12 @@ def validate_signal(
     if signal.stop_loss <= 0:
 
         errors.append("Stop Loss inválido")
+    elif signal.direction == "BUY" and signal.stop_loss >= signal.entry:
+
+        errors.append("Stop Loss debe estar por debajo de la entrada BUY")
+    elif signal.direction == "SELL" and signal.stop_loss <= signal.entry:
+
+        errors.append("Stop Loss debe estar por encima de la entrada SELL")
 
     # ---------------------------------------------------------
     # Take Profit

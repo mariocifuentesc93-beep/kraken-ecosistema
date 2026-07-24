@@ -38,12 +38,14 @@ class ProfilesPage(QWidget):
         self.btn_edit = QPushButton("Editar")
         self.btn_delete = QPushButton("Eliminar")
         self.btn_activate = QPushButton("Activar")
+        self.btn_deactivate = QPushButton("Desactivar")
         self.btn_refresh = QPushButton("Actualizar")
 
         toolbar.addWidget(self.btn_new)
         toolbar.addWidget(self.btn_edit)
         toolbar.addWidget(self.btn_delete)
         toolbar.addWidget(self.btn_activate)
+        toolbar.addWidget(self.btn_deactivate)
 
         toolbar.addStretch()
 
@@ -101,6 +103,10 @@ class ProfilesPage(QWidget):
 
         self.btn_activate.clicked.connect(
             self.activate_profile
+        )
+
+        self.btn_deactivate.clicked.connect(
+            self.deactivate_profile
         )
 
         self.btn_refresh.clicked.connect(
@@ -277,15 +283,6 @@ class ProfilesPage(QWidget):
 
             return
 
-        profiles = profile_repository.get_all()
-
-        for p in profiles:
-
-            p.active = False
-            p.enabled = True
-
-            profile_repository.update(p)
-
         profile.active = True
         profile.enabled = True
 
@@ -299,6 +296,21 @@ class ProfilesPage(QWidget):
 
             "Perfil",
 
-            f"Perfil '{profile.name}' activado.",
+            f"Perfil '{profile.name}' activado. Los demás perfiles activos se mantienen.",
 
         )
+
+    # ======================================================
+
+    def deactivate_profile(self):
+
+        profile = self.selected_profile()
+
+        if profile is None:
+            QMessageBox.warning(self, "Perfil", "Seleccione un perfil.")
+            return
+
+        profile.active = False
+        profile_repository.update(profile)
+        self.refresh()
+        QMessageBox.information(self, "Perfil", f"Perfil '{profile.name}' desactivado.")

@@ -43,13 +43,14 @@ class FakeTradeManager:
         return True
 
 
-def source(checkpoint, service):
+def source(checkpoint, service, publication_service=None):
     return InternalSignalSource(
         directory=FIXTURES,
         pattern=PATTERN,
         checkpoint_store=checkpoint,
         observation_only=False,
         ingestion_service=service,
+        publication_service=publication_service,
     )
 
 
@@ -175,18 +176,88 @@ def test_internal_simulation_runs_controlled_full_pipeline(
         repository=temporary_signal_repository,
         signal_engine_instance=signal_engine,
     )
+    class RecordingPublicationService:
+        def __init__(self):
+            self.calls = []
+
+        def publish(self, signal):
+            self.calls.append(signal)
+            return []
+
+    publication = RecordingPublicationService()
     internal = source(
         InternalCheckpointStore(tmp_path / "checkpoint.json"),
         service,
+        publication,
     )
 
     result = internal.scan_once()[0]
 
     assert result.accepted is True
     assert result.routed is True
+    assert result.routed_profiles == (profile,)
+    assert publication.calls == [result.signal]
     assert len(manager.calls) == 1
     signal, received_profile, received_account = manager.calls[0]
     assert signal.source == "INTERNAL"
     assert signal.execution_mode == "SIMULATION"
     assert received_profile is profile
     assert received_account is account
+
+
+def test_multiple_profiles_route_once_and_publish_once(
+    tmp_path,
+    temporary_signal_repository,
+    profile_factory,
+    account_factory,
+):
+    profiles = [
+        profile_factory(
+            profile_id,
+            signal_source_mode="INTERNAL",
+            execution_mode="SIMULATION",
+        )
+        for profile_id in (1, 2)
+    ]
+    accounts = {
+        profile.id: [account_factory(profile.id)]
+        for profile in profiles
+    }
+    manager = FakeTradeManager()
+    execution = ExecutionEngine(manager)
+    execution.start()
+    profile_engine = ProfileEngine(
+        accounts_provider=lambda profile_id: accounts[profile_id],
+        execution_engine_instance=execution,
+    )
+    signal_engine = SignalEngine(
+        profiles_provider=lambda chat_id: [],
+        internal_profiles_provider=lambda: profiles,
+        profile_engine_instance=profile_engine,
+        validator=lambda signal, profile: (True, []),
+    )
+    signal_engine.start()
+
+    class RecordingPublicationService:
+        def __init__(self):
+            self.calls = []
+
+        def publish(self, signal):
+            self.calls.append(signal)
+            return []
+
+    publication = RecordingPublicationService()
+    internal = source(
+        InternalCheckpointStore(tmp_path / "checkpoint.json"),
+        SignalIngestionService(
+            repository=temporary_signal_repository,
+            signal_engine_instance=signal_engine,
+        ),
+        publication,
+    )
+
+    result = internal.scan_once()[0]
+
+    assert result.routed_profiles == tuple(profiles)
+    assert len(manager.calls) == 2
+    assert publication.calls == [result.signal]

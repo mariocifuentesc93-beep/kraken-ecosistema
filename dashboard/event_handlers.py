@@ -1,9 +1,13 @@
 from core.event_bus import event_bus
+from core.config_service import get_execution_mode
+from PySide6.QtCore import QObject
 
 
-class DashboardEventHandlers:
+class DashboardEventHandlers(QObject):
 
     def __init__(self, window):
+
+        super().__init__(window)
 
         self.window = window
 
@@ -155,6 +159,33 @@ class DashboardEventHandlers:
 
         )
 
+    def disconnect(self):
+        connections = (
+            (event_bus.applicationStarted, self.on_application_started),
+            (event_bus.applicationStopped, self.on_application_stopped),
+            (event_bus.telegramConnected, self.on_telegram_connected),
+            (event_bus.telegramDisconnected, self.on_telegram_disconnected),
+            (event_bus.mt5Connected, self.on_mt5_connected),
+            (event_bus.mt5Disconnected, self.on_mt5_disconnected),
+            (event_bus.signalReceived, self.on_signal_received),
+            (event_bus.operationCreated, self.on_operation_created),
+            (event_bus.operationOpened, self.on_operation_opened),
+            (event_bus.operationModified, self.on_operation_modified),
+            (event_bus.operationClosed, self.on_operation_closed),
+            (event_bus.profitUpdated, self.on_profit_updated),
+            (event_bus.statisticsUpdated, self.on_statistics_updated),
+            (event_bus.dashboardRefreshRequested, self.on_dashboard_refresh),
+            (event_bus.logGenerated, self.on_log),
+            (event_bus.notificationGenerated, self.on_notification),
+            (event_bus.warningGenerated, self.on_warning),
+            (event_bus.errorGenerated, self.on_error),
+        )
+        for signal, handler in connections:
+            try:
+                signal.disconnect(handler)
+            except (RuntimeError, TypeError):
+                pass
+
     # =====================================================
     # APPLICATION
     # =====================================================
@@ -163,7 +194,7 @@ class DashboardEventHandlers:
 
         self.window.log("Kraken Engine iniciado")
 
-        self.window.set_mode("LIVE")
+        self.window.set_mode(get_execution_mode())
 
     def on_application_stopped(self, event):
 
@@ -228,8 +259,7 @@ class DashboardEventHandlers:
     # =====================================================
 
     def on_profit_updated(self, event):
-
-        value = getattr(event, "profit", 0)
+        value = float(getattr(event, "profit", event))
 
         self.window.update_profit(value)
 
@@ -267,8 +297,8 @@ class DashboardEventHandlers:
 
     def on_warning(self, text):
 
-        self.window.notify(f"⚠ {text}")
+        self.window.notify(f"ADVERTENCIA · {text}")
 
     def on_error(self, text):
 
-        self.window.notify(f"❌ {text}")
+        self.window.notify(f"ERROR · {text}")
