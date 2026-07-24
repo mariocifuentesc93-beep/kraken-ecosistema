@@ -110,6 +110,7 @@ def test_rollback_starting_from_new_schema(tmp_path):
         Signal(
             source="INTERNAL",
             external_signal_id="12241",
+            symbol="LionX75",
             take_profits=[110, 120, 130],
             metadata={"market_execution": True},
         )

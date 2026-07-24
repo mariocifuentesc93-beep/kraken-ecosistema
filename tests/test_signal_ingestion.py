@@ -60,6 +60,8 @@ def test_manual_internal_signal_uses_common_ingestion_service(
     assert result.accepted is True
     assert result.created is True
     assert result.signal.source == "INTERNAL"
-    assert result.signal.idempotency_key == "INTERNAL:BMSP-12241"
+    assert result.signal.idempotency_key == (
+        "INTERNAL:LIONX75:BMSP-12241"
+    )
     assert len(engine.calls) == 1
     assert temporary_signal_repository.count() == 1

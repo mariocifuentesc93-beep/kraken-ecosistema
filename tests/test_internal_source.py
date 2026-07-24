@@ -4,6 +4,7 @@ import subprocess
 import sys
 
 from internal.csv_parser import parse_csv
+from internal.checkpoint_store import InternalCheckpointStore
 from internal.signal_assembler import assemble_signals
 from internal.source import (
     InternalSignalSource,
@@ -25,7 +26,7 @@ def test_assembled_signal_converts_to_unified_internal_signal():
 
     assert signal.source == "INTERNAL"
     assert signal.external_signal_id == "12304"
-    assert signal.idempotency_key == "INTERNAL:12304"
+    assert signal.idempotency_key == "INTERNAL:EMASVOL20:12304"
     assert signal.take_profits == [73517.7, 73529.41, 73545.02]
     assert signal.received_at == received_at
     assert signal.detected_at == datetime(2026, 7, 23, 10, 0)
@@ -43,10 +44,34 @@ def test_observation_format_keeps_internal_id():
     )[0]
     output = format_internal_signal(signal)
 
-    assert "SIGNAL - EmasVol20 (BUY)" in output
+    assert "SIGNAL - EMASVOL20 (BUY)" in output
     assert "Entry: 73505.99" in output
     assert "TP3: 73545.02" in output
     assert "ID interno Kraken: 12304" in output
+
+
+def test_source_checkpoint_keeps_same_id_for_different_symbols(
+    tmp_path,
+):
+    source = InternalSignalSource(
+        directory=FIXTURES,
+        checkpoint_store=InternalCheckpointStore(
+            tmp_path / "checkpoint.json"
+        ),
+        pattern="Kraken_BMSP_same_id_symbols.csv",
+    )
+
+    first_scan = source.scan_once()
+    second_scan = source.scan_once()
+
+    assert {
+        signal.idempotency_key
+        for signal in first_scan
+    } == {
+        "INTERNAL:EMASVOL80:70001",
+        "INTERNAL:LIONX100:70001",
+    }
+    assert second_scan == []
 
 
 def test_importing_source_does_not_import_operational_pipeline():

@@ -40,7 +40,7 @@ Las claves normalizadas son:
 
 ```text
 TELEGRAM:<telegram_account_id>:<chat_id>:<message_id>
-INTERNAL:<external_signal_id>
+INTERNAL:<SYMBOL_NORMALIZADO>:<external_signal_id>
 ```
 
 ### Identidad obligatoria por fuente
@@ -56,9 +56,22 @@ Para `TELEGRAM` son obligatorios `telegram_account_id`, `chat_id` y
   evalúan por *truthiness*; la validez de negocio de un ID concreto pertenece
   al adaptador Telegram.
 
-Para `INTERNAL`, `external_signal_id` es obligatorio. Se aceptan texto o
-entero (nunca booleano), se convierte a texto, se normaliza con `strip()` y se
-rechaza cuando queda vacío.
+Para `INTERNAL`, `symbol` y `external_signal_id` son obligatorios.
+`external_signal_id` acepta texto o entero (nunca booleano), se convierte a
+texto, se normaliza con `strip()` y se rechaza cuando queda vacío.
+
+El símbolo INTERNAL usa una única normalización canónica:
+
+- debe ser texto;
+- se aplica `strip()` y se convierte a mayúsculas;
+- se rechaza cuando queda vacío;
+- se conservan espacios interiores, sufijos y caracteres operativos del
+  broker sin crear aliases;
+- se permiten caracteres especiales, excepto `:` y caracteres de control,
+  porque `:` delimita los componentes de la clave.
+
+Por ejemplo, ` EmasVol20 ` se normaliza como `EMASVOL20` y genera
+`INTERNAL:EMASVOL20:12304`.
 
 Si el llamador suministra una `idempotency_key`, esta nunca se considera
 autoridad. Se elimina el espacio exterior, se recalcula la clave canónica con
@@ -81,6 +94,11 @@ existente. `create()` devuelve `SignalCreateResult`:
 Los errores de identidad se comunican como `SignalIdentityError`; no llegan a
 SQLite. No se ocultan otros errores de integridad no relacionados con
 idempotencia.
+
+El formato provisional anterior `INTERNAL:<external_signal_id>` se rechaza
+incluso cuando se suministra manualmente. INTERNAL todavía no estaba activo
+en producción al cambiar este contrato, por lo que no se mantiene
+compatibilidad permanente ni se reescriben filas de `database/kraken.db`.
 
 ## Esquema SQLite
 

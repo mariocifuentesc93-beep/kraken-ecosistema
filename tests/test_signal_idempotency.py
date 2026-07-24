@@ -51,7 +51,7 @@ def test_duplicate_internal_signal_returns_existing_row(unified_database):
         Signal(
             source="INTERNAL",
             external_signal_id=12241,
-            symbol="Other",
+            symbol=" lionx75 ",
         )
     )
 
@@ -59,6 +59,33 @@ def test_duplicate_internal_signal_returns_existing_row(unified_database):
     assert second.already_existed is True
     assert second.signal.id == first.signal.id
     assert repository.count() == 1
+
+
+def test_same_internal_id_on_different_symbols_is_not_duplicate(
+    unified_database,
+):
+    repository = SignalRepository(unified_database)
+
+    first = repository.create(
+        Signal(
+            source="INTERNAL",
+            external_signal_id="12241",
+            symbol="EmasVol20",
+        )
+    )
+    second = repository.create(
+        Signal(
+            source="INTERNAL",
+            external_signal_id="12241",
+            symbol="LionX75",
+        )
+    )
+
+    assert first.created is True
+    assert second.created is True
+    assert first.signal.idempotency_key == "INTERNAL:EMASVOL20:12241"
+    assert second.signal.idempotency_key == "INTERNAL:LIONX75:12241"
+    assert repository.count() == 2
 
 
 @pytest.mark.parametrize(
@@ -186,6 +213,7 @@ def test_internal_requires_external_signal_id(
             Signal(
                 source="INTERNAL",
                 external_signal_id=external_signal_id,
+                symbol="LionX75",
             )
         )
 
@@ -195,12 +223,14 @@ def test_internal_accepts_matching_manual_key(unified_database):
         Signal(
             source="INTERNAL",
             external_signal_id=" 12241 ",
-            idempotency_key=" INTERNAL:12241 ",
+            symbol=" lionx75 ",
+            idempotency_key=" INTERNAL:LIONX75:12241 ",
         )
     )
 
     assert result.signal.external_signal_id == "12241"
-    assert result.signal.idempotency_key == "INTERNAL:12241"
+    assert result.signal.symbol == "LIONX75"
+    assert result.signal.idempotency_key == "INTERNAL:LIONX75:12241"
 
 
 def test_internal_rejects_mismatching_manual_key(unified_database):
@@ -209,9 +239,38 @@ def test_internal_rejects_mismatching_manual_key(unified_database):
             Signal(
                 source="INTERNAL",
                 external_signal_id="12241",
-                idempotency_key="INTERNAL:99999",
+                symbol="LionX75",
+                idempotency_key="INTERNAL:LIONX75:99999",
             )
         )
+
+
+def test_internal_rejects_provisional_manual_key(unified_database):
+    with pytest.raises(SignalIdentityError):
+        SignalRepository(unified_database).create(
+            Signal(
+                source="INTERNAL",
+                external_signal_id="12304",
+                symbol="EmasVol20",
+                idempotency_key="INTERNAL:12304",
+            )
+        )
+
+
+@pytest.mark.parametrize("symbol", ["", "   "])
+def test_internal_rejects_empty_symbol(unified_database, symbol):
+    repository = SignalRepository(unified_database)
+
+    with pytest.raises(SignalIdentityError):
+        repository.create(
+            Signal(
+                source="INTERNAL",
+                external_signal_id="12304",
+                symbol=symbol,
+            )
+        )
+
+    assert repository.count() == 0
 
 
 @pytest.mark.parametrize("idempotency_key", ["", "   "])
@@ -249,6 +308,7 @@ def test_distinct_signals_cannot_collide_on_blank_key(unified_database):
         Signal(
             source="INTERNAL",
             external_signal_id="12241",
+            symbol="LionX75",
             idempotency_key=" ",
         ),
     ):

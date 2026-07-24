@@ -97,6 +97,7 @@ class InternalSignalSource:
                 if (
                     self.checkpoint_store is not None
                     and self.checkpoint_store.contains(
+                        signal.symbol,
                         signal.external_signal_id
                     )
                 ):
@@ -104,6 +105,7 @@ class InternalSignalSource:
                 detected.append(signal)
                 if self.checkpoint_store is not None:
                     self.checkpoint_store.mark(
+                        signal.symbol,
                         signal.external_signal_id
                     )
         return detected

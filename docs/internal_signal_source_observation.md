@@ -81,7 +81,7 @@ Convierte una señal ensamblada a:
 ```text
 source = INTERNAL
 external_signal_id = signal_id
-idempotency_key = INTERNAL:<signal_id>
+idempotency_key = INTERNAL:<SYMBOL_NORMALIZADO>:<signal_id>
 ```
 
 La metadata incluye:
@@ -112,7 +112,7 @@ El checkpoint usa un JSON configurable e independiente:
 ```json
 {
   "processed": [
-    "INTERNAL:12304"
+    "INTERNAL:EMASVOL20:12304"
   ]
 }
 ```
@@ -159,18 +159,25 @@ ID interno Kraken: 12304
 
 ## Riesgo de colisión de identidad
 
-El ensamblador separa señales usando `symbol + signal_id`. Sin embargo, el
-contrato global actual genera:
+El ensamblador separa señales usando `symbol + signal_id` y el contrato global
+usa la misma combinación:
 
 ```text
-INTERNAL:<external_signal_id>
+INTERNAL:<SYMBOL_NORMALIZADO>:<external_signal_id>
 ```
 
-Si KrakenBMSPInspector reutiliza un ID entre símbolos o después de un reinicio,
-dos señales distintas podrían producir la misma clave persistente y el mismo
-checkpoint. Esta fase detecta, prueba y documenta el riesgo, pero no modifica
-el contrato global. Antes de activar INTERNAL en producción deberá definirse
-si la identidad incorpora símbolo, instancia del terminal o época de origen.
+El símbolo se normaliza aplicando `strip()` y mayúsculas. No se crean aliases:
+los espacios interiores y sufijos operativos se conservan. Los caracteres
+especiales se permiten excepto `:` y caracteres de control.
+
+Esto evita colisiones cuando el mismo ID aparece en símbolos diferentes. El
+formato provisional `INTERNAL:<external_signal_id>` ya no se acepta. Como
+INTERNAL todavía no está en producción, no se migran filas reales.
+
+Permanece un riesgo si KrakenBMSPInspector reutiliza el mismo ID para el mismo
+símbolo después de un reinicio. Antes de producción deberá determinarse si
+esa reutilización ocurre y si hace falta incorporar una época o instancia del
+terminal.
 
 ## Limitaciones
 
@@ -179,7 +186,9 @@ si la identidad incorpora símbolo, instancia del terminal o época de origen.
 - no hay ejecución MT5;
 - no hay publicación Telegram;
 - el watcher informa archivos estables, pero su arranque es siempre explícito;
-- el checkpoint basado solo en ID hereda el riesgo de colisión descrito.
+- el checkpoint comparte exactamente la identidad canónica del modelo;
+- permanece el posible riesgo de reutilización del mismo ID en el mismo
+  símbolo después de reinicios.
 
 ## Pruebas
 

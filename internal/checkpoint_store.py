@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from threading import Lock
 
+from models.signal import build_internal_idempotency_key
+
 
 class InternalCheckpointStore:
     def __init__(self, path):
@@ -13,8 +15,11 @@ class InternalCheckpointStore:
         self.load()
 
     @staticmethod
-    def key(external_signal_id):
-        return f"INTERNAL:{str(external_signal_id).strip()}"
+    def key(symbol, external_signal_id):
+        return build_internal_idempotency_key(
+            symbol,
+            external_signal_id,
+        )
 
     def load(self):
         with self._lock:
@@ -33,12 +38,12 @@ class InternalCheckpointStore:
                 self._keys = set()
             return set(self._keys)
 
-    def contains(self, external_signal_id):
+    def contains(self, symbol, external_signal_id):
         with self._lock:
-            return self.key(external_signal_id) in self._keys
+            return self.key(symbol, external_signal_id) in self._keys
 
-    def mark(self, external_signal_id):
-        key = self.key(external_signal_id)
+    def mark(self, symbol, external_signal_id):
+        key = self.key(symbol, external_signal_id)
         with self._lock:
             if key in self._keys:
                 return False
