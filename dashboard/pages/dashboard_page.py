@@ -11,6 +11,7 @@ from dashboard.ui_theme import refresh_widget_style, set_visual_role
 from dashboard.icons import ICON_INFO, colored_icon, set_label_icon
 from repositories.profile_repository import profile_repository
 from repositories.signal_repository import signal_repository
+from services.dashboard_account_metrics_service import dashboard_account_metrics_service
 from services.trading_analytics_service import trading_analytics_service
 
 
@@ -92,7 +93,12 @@ class KpiCard(QFrame):
 class DashboardPage(QWidget):
     connection_action_requested = Signal(str)
     navigate_requested=Signal(str); action_requested=Signal(str); notifications_requested=Signal()
-    def __init__(self): super().__init__(); self.build_ui(); self.connect_events(); self.refresh()
+    def __init__(self, account_metrics_service=None):
+        super().__init__()
+        self.account_metrics_service = account_metrics_service or dashboard_account_metrics_service
+        self.build_ui()
+        self.connect_events()
+        self.refresh()
     def connect_events(self):
         from core.event_bus import event_bus
         for event in (event_bus.dashboardRefreshRequested,event_bus.statisticsUpdated,event_bus.profitUpdated,event_bus.operationCreated,event_bus.operationOpened,event_bus.operationClosed,event_bus.profileFinished): event.connect(self.refresh)
@@ -255,6 +261,9 @@ class DashboardPage(QWidget):
             f"{datetime.now():%d/%m/%Y %I:%M:%S %p}"
         )
 
+        if service == "MT5" and snapshot.state == "CONNECTED":
+            self.refresh()
+
     def quick_panel(self):
         box = QFrame()
         box.setObjectName("DashboardQuickPanel")
@@ -316,10 +325,26 @@ class DashboardPage(QWidget):
         active=profile_repository.get_active()
         self._refresh_profile_filter(active)
         profile_id=self.profile_filter.currentData()
+        selected_profile = profile_repository.get_by_id(profile_id) if profile_id else None
         metrics=trading_analytics_service.metrics({"profile":profile_id} if profile_id else {})
+        account_metrics = self.account_metrics_service.snapshot(selected_profile)
         rows=metrics["rows"]; open_count=sum(r["status"]=="OPEN" for r in rows); pending=sum(r["status"] in ("PENDING","QUEUED") for r in rows)
         values={"Balance":(f"{metrics['net']:,.2f}","Respecto al inicial"),"Equity":(f"{metrics['net']:,.2f}","Flotante: $0.00"),"P/L diario":(f"{metrics['net']:,.2f}","Hoy"),"P/L mensual":(f"{metrics['net']:,.2f}","Este mes"),"Win rate":(f"{metrics['win_rate']}%",f"{len(rows)} operaciones"),"Profit factor":(metrics['profit_factor'],"—"),"Drawdown":(f"{metrics['maximum_drawdown']:,.2f}","Máx. histórico"),"Abiertas":(open_count,"Posiciones abiertas"),"Pendientes":(pending,"Órdenes pendientes"),"Modo":(getattr(active,'execution_mode','OFF'),"Ejecución actual"),"Perfil":(getattr(active,'name','Sin perfil activo'),"Perfil activo"),"Capital":(f"{metrics['net']:,.2f}","Capital disponible")}
-        selected_profile = profile_repository.get_by_id(profile_id) if profile_id else None
+        if account_metrics.available:
+            currency = account_metrics.currency or "MT5"
+            floating = account_metrics.equity - account_metrics.balance
+            values["Balance"] = (
+                f"{account_metrics.balance:,.2f}",
+                f"Cuenta MT5 · {currency}",
+            )
+            values["Equity"] = (
+                f"{account_metrics.equity:,.2f}",
+                f"Flotante: {floating:,.2f}",
+            )
+            values["Capital"] = (
+                f"{account_metrics.free_margin:,.2f}",
+                f"Margen libre · {currency}",
+            )
         values["Modo"] = (
             getattr(selected_profile, "execution_mode", "MÚLTIPLE"),
             "Ejecución actual",
