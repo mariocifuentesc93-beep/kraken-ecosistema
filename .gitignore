@@ -3,6 +3,9 @@
 **/__pycache__/
 *.pyc
 *.session
+*.log
+*.tmp
+*.temp
 *.db-shm
 *.db-wal
 database/backups/
@@ -13,6 +16,10 @@ database/*.bak
 /database/kraken_before_*.db
 /dashboard_iteration*.png
 /dashboard_reference_iteration*.png
+/screenshots/
+/captures/
+/screenshot*.png
+/capture*.png
 /logs/
 .idea/
 .vscode/
