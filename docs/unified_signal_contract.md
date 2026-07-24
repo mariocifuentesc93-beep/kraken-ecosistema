@@ -43,6 +43,34 @@ TELEGRAM:<telegram_account_id>:<chat_id>:<message_id>
 INTERNAL:<external_signal_id>
 ```
 
+### Identidad obligatoria por fuente
+
+Para `TELEGRAM` son obligatorios `telegram_account_id`, `chat_id` y
+`message_id`. Los tres se normalizan a enteros:
+
+- se rechazan `None`, cadenas vacías, espacios y texto no numérico;
+- se rechazan booleanos, aunque Python los considere subclases de `int`;
+- los enteros expresados como cadenas son aceptados;
+- los valores negativos son válidos, especialmente para `chat_id`;
+- el valor cero es válido para los tres campos a nivel de contrato. No se
+  evalúan por *truthiness*; la validez de negocio de un ID concreto pertenece
+  al adaptador Telegram.
+
+Para `INTERNAL`, `external_signal_id` es obligatorio. Se aceptan texto o
+entero (nunca booleano), se convierte a texto, se normaliza con `strip()` y se
+rechaza cuando queda vacío.
+
+Si el llamador suministra una `idempotency_key`, esta nunca se considera
+autoridad. Se elimina el espacio exterior, se recalcula la clave canónica con
+los campos de la fuente y ambas deben coincidir exactamente. Una clave vacía,
+compuesta por espacios o incompatible produce `SignalIdentityError`.
+
+Las fuentes admitidas por `SignalRepository.create()` son únicamente
+`TELEGRAM` e `INTERNAL`. Una fuente desconocida se rechaza. `LEGACY:<id>` está
+reservada para la migración, que escribe directamente durante la reconstrucción
+de la tabla; una señal nueva con `source=LEGACY` no puede persistirse por el
+repositorio normal.
+
 `idx_signals_idempotency` es un índice SQLite `UNIQUE`. El repositorio intenta
 insertar de forma atómica y, ante una colisión de esa clave, recupera la fila
 existente. `create()` devuelve `SignalCreateResult`:
@@ -50,7 +78,9 @@ existente. `create()` devuelve `SignalCreateResult`:
 - `created=True`: se creó una fila;
 - `created=False` / `already_existed=True`: ya existía y se devuelve esa fila.
 
-No se ocultan otros errores de integridad.
+Los errores de identidad se comunican como `SignalIdentityError`; no llegan a
+SQLite. No se ocultan otros errores de integridad no relacionados con
+idempotencia.
 
 ## Esquema SQLite
 

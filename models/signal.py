@@ -3,8 +3,47 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 
+class SignalIdentityError(ValueError):
+    """La identidad de una señal no es válida para persistencia."""
+
+
 def _normalize_source(value: str) -> str:
     return (value or "TELEGRAM").strip().upper()
+
+
+def _telegram_integer(value, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise SignalIdentityError(
+            f"{field_name} no acepta valores booleanos"
+        )
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip()
+        if normalized and (
+            normalized.isdigit()
+            or (
+                normalized[0] in "+-"
+                and normalized[1:].isdigit()
+            )
+        ):
+            return int(normalized)
+    raise SignalIdentityError(
+        f"{field_name} debe ser un entero válido"
+    )
+
+
+def _internal_external_id(value) -> str:
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise SignalIdentityError(
+            "external_signal_id debe ser texto o entero"
+        )
+    normalized = str(value).strip()
+    if not normalized:
+        raise SignalIdentityError(
+            "external_signal_id es obligatorio para INTERNAL"
+        )
+    return normalized
 
 
 @dataclass
@@ -57,10 +96,14 @@ class Signal:
         )
         self.detected_at = self._as_datetime(self.detected_at)
 
-        if self.external_signal_id is not None:
+        if (
+            self.external_signal_id is not None
+            and not isinstance(self.external_signal_id, bool)
+            and isinstance(self.external_signal_id, (str, int))
+        ):
             self.external_signal_id = str(self.external_signal_id).strip()
 
-        if not self.idempotency_key:
+        if self.idempotency_key is None:
             self.idempotency_key = self.build_idempotency_key()
 
     @staticmethod
@@ -73,19 +116,78 @@ class Signal:
 
     def build_idempotency_key(self) -> Optional[str]:
         if self.source == "TELEGRAM":
-            identity = (
-                self.telegram_account_id,
-                self.chat_id,
-                self.message_id,
-            )
-            if all(value is not None for value in identity):
-                return "TELEGRAM:{0}:{1}:{2}".format(*identity)
-            return None
+            try:
+                account_id = _telegram_integer(
+                    self.telegram_account_id,
+                    "telegram_account_id",
+                )
+                chat_id = _telegram_integer(self.chat_id, "chat_id")
+                message_id = _telegram_integer(
+                    self.message_id,
+                    "message_id",
+                )
+            except SignalIdentityError:
+                return None
+            return f"TELEGRAM:{account_id}:{chat_id}:{message_id}"
 
-        if self.source == "INTERNAL" and self.external_signal_id:
-            return f"INTERNAL:{self.external_signal_id}"
+        if self.source == "INTERNAL":
+            try:
+                external_id = _internal_external_id(
+                    self.external_signal_id
+                )
+            except SignalIdentityError:
+                return None
+            return f"INTERNAL:{external_id}"
 
         return None
+
+    def validate_persistent_identity(self) -> str:
+        """Valida la fuente y reemplaza la clave por su forma canónica."""
+        self.source = _normalize_source(self.source)
+        manual_key = self.idempotency_key
+        if manual_key is not None:
+            manual_key = str(manual_key).strip()
+            if not manual_key:
+                raise SignalIdentityError(
+                    "idempotency_key no puede estar vacía"
+                )
+
+        if self.source == "TELEGRAM":
+            self.telegram_account_id = _telegram_integer(
+                self.telegram_account_id,
+                "telegram_account_id",
+            )
+            self.chat_id = _telegram_integer(self.chat_id, "chat_id")
+            self.message_id = _telegram_integer(
+                self.message_id,
+                "message_id",
+            )
+            canonical_key = (
+                f"TELEGRAM:{self.telegram_account_id}:"
+                f"{self.chat_id}:{self.message_id}"
+            )
+        elif self.source == "INTERNAL":
+            external_id = _internal_external_id(
+                self.external_signal_id
+            )
+            self.external_signal_id = external_id
+            canonical_key = f"INTERNAL:{external_id}"
+        elif self.source == "LEGACY":
+            raise SignalIdentityError(
+                "LEGACY está reservado para la migración"
+            )
+        else:
+            raise SignalIdentityError(
+                f"Fuente de señal no soportada: {self.source!r}"
+            )
+
+        if manual_key is not None and manual_key != canonical_key:
+            raise SignalIdentityError(
+                "idempotency_key manual no coincide con la identidad canónica"
+            )
+
+        self.idempotency_key = canonical_key
+        return canonical_key
 
     @property
     def tp1(self) -> float:

@@ -60,15 +60,7 @@ class SignalRepository:
         )
 
     def create(self, signal: Signal) -> SignalCreateResult:
-        signal.source = signal.source.upper()
-        signal.idempotency_key = (
-            signal.idempotency_key or signal.build_idempotency_key()
-        )
-        if not signal.idempotency_key:
-            raise ValueError(
-                "La señal no contiene los campos necesarios para construir "
-                "idempotency_key"
-            )
+        signal.validate_persistent_identity()
 
         connection = self._connection()
         try:

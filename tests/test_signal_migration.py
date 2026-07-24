@@ -1,6 +1,8 @@
 import sqlite3
 
 from database.signal_contract_migration import rollback, upgrade
+from models.signal import Signal
+from repositories.signal_repository import SignalRepository
 
 
 def _legacy_database(path):
@@ -98,3 +100,30 @@ def test_migration_rollback_restores_legacy_schema(tmp_path):
     assert "idempotency_key" not in columns
     assert {"tp1", "tp2", "tp3", "market_execution", "created_at"} <= columns
     assert row == (110.0, 120.0, 130.0, 1, "2026-07-23 10:00:00")
+
+
+def test_rollback_starting_from_new_schema(tmp_path):
+    connection = sqlite3.connect(tmp_path / "new-schema.db")
+    connection.row_factory = sqlite3.Row
+    upgrade(connection)
+    SignalRepository(connection).create(
+        Signal(
+            source="INTERNAL",
+            external_signal_id="12241",
+            take_profits=[110, 120, 130],
+            metadata={"market_execution": True},
+        )
+    )
+
+    assert rollback(connection) is True
+    columns = {
+        item[1]
+        for item in connection.execute("PRAGMA table_info(signals)")
+    }
+    row = connection.execute(
+        "SELECT tp1, tp2, tp3, market_execution FROM signals"
+    ).fetchone()
+
+    assert "idempotency_key" not in columns
+    assert {"tp1", "tp2", "tp3", "created_at"} <= columns
+    assert tuple(row) == (110.0, 120.0, 130.0, 1)
