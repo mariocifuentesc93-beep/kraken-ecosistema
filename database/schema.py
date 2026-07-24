@@ -17,6 +17,15 @@ def _ensure_columns(cursor, table, definitions):
 def create_tables(connection: sqlite3.Connection):
 
     cursor = connection.cursor()
+    settings_preexisting = (
+        cursor.execute(
+            """
+            SELECT 1 FROM sqlite_master
+            WHERE type='table' AND name='settings'
+            """
+        ).fetchone()
+        is not None
+    )
 
     # ==========================================================
     # PROFILES
@@ -759,6 +768,14 @@ def create_tables(connection: sqlite3.Connection):
 
     )
     """)
+
+    if not settings_preexisting:
+        cursor.execute(
+            """
+            INSERT INTO settings(key, value)
+            VALUES ('internal.telegram_publication.enabled', '0')
+            """
+        )
 
     # ==========================================================
     # LOGS

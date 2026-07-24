@@ -8,6 +8,8 @@ class InternalPublicationConfig:
     enabled: bool = False
     telegram_account_id: int | None = None
     telegram_output_chat_id: int | None = None
+    destination_name: str | None = None
+    destination_type: str | None = None
 
     def validate(self):
         if not self.enabled:

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from dashboard.pages.internal_source_settings_page import (
     InternalSourceSettingsPage,
@@ -84,7 +84,33 @@ def test_global_internal_settings_are_not_profile_fields():
         enabled=True,
         telegram_account_id=7,
         telegram_output_chat_id=-1001234567890,
+        destination_name="Señales Premium",
+        destination_type="Canal",
     )
     page._test_sender(7, -1001234567890)
+    assert sent == [(7, -1001234567890)]
+    page.close()
+
+
+def test_test_send_validates_without_saving_configuration(monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    repository = MemoryConfigRepository()
+    manager = FakeAccountManager()
+    sent = []
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
+    page = InternalSourceSettingsPage(
+        config_repository=repository,
+        account_manager=manager,
+        destinations_provider=destinations,
+        test_sender=lambda account, chat: sent.append((account, chat)),
+    )
+    page.publish_checkbox.setChecked(True)
+    page.account_combo.setCurrentIndex(page.account_combo.findData(7))
+    page.destination_combo.setCurrentIndex(
+        page.destination_combo.findData(-1001234567890)
+    )
+
+    assert page.test_send() is True
+    assert repository.config == InternalPublicationConfig()
     assert sent == [(7, -1001234567890)]
     page.close()

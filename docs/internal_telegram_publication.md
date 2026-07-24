@@ -41,6 +41,8 @@ Los valores se almacenan en la tabla global `settings`:
 internal.telegram_publication.enabled
 internal.telegram_publication.telegram_account_id
 internal.telegram_publication.telegram_output_chat_id
+internal.telegram_publication.destination_name
+internal.telegram_publication.destination_type
 ```
 
 No existen campos de publicación INTERNAL en `Profile`. Los perfiles continúan
@@ -98,8 +100,14 @@ Los precios conservan entre dos y cuatro decimales.
 
 ## Migración
 
-`database/telegram_publication_migration.py` crea exclusivamente la tabla e
-índice de publicaciones. El formato anterior, que añadía campos de salida a
-`profiles`, queda retirado. Bases que ya contengan esas columnas heredadas
-pueden abrirse: el repositorio ignora campos desconocidos, pero ninguna ruta
-normal vuelve a leerlos o escribirlos.
+`database/telegram_publication_migration.py` crea la tabla, el índice y la
+configuración global desactivada. Nunca copia silenciosamente una cuenta o un
+destino desde perfiles. El formato anterior, que añadía campos de salida a
+`profiles`, queda retirado.
+
+En bases existentes las columnas `publish_internal_to_telegram`,
+`telegram_output_account_id` y `telegram_output_chat_id` pueden permanecer
+físicamente como campos legacy para evitar una reconstrucción destructiva de
+SQLite. El modelo, repositorio, servicio y editor de perfiles las ignoran por
+completo. La migración es reversible: elimina las claves globales y la tabla de
+reservas sin alterar perfiles ni configuración general.

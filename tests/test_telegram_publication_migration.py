@@ -12,7 +12,14 @@ def legacy_database(path):
         CREATE TABLE profiles(
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
-            operation_mode TEXT DEFAULT 'telegram'
+            operation_mode TEXT DEFAULT 'telegram',
+            publish_internal_to_telegram INTEGER NOT NULL DEFAULT 0,
+            telegram_output_account_id INTEGER,
+            telegram_output_chat_id INTEGER
+        );
+        CREATE TABLE settings(
+            key TEXT PRIMARY KEY,
+            value TEXT
         );
         CREATE TABLE signals(
             id INTEGER PRIMARY KEY,
@@ -22,14 +29,22 @@ def legacy_database(path):
             id INTEGER PRIMARY KEY,
             enabled INTEGER DEFAULT 1
         );
-        INSERT INTO profiles(id, name) VALUES (1, 'Existing');
+        INSERT INTO profiles(
+            id,
+            name,
+            publish_internal_to_telegram,
+            telegram_output_account_id,
+            telegram_output_chat_id
+        ) VALUES (1, 'Existing', 0, NULL, NULL);
+        INSERT INTO settings(key, value)
+        VALUES ('execution_mode', 'OFF');
         """
     )
     connection.commit()
     return connection
 
 
-def test_migration_adds_only_global_publication_schema(tmp_path):
+def test_migration_adds_global_configuration_without_copying_legacy(tmp_path):
     connection = legacy_database(tmp_path / "publication.db")
 
     assert upgrade(connection) is True
@@ -38,9 +53,9 @@ def test_migration_adds_only_global_publication_schema(tmp_path):
         row[1]
         for row in connection.execute("PRAGMA table_info(profiles)")
     }
-    assert "publish_internal_to_telegram" not in profile_columns
-    assert "telegram_output_account_id" not in profile_columns
-    assert "telegram_output_chat_id" not in profile_columns
+    assert "publish_internal_to_telegram" in profile_columns
+    assert "telegram_output_account_id" in profile_columns
+    assert "telegram_output_chat_id" in profile_columns
     indexes = connection.execute(
         "PRAGMA index_list(telegram_publications)"
     ).fetchall()
@@ -48,10 +63,21 @@ def test_migration_adds_only_global_publication_schema(tmp_path):
     assert connection.execute(
         "SELECT name FROM profiles WHERE id=1"
     ).fetchone()[0] == "Existing"
+    settings = dict(
+        connection.execute(
+            """
+            SELECT key, value FROM settings
+            WHERE key LIKE 'internal.telegram_publication.%'
+            """
+        ).fetchall()
+    )
+    assert settings == {
+        "internal.telegram_publication.enabled": "0",
+    }
     connection.close()
 
 
-def test_migration_rollback_removes_only_publication_table(tmp_path):
+def test_migration_rollback_removes_global_configuration_and_table(tmp_path):
     connection = legacy_database(tmp_path / "rollback.db")
     upgrade(connection)
 
@@ -66,6 +92,15 @@ def test_migration_rollback_removes_only_publication_table(tmp_path):
     assert connection.execute(
         "SELECT name FROM profiles WHERE id=1"
     ).fetchone()[0] == "Existing"
+    assert connection.execute(
+        """
+        SELECT COUNT(*) FROM settings
+        WHERE key LIKE 'internal.telegram_publication.%'
+        """
+    ).fetchone()[0] == 0
+    assert connection.execute(
+        "SELECT value FROM settings WHERE key='execution_mode'"
+    ).fetchone()[0] == "OFF"
     connection.close()
 
 
@@ -79,4 +114,10 @@ def test_fresh_schema_has_no_profile_publication_fields():
     assert "publish_internal_to_telegram" not in columns
     assert "telegram_output_account_id" not in columns
     assert "telegram_output_chat_id" not in columns
+    assert connection.execute(
+        """
+        SELECT value FROM settings
+        WHERE key='internal.telegram_publication.enabled'
+        """
+    ).fetchone()[0] == "0"
     connection.close()

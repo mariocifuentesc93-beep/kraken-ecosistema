@@ -218,7 +218,7 @@ class InternalSourceSettingsPage(QWidget):
         account_id = self.account_combo.currentData()
         chat_id = self.destination_combo.currentData()
         try:
-            self._service.save(True, account_id, chat_id)
+            self._service.validate(True, account_id, chat_id)
             self._test_sender(account_id, chat_id)
         except Exception as error:
             QMessageBox.critical(

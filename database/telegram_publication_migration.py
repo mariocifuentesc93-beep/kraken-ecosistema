@@ -5,6 +5,15 @@ import sqlite3
 from pathlib import Path
 
 
+GLOBAL_SETTING_KEYS = (
+    "internal.telegram_publication.enabled",
+    "internal.telegram_publication.telegram_account_id",
+    "internal.telegram_publication.telegram_output_chat_id",
+    "internal.telegram_publication.destination_name",
+    "internal.telegram_publication.destination_type",
+)
+
+
 def _table_exists(connection, table):
     return (
         connection.execute(
@@ -15,9 +24,27 @@ def _table_exists(connection, table):
     )
 
 
+def _index_exists(connection, index):
+    return (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
+            (index,),
+        ).fetchone()
+        is not None
+    )
+
+
 def upgrade(connection: sqlite3.Connection) -> bool:
     changed = False
     with connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS settings(
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+            """
+        )
         if not _table_exists(connection, "telegram_publications"):
             connection.execute(
                 """
@@ -41,6 +68,11 @@ def upgrade(connection: sqlite3.Connection) -> bool:
                 """
             )
             changed = True
+        if not _index_exists(
+            connection,
+            "idx_telegram_publication_destination",
+        ):
+            changed = True
         connection.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS
@@ -52,15 +84,33 @@ def upgrade(connection: sqlite3.Connection) -> bool:
             )
             """
         )
+        exists = connection.execute(
+            "SELECT 1 FROM settings WHERE key=?",
+            (GLOBAL_SETTING_KEYS[0],),
+        ).fetchone()
+        if exists is None:
+            connection.execute(
+                "INSERT INTO settings(key, value) VALUES (?, ?)",
+                (GLOBAL_SETTING_KEYS[0], "0"),
+            )
+            changed = True
     return changed
 
 
 def rollback(connection: sqlite3.Connection) -> bool:
-    if not _table_exists(connection, "telegram_publications"):
-        return False
+    changed = False
     with connection:
-        connection.execute("DROP TABLE telegram_publications")
-    return True
+        if _table_exists(connection, "settings"):
+            placeholders = ",".join("?" for _ in GLOBAL_SETTING_KEYS)
+            cursor = connection.execute(
+                f"DELETE FROM settings WHERE key IN ({placeholders})",
+                GLOBAL_SETTING_KEYS,
+            )
+            changed = cursor.rowcount > 0
+        if _table_exists(connection, "telegram_publications"):
+            connection.execute("DROP TABLE telegram_publications")
+            changed = True
+    return changed
 
 
 def main(argv=None):

@@ -64,7 +64,9 @@ def test_profile_dialog_selectors_open_reload_and_close_repeatedly():
             dialog = ProfileDialog()
             dialog.load_repository_data()
             dialog._load_telegram_channels(0)
-            dialog._load_output_channels(0)
+            assert not hasattr(dialog, "chkPublishInternal")
+            assert not hasattr(dialog, "cboTelegramOutputAccount")
+            assert not hasattr(dialog, "cboTelegramOutputChannel")
             dialog.close()
     finally:
         database_manager.close()
