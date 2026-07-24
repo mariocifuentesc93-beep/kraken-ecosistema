@@ -68,49 +68,35 @@ class AccountSelector(QWidget):
         )
 
         self.list.itemChanged.connect(
-            self.selectionChanged.emit
+            self._emit_selection_changed
         )
+
+    def _emit_selection_changed(self, _item=None):
+        """Adapt QListWidget.itemChanged(item) to our argument-free signal."""
+        self.selectionChanged.emit()
 
     # ------------------------------------------------
 
     def loadAccounts(self, accounts):
+        previous = self.list.blockSignals(True)
+        try:
+            self.list.clear()
 
-        self.list.clear()
+            for account in accounts:
+                if hasattr(account, "name"):
+                    text = account.name
+                elif isinstance(account, dict):
+                    text = account.get("name", str(account))
+                else:
+                    text = str(account)
 
-        for account in accounts:
-
-            if hasattr(account, "name"):
-
-                text = account.name
-
-            elif isinstance(account, dict):
-
-                text = account.get(
-                    "name",
-                    str(account),
-                )
-
-            else:
-
-                text = str(account)
-
-            item = QListWidgetItem(text)
-
-            item.setData(
-                Qt.UserRole,
-                account,
-            )
-
-            item.setFlags(
-                item.flags() |
-                Qt.ItemIsUserCheckable
-            )
-
-            item.setCheckState(
-                Qt.Unchecked
-            )
-
-            self.list.addItem(item)
+                item = QListWidgetItem(text)
+                item.setData(Qt.UserRole, account)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Unchecked)
+                self.list.addItem(item)
+        finally:
+            self.list.blockSignals(previous)
 
     # ------------------------------------------------
 
@@ -185,27 +171,15 @@ class AccountSelector(QWidget):
     # ------------------------------------------------
 
     def setSelected(self, ids):
-
         ids = set(ids)
-
-        for i in range(self.list.count()):
-
-            item = self.list.item(i)
-
-            obj = item.data(
-                Qt.UserRole
-            )
-
-            account_id = getattr(
-                obj,
-                "id",
-                None,
-            )
-
-            item.setCheckState(
-
-                Qt.Checked
-                if account_id in ids
-                else Qt.Unchecked
-
-            )
+        previous = self.list.blockSignals(True)
+        try:
+            for i in range(self.list.count()):
+                item = self.list.item(i)
+                obj = item.data(Qt.UserRole)
+                account_id = getattr(obj, "id", None)
+                item.setCheckState(
+                    Qt.Checked if account_id in ids else Qt.Unchecked
+                )
+        finally:
+            self.list.blockSignals(previous)

@@ -58,30 +58,27 @@ class SymbolSelector(QWidget):
         )
 
         self.list.itemChanged.connect(
-            self.selectionChanged.emit
+            self._emit_selection_changed
         )
+
+    def _emit_selection_changed(self, _item=None):
+        """Adapt QListWidget.itemChanged(item) to our argument-free signal."""
+        self.selectionChanged.emit()
 
     # ------------------------------------------------
 
     def loadSymbols(self, symbols):
+        previous = self.list.blockSignals(True)
+        try:
+            self.list.clear()
 
-        self.list.clear()
-
-        for symbol in symbols:
-
-            item = QListWidgetItem(
-                symbol
-            )
-
-            item.setFlags(
-                item.flags() | Qt.ItemIsUserCheckable
-            )
-
-            item.setCheckState(
-                Qt.Unchecked
-            )
-
-            self.list.addItem(item)
+            for symbol in symbols:
+                item = QListWidgetItem(symbol)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Unchecked)
+                self.list.addItem(item)
+        finally:
+            self.list.blockSignals(previous)
 
     # ------------------------------------------------
 
@@ -138,17 +135,13 @@ class SymbolSelector(QWidget):
     # ------------------------------------------------
 
     def setSelected(self, symbols):
-
         symbols = set(symbols)
-
-        for i in range(self.list.count()):
-
-            item = self.list.item(i)
-
-            item.setCheckState(
-
-                Qt.Checked
-                if item.text() in symbols
-                else Qt.Unchecked
-
-            )
+        previous = self.list.blockSignals(True)
+        try:
+            for i in range(self.list.count()):
+                item = self.list.item(i)
+                item.setCheckState(
+                    Qt.Checked if item.text() in symbols else Qt.Unchecked
+                )
+        finally:
+            self.list.blockSignals(previous)

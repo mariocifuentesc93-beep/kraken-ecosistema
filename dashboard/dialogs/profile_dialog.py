@@ -482,7 +482,7 @@ class ProfileDialog(QDialog):
         self.cboTelegramOutputAccount.setEnabled(enabled)
         self.cboTelegramOutputChannel.setEnabled(enabled)
 
-    def _load_output_channels(self):
+    def _load_output_channels(self, *_):
         account_id = self.cboTelegramOutputAccount.currentData()
         previous_channel = self.cboTelegramOutputChannel.currentData()
         self.cboTelegramOutputChannel.clear()
@@ -506,7 +506,7 @@ class ProfileDialog(QDialog):
         if previous_index >= 0:
             self.cboTelegramOutputChannel.setCurrentIndex(previous_index)
 
-    def _load_telegram_channels(self):
+    def _load_telegram_channels(self, *_):
         account_id = self._selected_account_id(self.telegramSelector)
         previous_channel = self.cboTelegramChannel.currentData()
         self.cboTelegramChannel.clear()
