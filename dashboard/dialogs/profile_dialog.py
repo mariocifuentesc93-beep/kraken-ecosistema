@@ -493,7 +493,7 @@ class ProfileDialog(QDialog):
 
     def get_profile_data(self):
 
-    return {
+        return {
 
         "name": self.txtName.text(),
 
@@ -512,7 +512,7 @@ class ProfileDialog(QDialog):
         "default_mt5_account": self.mt5Selector.selectedAccount(),
 
         "telegram_account_id": self.telegramSelector.selectedAccount()
-    }
+        }
 
     def set_mt5_accounts(self, accounts):
 
@@ -577,17 +577,17 @@ class ProfileDialog(QDialog):
 
         nombre = self.txtName.text().strip()
 
-    if not nombre:
+        if not nombre:
 
-        QMessageBox.warning(
-            self,
-            "Perfil",
-            "Debe ingresar un nombre."
-        )
-        return
+            QMessageBox.warning(
+                self,
+                "Perfil",
+                "Debe ingresar un nombre."
+            )
+            return
 
-    if self.profile is None:
-        self.profile = Profile()
+        if self.profile is None:
+            self.profile = Profile()
 
     # Información general
         self.profile.name = nombre
@@ -613,13 +613,13 @@ class ProfileDialog(QDialog):
     # Estado
         self.profile.enabled = True
 
-    if not hasattr(self.profile, "active"):
-        self.profile.active = True
+        if not hasattr(self.profile, "active"):
+            self.profile.active = True
 
-    if self.profile.id:
-        profile_repository.update(self.profile)
-    else:
-        profile_repository.create(self.profile)
+        if self.profile.id:
+            profile_repository.update(self.profile)
+        else:
+            profile_repository.create(self.profile)
 
-    self.accept()
+        self.accept()
 
