@@ -1,6 +1,7 @@
 """Conversión y ejecución manual de INTERNAL en modo observación."""
 
 import argparse
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -79,10 +80,24 @@ class InternalSignalSource:
         directory=None,
         checkpoint_store=None,
         pattern="Kraken_BMSP_*.csv",
+        observation_only=True,
+        ingestion_service=None,
+        logger=None,
     ):
         self.directory = Path(directory or default_internal_directory())
         self.pattern = pattern
         self.checkpoint_store = checkpoint_store
+        self.observation_only = bool(observation_only)
+        self._ingestion_service = ingestion_service
+        self._logger = logger or logging.getLogger(__name__)
+
+    def _get_ingestion_service(self):
+        if self._ingestion_service is None:
+            raise RuntimeError(
+                "ingestion_service es obligatorio cuando "
+                "observation_only=False"
+            )
+        return self._ingestion_service
 
     def scan_file(self, path):
         return [
@@ -90,24 +105,52 @@ class InternalSignalSource:
             for item in assemble_signals(parse_csv(path))
         ]
 
-    def scan_once(self):
+    def process_file(self, path):
         detected = []
-        for path in sorted(self.directory.glob(self.pattern)):
-            for signal in self.scan_file(path):
-                if (
-                    self.checkpoint_store is not None
-                    and self.checkpoint_store.contains(
-                        signal.symbol,
-                        signal.external_signal_id
-                    )
-                ):
-                    continue
+        for signal in self.scan_file(path):
+            if (
+                self.checkpoint_store is not None
+                and self.checkpoint_store.contains(
+                    signal.symbol,
+                    signal.external_signal_id
+                )
+            ):
+                continue
+            if self.observation_only:
                 detected.append(signal)
                 if self.checkpoint_store is not None:
                     self.checkpoint_store.mark(
                         signal.symbol,
                         signal.external_signal_id
                     )
+                continue
+
+            try:
+                result = self._get_ingestion_service().ingest(signal)
+            except Exception as error:
+                self._logger.exception(
+                    "Fallo transitorio ingiriendo INTERNAL %s: %s",
+                    signal.idempotency_key,
+                    error,
+                )
+                continue
+
+            detected.append(result)
+            conclusive = bool(
+                getattr(result, "created", False)
+                or getattr(result, "duplicate", False)
+            )
+            if conclusive and self.checkpoint_store is not None:
+                self.checkpoint_store.mark(
+                    signal.symbol,
+                    signal.external_signal_id
+                )
+        return detected
+
+    def scan_once(self):
+        detected = []
+        for path in sorted(self.directory.glob(self.pattern)):
+            detected.extend(self.process_file(path))
         return detected
 
 

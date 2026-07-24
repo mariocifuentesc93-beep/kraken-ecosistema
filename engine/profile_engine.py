@@ -54,6 +54,24 @@ class ProfileEngine:
             )
             return False
 
+        if getattr(signal, "source", "") == "INTERNAL":
+            from engine.execution_engine import internal_execution_allowed
+
+            if not internal_execution_allowed(profile):
+                mode = getattr(profile, "execution_mode", None)
+                event_bus.warning(
+                    f"Perfil '{profile.name}' bloqueó INTERNAL: "
+                    f"execution_mode={mode} no está permitido en Fase 4."
+                )
+                event_bus.profileFinished.emit(
+                    ProfileFinishedEvent(
+                        profile=profile,
+                        signal=signal,
+                        success=False,
+                    )
+                )
+                return False
+
         signal.profile_id = profile.id
         signal.profile_name = profile.name
         signal.profile_telegram_account_id = getattr(
