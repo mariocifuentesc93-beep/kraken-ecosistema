@@ -263,9 +263,23 @@ def create_tables(connection: sqlite3.Connection):
 
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
+        source TEXT NOT NULL DEFAULT 'TELEGRAM',
+
+        external_signal_id TEXT,
+
+        idempotency_key TEXT NOT NULL,
+
         telegram_account_id INTEGER,
 
+        chat_id INTEGER,
+
+        message_id INTEGER,
+
         profile_id INTEGER,
+
+        received_at TEXT NOT NULL,
+
+        detected_at TEXT,
 
         symbol TEXT,
 
@@ -275,19 +289,15 @@ def create_tables(connection: sqlite3.Connection):
 
         stop_loss REAL,
 
-        tp1 REAL,
-
-        tp2 REAL,
-
-        tp3 REAL,
-
-        market_execution INTEGER DEFAULT 0,
+        take_profits TEXT NOT NULL DEFAULT '[]',
 
         raw_message TEXT,
 
-        status TEXT DEFAULT 'RECEIVED',
+        metadata TEXT NOT NULL DEFAULT '{}',
 
-        created_at TEXT,
+        status TEXT DEFAULT 'NEW',
+
+        score REAL DEFAULT 0,
 
         FOREIGN KEY(profile_id)
             REFERENCES profiles(id)
@@ -300,6 +310,16 @@ def create_tables(connection: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_signals_profile
     ON signals(profile_id)
     """)
+
+    signal_columns = {
+        row[1]
+        for row in cursor.execute("PRAGMA table_info(signals)")
+    }
+    if "idempotency_key" in signal_columns:
+        cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_idempotency
+        ON signals(idempotency_key)
+        """)
 
     # ==========================================================
     # OPERATIONS

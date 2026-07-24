@@ -1,8 +1,19 @@
 from types import SimpleNamespace
+import sqlite3
 
 import pytest
 
+from database.signal_contract_migration import upgrade
 from models.signal import Signal
+
+
+@pytest.fixture
+def unified_database(tmp_path):
+    connection = sqlite3.connect(tmp_path / "signals.db")
+    connection.row_factory = sqlite3.Row
+    upgrade(connection)
+    yield connection
+    connection.close()
 
 
 @pytest.fixture
