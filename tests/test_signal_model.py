@@ -42,5 +42,5 @@ def test_signal_model_can_represent_future_internal_signal():
 
     assert signal.source == "INTERNAL"
     assert signal.external_signal_id == "12241"
-    assert signal.idempotency_key == "INTERNAL:12241"
+    assert signal.idempotency_key == "INTERNAL:LIONX75:12241"
     assert signal.detected_at == datetime(2026, 7, 23, 11, 0)

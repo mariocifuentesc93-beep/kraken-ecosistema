@@ -1,0 +1,4 @@
+scan_time;symbol;object_name;object_type;price_0;text
+2026-07-23 13:00:00;EmasVol40;BMSP_30001_entry_line;OBJ_HLINE;100;ENTRY BUY
+2026-07-23 13:00:00;EmasVol40;BMSP_30001_sl_line;OBJ_HLINE;90;
+2026-07-23 13:00:00;EmasVol40;BMSP_30001_tp1_line;OBJ_HLINE;110;

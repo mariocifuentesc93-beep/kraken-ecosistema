@@ -46,6 +46,34 @@ def _internal_external_id(value) -> str:
     return normalized
 
 
+def normalize_internal_symbol(value) -> str:
+    """Normaliza el símbolo operativo usado en la identidad INTERNAL."""
+    if not isinstance(value, str):
+        raise SignalIdentityError(
+            "symbol debe ser texto para INTERNAL"
+        )
+    normalized = value.strip().upper()
+    if not normalized:
+        raise SignalIdentityError(
+            "symbol es obligatorio para INTERNAL"
+        )
+    if ":" in normalized or any(
+        ord(character) < 32
+        for character in normalized
+    ):
+        raise SignalIdentityError(
+            "symbol contiene caracteres no permitidos para INTERNAL"
+        )
+    return normalized
+
+
+def build_internal_idempotency_key(symbol, external_signal_id) -> str:
+    """Construye la única identidad canónica admitida para INTERNAL."""
+    normalized_symbol = normalize_internal_symbol(symbol)
+    normalized_external_id = _internal_external_id(external_signal_id)
+    return f"INTERNAL:{normalized_symbol}:{normalized_external_id}"
+
+
 @dataclass
 class Signal:
     """Contrato unificado de una señal, independiente de su fuente."""
@@ -132,12 +160,12 @@ class Signal:
 
         if self.source == "INTERNAL":
             try:
-                external_id = _internal_external_id(
-                    self.external_signal_id
+                return build_internal_idempotency_key(
+                    self.symbol,
+                    self.external_signal_id,
                 )
             except SignalIdentityError:
                 return None
-            return f"INTERNAL:{external_id}"
 
         return None
 
@@ -167,11 +195,15 @@ class Signal:
                 f"{self.chat_id}:{self.message_id}"
             )
         elif self.source == "INTERNAL":
+            self.symbol = normalize_internal_symbol(self.symbol)
             external_id = _internal_external_id(
                 self.external_signal_id
             )
             self.external_signal_id = external_id
-            canonical_key = f"INTERNAL:{external_id}"
+            canonical_key = build_internal_idempotency_key(
+                self.symbol,
+                external_id,
+            )
         elif self.source == "LEGACY":
             raise SignalIdentityError(
                 "LEGACY está reservado para la migración"

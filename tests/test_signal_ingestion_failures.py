@@ -75,6 +75,7 @@ def test_repository_failure_never_routes():
     signal = Signal(
         source="INTERNAL",
         external_signal_id="123",
+        symbol="EmasVol20",
     )
 
     result = service.ingest(signal)

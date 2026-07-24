@@ -26,7 +26,8 @@ result = service.ingest(
 identidad dependen de la fuente:
 
 - `TELEGRAM`: `telegram_account_id`, `chat_id` y `message_id`.
-- `INTERNAL`: `external_signal_id`.
+- `INTERNAL`: `symbol` y `external_signal_id`; su clave canónica es
+  `INTERNAL:<SYMBOL_NORMALIZADO>:<external_signal_id>`.
 
 Cuando `chat_id` o `account_id` se entregan como contexto, se copian a la señal
 antes de validar su identidad. La identidad canónica y la

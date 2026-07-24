@@ -1,0 +1,4 @@
+scan_time;symbol;object_name;object_type;price_0;text
+2026-07-23 12:00:00;EmasVol20;BMSP_HUD_conn;OBJ_LABEL;0;Connected
+2026-07-23 12:00:00;EmasVol20;BMSP_HUD_lic;OBJ_LABEL;0;Licensed
+2026-07-23 12:00:00;EmasVol20;BMSP_HUD_dot;OBJ_LABEL;0;●
