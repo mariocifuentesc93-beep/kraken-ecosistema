@@ -754,13 +754,15 @@ class MainWindow(QMainWindow):
 
     def toggle_connection(self, service):
         """Connect or disconnect in a worker, never on Qt's UI thread."""
-        if (
-            service == "Telegram"
-            and not telegram_account_repository.get_all()
-        ):
-            self.telegramPage.refresh()
-            self.navigate_to_page("Cuentas Telegram")
-            return
+        if service == "Telegram":
+            accounts = telegram_account_repository.get_all()
+            if not any(
+                account.enabled and account.authorized
+                for account in accounts
+            ):
+                self.telegramPage.refresh()
+                self.navigate_to_page("Cuentas Telegram")
+                return
 
         def work():
             try:

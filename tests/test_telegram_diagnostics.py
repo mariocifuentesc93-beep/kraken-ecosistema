@@ -13,6 +13,7 @@ from repositories.profile_telegram_repository import profile_telegram_channel_re
 from repositories.telegram_account_repository import telegram_account_repository
 from repositories.telegram_diagnostics_repository import telegram_diagnostics_repository
 from services.telegram_diagnostics import TelegramDiagnostics
+from telegram.async_runner import AsyncioThreadRunner
 
 
 class PasswordRequiredError(Exception):
@@ -45,6 +46,31 @@ class FakeClient:
     async def get_entity(self, chat_id):
         if self.inaccessible: raise ValueError("access denied")
         return SimpleNamespace(title=f"Channel {chat_id}")
+
+
+class LoopBoundFakeClient(FakeClient):
+    def __init__(self):
+        super().__init__()
+        self.loop_ids = []
+
+    def _record_loop(self):
+        self.loop_ids.append(id(asyncio.get_running_loop()))
+
+    async def connect(self):
+        self._record_loop()
+        await super().connect()
+
+    async def send_code_request(self, phone):
+        self._record_loop()
+        await super().send_code_request(phone)
+
+    async def sign_in(self, *args, **kwargs):
+        self._record_loop()
+        await super().sign_in(*args, **kwargs)
+
+    async def is_user_authorized(self):
+        self._record_loop()
+        return await super().is_user_authorized()
 
 
 class TelegramDiagnosticsTests(unittest.TestCase):
@@ -112,6 +138,26 @@ class TelegramDiagnosticsTests(unittest.TestCase):
         self.assertEqual(report["status"], TelegramDiagnostics.DISCONNECTED)
         asyncio.run(service.delete_local_session(self.account))
         self.assertFalse(session.exists())
+
+    def test_authorization_reuses_one_persistent_event_loop(self):
+        client = LoopBoundFakeClient()
+        service = self.service(client)
+        runner = AsyncioThreadRunner("TelegramAuthorizationTest")
+        try:
+            sent = runner.run(service.start_authorization(self.account))
+            self.assertEqual(sent["status"], TelegramDiagnostics.CODE_REQUIRED)
+            authorized = runner.run(
+                service.verify_code(self.account, "12345")
+            )
+            self.assertEqual(
+                authorized["status"],
+                TelegramDiagnostics.AUTHORIZED,
+            )
+            self.assertGreaterEqual(len(client.loop_ids), 4)
+            self.assertEqual(len(set(client.loop_ids)), 1)
+            runner.run(service.disconnect_all())
+        finally:
+            runner.shutdown()
 
 
 if __name__ == "__main__":

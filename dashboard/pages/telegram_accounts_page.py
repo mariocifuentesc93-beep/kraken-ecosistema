@@ -1,5 +1,5 @@
-import asyncio
 from datetime import datetime
+from uuid import uuid4
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -13,6 +13,7 @@ from models.telegram_account import TelegramAccount
 from repositories.telegram_account_repository import telegram_account_repository
 from telegram.account_manager import telegram_account_manager
 from services.telegram_diagnostics import telegram_diagnostics
+from telegram.async_runner import telegram_async_runner
 
 
 class TelegramAccountsPage(QWidget):
@@ -158,11 +159,7 @@ class TelegramAccountsPage(QWidget):
 
     @staticmethod
     def _run(coroutine):
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(coroutine)
-        raise RuntimeError("Telegram no puede conectarse mientras hay un ciclo asíncrono activo.")
+        return telegram_async_runner.run(coroutine)
 
     def login(self):
         account = self.selected_account()
@@ -181,26 +178,88 @@ class TelegramAccountsPage(QWidget):
         if account is None:
             QMessageBox.warning(self, "Telegram", "Seleccione una cuenta.")
             return
-        self.last_diagnostic = self._run(telegram_diagnostics.start_authorization(account))
-        self._show_diagnostic(self.last_diagnostic)
-        self.refresh()
+        account = self._prepare_authorization_account(account)
+        self.btn_start_auth.setEnabled(False)
+        self.btn_start_auth.setText("Esperando código…")
+        try:
+            report = self._run(
+                telegram_diagnostics.start_authorization(account)
+            )
+            if report["status"] == telegram_diagnostics.CODE_REQUIRED:
+                report = self._prompt_and_verify(account, report)
+            self.last_diagnostic = report
+            self._show_diagnostic(report)
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Autorización Telegram",
+                f"No se pudo completar la autorización: {error}",
+            )
+        finally:
+            self.btn_start_auth.setText("Iniciar autorización")
+            self.btn_start_auth.setEnabled(True)
+            self.refresh()
+
+    @staticmethod
+    def _prepare_authorization_account(account):
+        changed = False
+        if not str(getattr(account, "session_name", "") or "").strip():
+            account.session_name = (
+                f"sessions/telegram_{uuid4().hex[:16]}"
+            )
+            changed = True
+        if not bool(getattr(account, "enabled", False)):
+            account.enabled = True
+            changed = True
+        if changed:
+            account.updated_at = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            telegram_account_repository.update(account)
+            telegram_account_manager.reload()
+        return account
 
     def verify_authorization(self):
         account = self.selected_account()
         if account is None:
             QMessageBox.warning(self, "Telegram", "Seleccione una cuenta.")
             return
-        code, accepted = QInputDialog.getText(self, "Código Telegram", "Código recibido:")
-        if not accepted or not code:
+        report = self._prompt_and_verify(account)
+        if report is None:
             return
-        report = self._run(telegram_diagnostics.verify_code(account, code))
-        if report["status"] == telegram_diagnostics.PASSWORD_REQUIRED:
-            password, accepted = QInputDialog.getText(self, "Contraseña Telegram", "Contraseña de dos pasos:", QLineEdit.Password)
-            if accepted and password:
-                report = self._run(telegram_diagnostics.verify_code(account, code, password))
         self.last_diagnostic = report
         self._show_diagnostic(report)
         self.refresh()
+
+    def _prompt_and_verify(self, account, current_report=None):
+        code, accepted = QInputDialog.getText(
+            self,
+            "Autorización Telegram",
+            "Introduzca el código recibido en Telegram",
+        )
+        if not accepted or not code:
+            return current_report
+        code = code.strip()
+        if not code:
+            return current_report
+        report = self._run(telegram_diagnostics.verify_code(account, code))
+        if report["status"] == telegram_diagnostics.PASSWORD_REQUIRED:
+            password, accepted = QInputDialog.getText(
+                self,
+                "Verificación en dos pasos",
+                "Introduzca la contraseña de dos pasos de Telegram",
+                QLineEdit.Password,
+            )
+            if not accepted or not password:
+                return report
+            report = self._run(
+                telegram_diagnostics.verify_code(
+                    account,
+                    code,
+                    password,
+                )
+            )
+        return report
 
     def logout(self):
         account = self.selected_account()

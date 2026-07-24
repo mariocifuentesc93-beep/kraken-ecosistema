@@ -55,3 +55,28 @@ def test_dashboard_connect_opens_account_setup_when_no_account(monkeypatch):
 
     assert refreshed == [True]
     assert destinations == ["Cuentas Telegram"]
+
+
+def test_dashboard_connect_opens_authorization_for_pending_account(
+    monkeypatch,
+):
+    refreshed = []
+    destinations = []
+    fake_window = SimpleNamespace(
+        telegramPage=SimpleNamespace(
+            refresh=lambda: refreshed.append(True),
+        ),
+        navigate_to_page=lambda title: destinations.append(title),
+    )
+    monkeypatch.setattr(
+        main_window.telegram_account_repository,
+        "get_all",
+        lambda: [
+            SimpleNamespace(enabled=True, authorized=False),
+        ],
+    )
+
+    MainWindow.toggle_connection(fake_window, "Telegram")
+
+    assert refreshed == [True]
+    assert destinations == ["Cuentas Telegram"]

@@ -58,11 +58,7 @@ class TelegramDiagnostics:
     def _client(self, account):
         if account.id not in self.clients:
             self.clients[account.id] = self.client_factory(account.session_name, int(account.api_id), account.api_hash)
-        client = self.clients[account.id]
-        from telegram.account_manager import telegram_account_manager
-
-        telegram_account_manager.register_client(account.id, client)
-        return client
+        return self.clients[account.id]
 
     async def test_connection(self, account, timeout=10):
         report = self._report(account, self.CONNECTING)
@@ -145,6 +141,15 @@ class TelegramDiagnostics:
         report = self._report(account, self.DISCONNECTED)
         report["authorized"] = bool(getattr(account, "authorized", False))
         return self._persist(account, report, self.DISCONNECTED)
+
+    async def disconnect_all(self):
+        for client in list(self.clients.values()):
+            try:
+                if client.is_connected():
+                    await client.disconnect()
+            except Exception:
+                pass
+        self.clients.clear()
 
     async def delete_local_session(self, account):
         await self.disconnect(account)

@@ -94,6 +94,7 @@ class TelegramAccountDialog(QDialog):
         self.chkEnabled = QCheckBox(
             "Cuenta habilitada"
         )
+        self.chkEnabled.setChecked(True)
 
         form.addRow(
             "Nombre",
