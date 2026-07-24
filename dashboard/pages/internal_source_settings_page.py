@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 import traceback
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -31,8 +31,7 @@ from dashboard.ui_theme import refresh_widget_style
 
 
 class _AsyncCallWorker(QObject):
-    finished = Signal(object)
-    failed = Signal(object)
+    completed = Signal(object)
 
     def __init__(self, callable_):
         super().__init__()
@@ -45,17 +44,27 @@ class _AsyncCallWorker(QObject):
                 raise RuntimeError(
                     "El worker recibió una coroutine sin programar."
                 )
-            self.finished.emit(value)
+            outcome = _AsyncCallOutcome(value=value)
         except Exception as error:
-            self.failed.emit(
-                _AsyncCallFailure(error, traceback.format_exc())
+            outcome = _AsyncCallOutcome(
+                failure=_AsyncCallFailure(
+                    error,
+                    traceback.format_exc(),
+                )
             )
+        self.completed.emit(outcome)
 
 
 @dataclass(frozen=True)
 class _AsyncCallFailure:
     error: Exception
     traceback_text: str
+
+
+@dataclass(frozen=True)
+class _AsyncCallOutcome:
+    value: object = None
+    failure: _AsyncCallFailure | None = None
 
 
 class InternalSourceSettingsPage(QWidget):
@@ -325,23 +334,49 @@ class InternalSourceSettingsPage(QWidget):
     def _start_worker(self, callable_, success, failure):
         thread = QThread(self)
         worker = _AsyncCallWorker(callable_)
-        worker_entry = (thread, worker)
+        worker_entry = {
+            "thread": thread,
+            "worker": worker,
+            "success": success,
+            "failure": failure,
+            "outcome": None,
+        }
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        worker.finished.connect(success)
-        worker.failed.connect(failure)
-        worker.finished.connect(thread.quit)
-        worker.failed.connect(thread.quit)
-        thread.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(
-            lambda: self._workers.remove(worker_entry)
-            if worker_entry in self._workers
-            else None
+
+        def capture_outcome(outcome):
+            worker_entry["outcome"] = outcome
+
+        worker.completed.connect(
+            capture_outcome,
+            Qt.DirectConnection,
         )
+        worker.completed.connect(worker.deleteLater)
+        worker.completed.connect(thread.quit, Qt.DirectConnection)
+        thread.finished.connect(
+            lambda: self._finish_worker(worker_entry)
+        )
+        thread.finished.connect(thread.deleteLater)
         # Keep both Qt objects alive until the queued result has been handled.
         self._workers.append(worker_entry)
         thread.start()
+
+    def _finish_worker(self, worker_entry):
+        if worker_entry in self._workers:
+            self._workers.remove(worker_entry)
+        outcome = worker_entry["outcome"]
+        if outcome is None:
+            worker_entry["failure"](
+                _AsyncCallFailure(
+                    RuntimeError("El worker terminó sin resultado."),
+                    "El QThread finalizó sin emitir completed.",
+                )
+            )
+            return
+        if outcome.failure is not None:
+            worker_entry["failure"](outcome.failure)
+            return
+        worker_entry["success"](outcome.value)
 
     def _apply_live_destinations(self, items):
         selected = self.destination_combo.currentData()
@@ -542,6 +577,8 @@ class InternalSourceSettingsPage(QWidget):
 
     def _test_send_ok(self, _result=None, identifiers=None):
         identifiers = identifiers or self._test_context
+        self._test_context = None
+        self._update_actions()
         try:
             self._log_test("INFO", "ÉXITO", identifiers)
             QMessageBox.information(
@@ -549,9 +586,14 @@ class InternalSourceSettingsPage(QWidget):
                 "Prueba Telegram",
                 "Mensaje de prueba enviado correctamente.",
             )
-        finally:
-            self._test_context = None
-            self._update_actions()
+        except Exception:
+            self._log_test(
+                "ERROR",
+                "ERROR",
+                identifiers,
+                traceback.format_exc(),
+            )
+            raise
 
     def _test_send_error(self, failure, identifiers=None):
         identifiers = identifiers or self._test_context
@@ -565,6 +607,8 @@ class InternalSourceSettingsPage(QWidget):
         detail = (
             f"{failure.error}\n{failure.traceback_text}".strip()
         )
+        self._test_context = None
+        self._update_actions()
         try:
             self._log_test("ERROR", state, identifiers, detail)
             if is_timeout:
@@ -580,6 +624,11 @@ class InternalSourceSettingsPage(QWidget):
                     "No se pudo enviar el mensaje de prueba: "
                     f"{failure.error}",
                 )
-        finally:
-            self._test_context = None
-            self._update_actions()
+        except Exception:
+            self._log_test(
+                "ERROR",
+                "ERROR",
+                identifiers,
+                traceback.format_exc(),
+            )
+            raise

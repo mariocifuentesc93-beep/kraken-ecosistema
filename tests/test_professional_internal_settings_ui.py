@@ -279,6 +279,7 @@ def test_async_test_send_success_uses_runner_logs_and_reenables(monkeypatch):
     app = QApplication.instance() or QApplication([])
     events = MemoryLogRepository()
     dialogs = []
+    worker_thread = {}
 
     class Client:
         def __init__(self):
@@ -305,10 +306,15 @@ def test_async_test_send_success_uses_runner_logs_and_reenables(monkeypatch):
             return asyncio.run(coroutine)
 
     manager = Manager()
+
+    def show_information(*args):
+        assert worker_thread["value"].isRunning() is False
+        dialogs.append(args[-1])
+
     monkeypatch.setattr(
         QMessageBox,
         "information",
-        lambda *args: dialogs.append(args[-1]),
+        show_information,
     )
     page = InternalSourceSettingsPage(
         config_repository=MemoryConfigRepository(),
@@ -324,6 +330,7 @@ def test_async_test_send_success_uses_runner_logs_and_reenables(monkeypatch):
     )
 
     assert page.test_send() is True
+    worker_thread["value"] = page._workers[0]["thread"]
     deadline = time.time() + 2
     while page._workers and time.time() < deadline:
         app.processEvents()
@@ -338,6 +345,8 @@ def test_async_test_send_success_uses_runner_logs_and_reenables(monkeypatch):
     assert dialogs
     assert "ÉXITO" in events.rows[-1]["message"]
     assert page.test_button.isEnabled() is True
+    assert worker_thread["value"].isRunning() is False
+    assert QApplication.activeModalWidget() is None
     page.close()
 
 
