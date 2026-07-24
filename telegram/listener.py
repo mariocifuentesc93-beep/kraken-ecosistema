@@ -1,27 +1,56 @@
 from telethon import events
 
-from core.signal_pipeline import process_signal_message
-from repositories.profile_telegram_repository import profile_telegram_channel_repository
+from core.signal_parser import parse_signal
 
 
-def register_telegram_listener(client):
+def register_telegram_listener(
+    client,
+    account_id=None,
+    signal_processor=None,
+):
+    """
+    Registra el adaptador de entrada Telegram.
+
+    El listener solo normaliza el mensaje y conserva su contexto de origen.
+    SignalIngestionService valida y persiste una sola vez. SignalEngine
+    conserva la responsabilidad de seleccionar y validar los perfiles.
+
+    ``signal_processor`` permite probar este adaptador sin iniciar KrakenEngine.
+    """
+
+    if signal_processor is None:
+        from engine.kraken_engine import kraken_engine
+        signal_processor = kraken_engine.process_telegram_signal
+
     @client.on(events.NewMessage)
     async def new_message_handler(event):
+
         message = event.message
         text = message.message or ""
         chat_id = int(event.chat_id)
-        profiles = profile_telegram_channel_repository.get_profiles(chat_id)
 
-        # Every source message produces a persisted decision. No listener path
-        # invokes the execution engine during connectivity validation.
-        if not profiles:
-            process_signal_message(text, chat_id=chat_id, source="Telegram")
+        print()
+        print("=" * 60)
+        print("NUEVO MENSAJE TELEGRAM")
+        print("=" * 60)
+        print(f"Chat ID: {chat_id}")
+
+        signal = parse_signal(text)
+
+        if signal is None:
+            print("El mensaje no corresponde a una señal.")
             return
-        for profile in profiles:
-            process_signal_message(
-                text,
-                chat_id=chat_id,
-                account_id=getattr(profile, "telegram_account_id", None),
-                profile=profile,
-                source="Telegram",
-            )
+
+        signal.source = "TELEGRAM"
+        signal.telegram_account_id = account_id
+        signal.chat_id = chat_id
+        signal.message_id = message.id
+        signal.idempotency_key = signal.build_idempotency_key()
+
+        signal_processor(
+            signal=signal,
+            chat_id=chat_id,
+            account_id=account_id,
+        )
+
+    return new_message_handler

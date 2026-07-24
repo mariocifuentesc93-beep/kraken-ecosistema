@@ -1,11 +1,4 @@
-from engine.execution_engine import execution_engine
-
-from repositories.profile_mt5_repository import (
-    profile_mt5_repository,
-)
-
 from core.event_bus import event_bus
-
 from core.events import (
     ProfileStartedEvent,
     ProfileFinishedEvent,
@@ -17,36 +10,41 @@ from core.events import (
 
 class ProfileEngine:
 
-    # ---------------------------------------------------------
-
-    def process_signal(
+    def __init__(
         self,
-        signal,
-        profile,
+        accounts_provider=None,
+        execution_engine_instance=None,
     ):
+        self._accounts_provider = accounts_provider
+        self._execution_engine = execution_engine_instance
 
-        print()
-        print("-" * 60)
-        print(f"👤 PROFILE ENGINE -> {profile.name}")
-        print("-" * 60)
+    def _get_accounts(self, profile_id):
+        if self._accounts_provider is None:
+            from repositories.profile_mt5_repository import (
+                profile_mt5_repository,
+            )
+            self._accounts_provider = profile_mt5_repository.get_accounts
+
+        return self._accounts_provider(profile_id)
+
+    def _get_execution_engine(self):
+        if self._execution_engine is None:
+            from engine.execution_engine import execution_engine
+            self._execution_engine = execution_engine
+
+        return self._execution_engine
+
+    def process_signal(self, signal, profile):
+        """Aplica el contexto de un perfil y delega sus cuentas MT5."""
 
         event_bus.profileStarted.emit(
-            ProfileStartedEvent(
-                profile=profile,
-                signal=signal,
-            )
+            ProfileStartedEvent(profile=profile, signal=signal)
         )
 
-        # -----------------------------------------------------
-        # VALIDAR PERFIL
-        # -----------------------------------------------------
-
         if not getattr(profile, "enabled", True):
-
             event_bus.warning(
                 f"Perfil '{profile.name}' deshabilitado."
             )
-
             event_bus.profileFinished.emit(
                 ProfileFinishedEvent(
                     profile=profile,
@@ -54,62 +52,46 @@ class ProfileEngine:
                     success=False,
                 )
             )
-
-            print(
-                f"[ProfileEngine] Perfil '{profile.name}' deshabilitado."
-            )
-
             return False
 
-        # -----------------------------------------------------
-        # CONTEXTO
-        # -----------------------------------------------------
+        if getattr(signal, "source", "") == "INTERNAL":
+            from engine.execution_engine import internal_execution_allowed
+
+            if not internal_execution_allowed(profile):
+                mode = getattr(profile, "execution_mode", None)
+                event_bus.warning(
+                    f"Perfil '{profile.name}' bloqueó INTERNAL: "
+                    f"execution_mode={mode} no está permitido en Fase 4."
+                )
+                event_bus.profileFinished.emit(
+                    ProfileFinishedEvent(
+                        profile=profile,
+                        signal=signal,
+                        success=False,
+                    )
+                )
+                return False
 
         signal.profile_id = profile.id
         signal.profile_name = profile.name
-
-        if hasattr(profile, "telegram_account_id"):
-            signal.profile_telegram_account_id = (
-                profile.telegram_account_id
-            )
-
-        if hasattr(profile, "execution_mode"):
-            signal.execution_mode = profile.execution_mode
-
-        if hasattr(profile, "tp_level"):
-            signal.tp_level = profile.tp_level
-
-        if hasattr(profile, "execute_market"):
-            signal.execute_market = profile.execute_market
-
-        # -----------------------------------------------------
-        # CUENTAS MT5
-        # -----------------------------------------------------
-
-        accounts = profile_mt5_repository.get_accounts(
-            profile.id
+        signal.profile_telegram_account_id = getattr(
+            profile,
+            "telegram_account_id",
+            None,
+        )
+        signal.execution_mode = getattr(
+            profile,
+            "execution_mode",
+            None,
+        )
+        signal.tp_level = getattr(profile, "tp_level", 1)
+        signal.execute_market = getattr(
+            profile,
+            "execute_market",
+            True,
         )
 
-        if not accounts:
-
-            event_bus.warning(
-                f"{profile.name} no tiene cuentas MT5."
-            )
-
-            event_bus.profileFinished.emit(
-                ProfileFinishedEvent(
-                    profile=profile,
-                    signal=signal,
-                    success=False,
-                )
-            )
-
-            print(
-                f"[ProfileEngine] {profile.name} no tiene cuentas MT5."
-            )
-
-            return False
-
+        accounts = self._get_accounts(profile.id)
         enabled_accounts = [
             account
             for account in accounts
@@ -117,11 +99,9 @@ class ProfileEngine:
         ]
 
         if not enabled_accounts:
-
             event_bus.warning(
-                f"{profile.name} no tiene cuentas activas."
+                f"{profile.name} no tiene cuentas MT5 activas."
             )
-
             event_bus.profileFinished.emit(
                 ProfileFinishedEvent(
                     profile=profile,
@@ -129,21 +109,9 @@ class ProfileEngine:
                     success=False,
                 )
             )
-
-            print(
-                f"[ProfileEngine] {profile.name} no tiene cuentas MT5 activas."
-            )
-
             return False
 
-        print(f"Cuentas MT5 activas: {len(enabled_accounts)}")
-
-        # -----------------------------------------------------
-        # EJECUCIÓN
-        # -----------------------------------------------------
-
         for account in enabled_accounts:
-
             event_bus.executionStarted.emit(
                 ExecutionStartedEvent(
                     profile=profile,
@@ -153,42 +121,28 @@ class ProfileEngine:
             )
 
         try:
-
-            success = execution_engine.execute_multiple(
+            success = self._get_execution_engine().execute_multiple(
                 signal=signal,
                 profile=profile,
                 accounts=enabled_accounts,
             )
-
-        except Exception as e:
-
+        except Exception as error:
             for account in enabled_accounts:
-
                 event_bus.executionFailed.emit(
                     ExecutionFailedEvent(
                         profile=profile,
                         account=account,
                         signal=signal,
-                        error=str(e),
+                        error=str(error),
                     )
                 )
 
             event_bus.error(
-                f"Error ejecutando perfil '{profile.name}': {e}"
+                f"Error ejecutando perfil '{profile.name}': {error}"
             )
-
-            event_bus.profileFinished.emit(
-                ProfileFinishedEvent(
-                    profile=profile,
-                    signal=signal,
-                    success=False,
-                )
-            )
-
-            return False
+            success = False
 
         for account in enabled_accounts:
-
             event_bus.executionFinished.emit(
                 ExecutionFinishedEvent(
                     profile=profile,
@@ -205,18 +159,6 @@ class ProfileEngine:
                 success=success,
             )
         )
-
-        if success:
-
-            event_bus.log(
-                f"Perfil '{profile.name}' ejecutado correctamente."
-            )
-
-        else:
-
-            event_bus.warning(
-                f"El perfil '{profile.name}' no pudo ejecutar la señal."
-            )
 
         return success
 

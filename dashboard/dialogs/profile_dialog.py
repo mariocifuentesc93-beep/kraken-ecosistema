@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import (
     QComboBox,
+    QCheckBox,
     QDialog,
     QDoubleSpinBox,
     QFormLayout,
@@ -125,6 +126,12 @@ class ProfileDialog(QDialog):
         # operation_mode remains a legacy persisted field.  Keep it synchronized
         # without presenting a second, conflicting selector to the operator.
         self.cboExecution.currentTextChanged.connect(self.cboMode.setCurrentText)
+        self.cboSignalSource = QComboBox()
+        self.cboSignalSource.addItems(["OFF", "TELEGRAM", "INTERNAL", "BOTH"])
+        self.cboSignalSource.setToolTip(
+            "Selecciona de dónde acepta señales este perfil. "
+            "Esta opción es independiente del modo de ejecución."
+        )
         self.cboRiskMode = QComboBox()
         self.cboRiskMode.addItems(["PERCENT", "AMOUNT"])
         self.spnMaxTrades = QSpinBox()
@@ -143,6 +150,7 @@ class ProfileDialog(QDialog):
         self.spnTP = QSpinBox()
 
         form.addRow("Modo de ejecuci\u00f3n", self.cboExecution)
+        form.addRow("Fuente de señales", self.cboSignalSource)
         form.addRow("Riesgo", self.cboRiskMode)
         form.addRow("Máx. Operaciones", self.spnMaxTrades)
         form.addRow("Puntaje mínimo", self.spnScore)
@@ -207,6 +215,30 @@ class ProfileDialog(QDialog):
         section.addWidget(self.cboTelegramChannel)
         self.telegramSelector.selectionChanged.connect(self._load_telegram_channels)
         layout.addWidget(section)
+
+        output_section = SectionWidget("Publicación de señales INTERNAL")
+        output_form = QFormLayout()
+        self.chkPublishInternal = QCheckBox(
+            "Publicar las señales INTERNAL de este perfil"
+        )
+        self.cboTelegramOutputAccount = QComboBox()
+        self.cboTelegramOutputChannel = QComboBox()
+        self.cboTelegramOutputAccount.currentIndexChanged.connect(
+            self._load_output_channels
+        )
+        self.chkPublishInternal.toggled.connect(
+            self._update_output_controls
+        )
+        output_form.addRow(self.chkPublishInternal)
+        output_form.addRow(
+            "Cuenta de salida", self.cboTelegramOutputAccount
+        )
+        output_form.addRow(
+            "Canal de salida", self.cboTelegramOutputChannel
+        )
+        output_section.addLayout(output_form)
+        layout.addWidget(output_section)
+        self._update_output_controls(False)
         layout.addStretch()
         self.tabs.addTab(page, "Telegram")
 
@@ -271,6 +303,9 @@ class ProfileDialog(QDialog):
         execution_mode = profile.execution_mode or profile.operation_mode or "OFF"
         self.cboExecution.setCurrentText(execution_mode)
         self.cboMode.setCurrentText(execution_mode)
+        self.cboSignalSource.setCurrentText(
+            getattr(profile, "signal_source_mode", "TELEGRAM")
+        )
         risk_mode = profile.risk_mode if profile.risk_mode in {"PERCENT", "AMOUNT"} else "PERCENT"
         self.cboRiskMode.setCurrentText(risk_mode)
         self.spnMaxTrades.setValue(profile.max_open_trades)
@@ -303,6 +338,21 @@ class ProfileDialog(QDialog):
         selected_channel = self.cboTelegramChannel.findData(profile.telegram_channel_id)
         if selected_channel >= 0:
             self.cboTelegramChannel.setCurrentIndex(selected_channel)
+        self.chkPublishInternal.setChecked(
+            bool(getattr(profile, "publish_internal_to_telegram", False))
+        )
+        output_account_index = self.cboTelegramOutputAccount.findData(
+            getattr(profile, "telegram_output_account_id", None)
+        )
+        if output_account_index >= 0:
+            self.cboTelegramOutputAccount.setCurrentIndex(output_account_index)
+        self._load_output_channels()
+        output_channel_index = self.cboTelegramOutputChannel.findData(
+            getattr(profile, "telegram_output_chat_id", None)
+        )
+        if output_channel_index >= 0:
+            self.cboTelegramOutputChannel.setCurrentIndex(output_channel_index)
+        self._update_output_controls(self.chkPublishInternal.isChecked())
 
         self._profile_symbols = {
             symbol.symbol: symbol
@@ -338,6 +388,7 @@ class ProfileDialog(QDialog):
             "description": self.profile.description if self.profile else "",
             "comment": self.txtComment.text(),
             "operation_mode": self.cboExecution.currentText(),
+            "signal_source_mode": self.cboSignalSource.currentText(),
             "magic_number": self.spnMagic.value(),
             "execution_mode": self.cboExecution.currentText(),
             "risk_mode": risk_mode,
@@ -365,6 +416,19 @@ class ProfileDialog(QDialog):
                 self.telegramSelector
             ),
             "telegram_channel_id": self.cboTelegramChannel.currentData(),
+            "publish_internal_to_telegram": (
+                self.chkPublishInternal.isChecked()
+            ),
+            "telegram_output_account_id": (
+                self.cboTelegramOutputAccount.currentData()
+                if self.chkPublishInternal.isChecked()
+                else None
+            ),
+            "telegram_output_chat_id": (
+                self.cboTelegramOutputChannel.currentData()
+                if self.chkPublishInternal.isChecked()
+                else None
+            ),
         }
 
     def set_mt5_accounts(self, accounts):
@@ -391,7 +455,56 @@ class ProfileDialog(QDialog):
 
     def set_telegram_accounts(self, accounts):
         self.telegramSelector.loadAccounts(accounts)
+        previous_output = self.cboTelegramOutputAccount.currentData()
+        self.cboTelegramOutputAccount.clear()
+        self.cboTelegramOutputAccount.addItem("Sin seleccionar", None)
+        for account in accounts:
+            account_id = (
+                account.get("id")
+                if isinstance(account, dict)
+                else getattr(account, "id", None)
+            )
+            name = (
+                account.get("name")
+                if isinstance(account, dict)
+                else getattr(account, "name", str(account_id))
+            )
+            self.cboTelegramOutputAccount.addItem(name, account_id)
+        previous_index = self.cboTelegramOutputAccount.findData(
+            previous_output
+        )
+        if previous_index >= 0:
+            self.cboTelegramOutputAccount.setCurrentIndex(previous_index)
         self._load_telegram_channels()
+        self._load_output_channels()
+
+    def _update_output_controls(self, enabled):
+        self.cboTelegramOutputAccount.setEnabled(enabled)
+        self.cboTelegramOutputChannel.setEnabled(enabled)
+
+    def _load_output_channels(self):
+        account_id = self.cboTelegramOutputAccount.currentData()
+        previous_channel = self.cboTelegramOutputChannel.currentData()
+        self.cboTelegramOutputChannel.clear()
+        self.cboTelegramOutputChannel.addItem("Sin seleccionar", None)
+        if account_id is None:
+            return
+        for channel in profile_telegram_channel_repository.get_available_channels(
+            account_id
+        ):
+            title = (
+                channel.get("title")
+                or channel.get("username")
+                or str(channel["chat_id"])
+            )
+            self.cboTelegramOutputChannel.addItem(
+                title, channel["chat_id"]
+            )
+        previous_index = self.cboTelegramOutputChannel.findData(
+            previous_channel
+        )
+        if previous_index >= 0:
+            self.cboTelegramOutputChannel.setCurrentIndex(previous_index)
 
     def _load_telegram_channels(self):
         account_id = self._selected_account_id(self.telegramSelector)

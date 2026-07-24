@@ -41,9 +41,17 @@ def create_tables(connection: sqlite3.Connection):
 
         operation_mode TEXT DEFAULT 'telegram',
 
+        signal_source_mode TEXT DEFAULT 'TELEGRAM',
+
         telegram_account_id INTEGER,
 
         telegram_channel_id INTEGER,
+
+        publish_internal_to_telegram INTEGER NOT NULL DEFAULT 0,
+
+        telegram_output_account_id INTEGER,
+
+        telegram_output_chat_id INTEGER,
 
         default_mt5_account INTEGER,
 
@@ -132,6 +140,10 @@ def create_tables(connection: sqlite3.Connection):
         "total_loss": "REAL DEFAULT 0",
         "net_profit": "REAL DEFAULT 0",
         "win_rate": "REAL DEFAULT 0",
+        "signal_source_mode": "TEXT DEFAULT 'TELEGRAM'",
+        "publish_internal_to_telegram": "INTEGER NOT NULL DEFAULT 0",
+        "telegram_output_account_id": "INTEGER",
+        "telegram_output_chat_id": "INTEGER",
     }.items():
         if column not in profile_columns:
             cursor.execute(
@@ -419,14 +431,59 @@ def create_tables(connection: sqlite3.Connection):
     """)
 
     _ensure_columns(cursor, "signals", {
-        "source": "TEXT DEFAULT 'Telegram'",
+        "source": "TEXT NOT NULL DEFAULT 'TELEGRAM'",
+        "external_signal_id": "TEXT",
+        "idempotency_key": "TEXT",
+        "chat_id": "INTEGER",
         "message_id": "INTEGER",
+        "received_at": "TEXT",
+        "detected_at": "TEXT",
+        "take_profits": "TEXT NOT NULL DEFAULT '[]'",
+        "metadata": "TEXT NOT NULL DEFAULT '{}'",
         "score": "REAL DEFAULT 0",
         "rejection_reason": "TEXT DEFAULT ''",
         "parsed_fields": "TEXT DEFAULT '{}'",
         "trade_request": "TEXT DEFAULT '{}'",
         "execution_decision": "TEXT DEFAULT ''",
     })
+
+    cursor.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_idempotency
+    ON signals(idempotency_key)
+    WHERE idempotency_key IS NOT NULL
+    """)
+
+    # ==========================================================
+    # INTERNAL -> TELEGRAM PUBLICATIONS
+    # ==========================================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_publications(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        signal_id INTEGER NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        telegram_account_id INTEGER NOT NULL,
+        chat_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        sent_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(signal_id) REFERENCES signals(id) ON DELETE CASCADE,
+        FOREIGN KEY(telegram_account_id)
+            REFERENCES telegram_accounts(id) ON DELETE RESTRICT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_publication_destination
+    ON telegram_publications(
+        idempotency_key,
+        telegram_account_id,
+        chat_id
+    )
+    """)
 
     # ==========================================================
     # OPERATIONS

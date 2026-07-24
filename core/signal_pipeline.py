@@ -25,14 +25,24 @@ def process_signal_message(text, chat_id=None, account_id=None, profile=None, so
     """Persist signal decisions without sending an MT5 order."""
     signal = parse_signal(text)
     signal.source = source
-    signal.chat_id = chat_id
-    signal.telegram_account_id = account_id
+    signal.chat_id = 0 if chat_id is None else chat_id
+    signal.telegram_account_id = 0 if account_id is None else account_id
+    signal.message_id = int.from_bytes(
+        hashlib.sha256(text.encode("utf-8")).digest()[:7],
+        byteorder="big",
+        signed=False,
+    )
+    signal.idempotency_key = None
+    signal.validate_persistent_identity()
     if profile is not None:
         signal.profile_id = profile.id
         signal.profile_name = profile.name
 
     valid, errors = validate_signal(signal)
-    if signal_repository.is_duplicate(signal.raw_message, chat_id):
+    duplicate_detected = signal_repository.exists_by_idempotency_key(
+        signal.idempotency_key
+    )
+    if duplicate_detected:
         errors.append("Señal duplicada")
     signal.score = _score(signal, valid and not errors)
     minimum_score = float(getattr(profile, "min_signal_score", 0) or 0)
@@ -63,4 +73,9 @@ def process_signal_message(text, chat_id=None, account_id=None, profile=None, so
         else:
             signal.status = "ACCEPTED"
             signal.execution_decision = "PENDING_MANUAL_APPROVAL"
-    return signal_repository.create(signal)
+    signal.metadata["rejection_reason"] = signal.rejection_reason
+    signal.metadata["execution_decision"] = signal.execution_decision
+    if duplicate_detected:
+        return signal
+    return signal_repository.create(signal).signal
+import hashlib
