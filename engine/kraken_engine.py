@@ -1,9 +1,6 @@
 from engine.runtime import RuntimeStatus
 
 from engine.signal_engine import signal_engine
-from engine.execution_engine import execution_engine
-
-from trading.operation_monitor import operation_monitor
 
 from core.event_bus import event_bus
 from core.events import (
@@ -14,10 +11,41 @@ from core.events import (
 
 class KrakenEngine:
 
-    def __init__(self):
+    def __init__(
+        self,
+        signal_engine_instance=None,
+        execution_engine_instance=None,
+        operation_monitor_instance=None,
+    ):
 
         self.status = RuntimeStatus.STOPPED
         self.telegram_clients = []
+        self._signal_engine = signal_engine_instance
+        self._execution_engine = execution_engine_instance
+        self._operation_monitor = operation_monitor_instance
+
+    def _get_signal_engine(self):
+
+        if self._signal_engine is None:
+            self._signal_engine = signal_engine
+
+        return self._signal_engine
+
+    def _get_execution_engine(self):
+
+        if self._execution_engine is None:
+            from engine.execution_engine import execution_engine
+            self._execution_engine = execution_engine
+
+        return self._execution_engine
+
+    def _get_operation_monitor(self):
+
+        if self._operation_monitor is None:
+            from trading.operation_monitor import operation_monitor
+            self._operation_monitor = operation_monitor
+
+        return self._operation_monitor
 
     # ---------------------------------------------------------
 
@@ -28,9 +56,9 @@ class KrakenEngine:
 
         self.status = RuntimeStatus.RUNNING
 
-        signal_engine.start()
-        execution_engine.start()
-        operation_monitor.start()
+        self._get_signal_engine().start()
+        self._get_execution_engine().start()
+        self._get_operation_monitor().start()
 
         event_bus.applicationStarted.emit(
             ApplicationStartedEvent()
@@ -58,9 +86,9 @@ class KrakenEngine:
         if self.status == RuntimeStatus.STOPPED:
             return
 
-        operation_monitor.stop()
-        execution_engine.stop()
-        signal_engine.stop()
+        self._get_operation_monitor().stop()
+        self._get_execution_engine().stop()
+        self._get_signal_engine().stop()
 
         for client in self.telegram_clients:
 
@@ -91,20 +119,36 @@ class KrakenEngine:
 
     # ---------------------------------------------------------
 
-    def process_signal(
+    def process_telegram_signal(
         self,
         signal,
-        profile,
+        chat_id,
+        account_id=None,
     ):
 
         if self.status != RuntimeStatus.RUNNING:
 
             print("Kraken detenido.")
-            return
+            return False
 
-        signal_engine.process(
+        return self._get_signal_engine().process(
             signal=signal,
-            profile=profile,
+            chat_id=chat_id,
+            account_id=account_id,
+        )
+
+    def process_signal(
+        self,
+        signal,
+        chat_id,
+        account_id=None,
+    ):
+        """Alias compatible con el contrato único de entrada Telegram."""
+
+        return self.process_telegram_signal(
+            signal=signal,
+            chat_id=chat_id,
+            account_id=account_id,
         )
 
 
