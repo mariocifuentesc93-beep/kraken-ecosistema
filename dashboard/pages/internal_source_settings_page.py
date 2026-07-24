@@ -1,4 +1,6 @@
 import asyncio
+from dataclasses import dataclass
+import traceback
 
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import (
@@ -17,6 +19,7 @@ from dashboard.widgets.section_widget import SectionWidget
 from repositories.internal_publication_config_repository import (
     internal_publication_config_repository,
 )
+from repositories.log_repository import log_repository
 from repositories.telegram_channel_repository import telegram_channel_repository
 from services.internal_publication_configuration_service import (
     InternalPublicationConfigurationService,
@@ -29,7 +32,7 @@ from dashboard.ui_theme import refresh_widget_style
 
 class _AsyncCallWorker(QObject):
     finished = Signal(object)
-    failed = Signal(str)
+    failed = Signal(object)
 
     def __init__(self, callable_):
         super().__init__()
@@ -39,10 +42,20 @@ class _AsyncCallWorker(QObject):
         try:
             value = self._callable()
             if asyncio.iscoroutine(value):
-                value = asyncio.run(value)
+                raise RuntimeError(
+                    "El worker recibió una coroutine sin programar."
+                )
             self.finished.emit(value)
         except Exception as error:
-            self.failed.emit(str(error))
+            self.failed.emit(
+                _AsyncCallFailure(error, traceback.format_exc())
+            )
+
+
+@dataclass(frozen=True)
+class _AsyncCallFailure:
+    error: Exception
+    traceback_text: str
 
 
 class InternalSourceSettingsPage(QWidget):
@@ -54,6 +67,9 @@ class InternalSourceSettingsPage(QWidget):
         account_manager=None,
         destinations_provider=None,
         test_sender=None,
+        async_runner=None,
+        event_log=None,
+        test_timeout=10.0,
         parent=None,
     ):
         super().__init__(parent)
@@ -72,6 +88,10 @@ class InternalSourceSettingsPage(QWidget):
         )
         self._test_sender = test_sender or self._send_test_message
         self._uses_default_test_sender = test_sender is None
+        self._async_runner = async_runner or telegram_async_runner
+        self._event_log = event_log or log_repository
+        self._test_timeout = test_timeout
+        self._test_context = None
         self._workers = []
         self._destinations = {}
         self._service = InternalPublicationConfigurationService(
@@ -305,6 +325,7 @@ class InternalSourceSettingsPage(QWidget):
     def _start_worker(self, callable_, success, failure):
         thread = QThread(self)
         worker = _AsyncCallWorker(callable_)
+        worker_entry = (thread, worker)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(success)
@@ -314,11 +335,12 @@ class InternalSourceSettingsPage(QWidget):
         thread.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
         thread.finished.connect(
-            lambda: self._workers.remove(thread)
-            if thread in self._workers
+            lambda: self._workers.remove(worker_entry)
+            if worker_entry in self._workers
             else None
         )
-        self._workers.append(thread)
+        # Keep both Qt objects alive until the queued result has been handled.
+        self._workers.append(worker_entry)
         thread.start()
 
     def _apply_live_destinations(self, items):
@@ -350,6 +372,8 @@ class InternalSourceSettingsPage(QWidget):
         self._show_destination()
 
     def _destination_error(self, message):
+        if isinstance(message, _AsyncCallFailure):
+            message = str(message.error)
         self.refresh_destinations_button.setEnabled(
             self.publish_checkbox.isChecked()
         )
@@ -442,11 +466,50 @@ class InternalSourceSettingsPage(QWidget):
         )
 
     def _send_test_message(self, account_id, chat_id):
-        asyncio.run(self._send_test_async(account_id, chat_id))
+        return self._async_runner.run(
+            self._send_test_async(account_id, chat_id),
+            timeout=self._test_timeout,
+        )
+
+    def _test_identifiers(self, account_id, chat_id):
+        destination = self._destinations.get(chat_id) or {}
+        channel_id = destination.get(
+            "id",
+            destination.get("telegram_channel_id"),
+        )
+        return {
+            "telegram_account_id": account_id,
+            "telegram_channel_id": channel_id,
+            "chat_id": chat_id,
+        }
+
+    @staticmethod
+    def _test_log_message(state, identifiers, detail=""):
+        message = (
+            f"Prueba de publicación Telegram {state}. "
+            f"telegram_account_id={identifiers['telegram_account_id']}; "
+            f"telegram_channel_id={identifiers['telegram_channel_id']}; "
+            f"chat_id={identifiers['chat_id']}"
+        )
+        return f"{message}; {detail}" if detail else message
+
+    def _log_test(self, level, state, identifiers, detail=""):
+        self._event_log.add(
+            level,
+            "Inspector INTERNAL",
+            self._test_log_message(
+                state,
+                identifiers,
+                detail,
+            ),
+        )
 
     def test_send(self):
         account_id = self.account_combo.currentData()
         chat_id = self.destination_combo.currentData()
+        identifiers = self._test_identifiers(account_id, chat_id)
+        self._test_context = identifiers
+        self._log_test("INFO", "INICIADA", identifiers)
         try:
             self._service.validate(True, account_id, chat_id)
             if self._connection_state(account_id) != "CONNECTED":
@@ -457,37 +520,66 @@ class InternalSourceSettingsPage(QWidget):
                 self.test_button.setEnabled(False)
                 self._start_worker(
                     lambda: self._test_sender(account_id, chat_id),
-                    self._test_send_ok,
-                    self._test_send_error,
+                    lambda result: self._test_send_ok(
+                        result,
+                        identifiers,
+                    ),
+                    lambda failure: self._test_send_error(
+                        failure,
+                        identifiers,
+                    ),
                 )
                 return True
             self._test_sender(account_id, chat_id)
         except Exception as error:
-            QMessageBox.critical(
-                self,
-                "Prueba Telegram",
-                f"No se pudo enviar el mensaje de prueba: {error}",
+            self._test_send_error(
+                _AsyncCallFailure(error, traceback.format_exc()),
+                identifiers,
             )
             return False
-        QMessageBox.information(
-            self,
-            "Prueba Telegram",
-            "Mensaje de prueba enviado correctamente.",
-        )
+        self._test_send_ok(None, identifiers)
         return True
 
-    def _test_send_ok(self, _result=None):
-        self._update_actions()
-        QMessageBox.information(
-            self,
-            "Prueba Telegram",
-            "Mensaje de prueba enviado correctamente.",
-        )
+    def _test_send_ok(self, _result=None, identifiers=None):
+        identifiers = identifiers or self._test_context
+        try:
+            self._log_test("INFO", "ÉXITO", identifiers)
+            QMessageBox.information(
+                self,
+                "Prueba Telegram",
+                "Mensaje de prueba enviado correctamente.",
+            )
+        finally:
+            self._test_context = None
+            self._update_actions()
 
-    def _test_send_error(self, message):
-        self._update_actions()
-        QMessageBox.critical(
-            self,
-            "Prueba Telegram",
-            f"No se pudo enviar el mensaje de prueba: {message}",
+    def _test_send_error(self, failure, identifiers=None):
+        identifiers = identifiers or self._test_context
+        if not isinstance(failure, _AsyncCallFailure):
+            failure = _AsyncCallFailure(
+                RuntimeError(str(failure)),
+                str(failure),
+            )
+        is_timeout = isinstance(failure.error, TimeoutError)
+        state = "TIMEOUT" if is_timeout else "ERROR"
+        detail = (
+            f"{failure.error}\n{failure.traceback_text}".strip()
         )
+        try:
+            self._log_test("ERROR", state, identifiers, detail)
+            if is_timeout:
+                QMessageBox.warning(
+                    self,
+                    "Prueba Telegram",
+                    "La prueba de envío agotó el tiempo de espera.",
+                )
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Prueba Telegram",
+                    "No se pudo enviar el mensaje de prueba: "
+                    f"{failure.error}",
+                )
+        finally:
+            self._test_context = None
+            self._update_actions()
