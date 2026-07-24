@@ -12,8 +12,8 @@ class EventBus(QObject):
     # APLICACIÓN
     # ==========================================================
 
-    applicationStarted = Signal()
-    applicationStopped = Signal()
+    applicationStarted = Signal(object)
+    applicationStopped = Signal(object)
 
     # ==========================================================
     # TELEGRAM

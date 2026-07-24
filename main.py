@@ -31,7 +31,12 @@ async def main():
         phone=telegram_account_service.get_phone()
     )
 
-    register_telegram_listener(client)
+    active_account = telegram_account_service.get_active_account()
+
+    register_telegram_listener(
+        client,
+        account_id=active_account.id if active_account else None,
+    )
 
     print("Inicializando Kraken Engine...")
     kraken_engine.start()
