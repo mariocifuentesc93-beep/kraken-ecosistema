@@ -12,7 +12,8 @@ def register_telegram_listener(
     Registra el adaptador de entrada Telegram.
 
     El listener solo normaliza el mensaje y conserva su contexto de origen.
-    SignalEngine es responsable de seleccionar y validar los perfiles.
+    SignalIngestionService valida y persiste una sola vez. SignalEngine
+    conserva la responsabilidad de seleccionar y validar los perfiles.
 
     ``signal_processor`` permite probar este adaptador sin iniciar KrakenEngine.
     """
