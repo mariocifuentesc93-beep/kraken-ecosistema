@@ -2,9 +2,6 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from database.schema import create_tables
-
-
 class DatabaseManager:
     """SQLite connection factory with one connection per calling thread."""
 
@@ -22,20 +19,47 @@ class DatabaseManager:
         if connection is not None:
             return connection
 
-        # Schema creation and WAL configuration must not race when a worker
-        # starts while the UI thread is opening the application database.
+        # Opening an existing database is deliberately side-effect free.
+        # Schema creation and migrations belong to explicit lifecycle calls.
         with self._initialization_lock:
             connection = sqlite3.connect(self.database, check_same_thread=True)
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA journal_mode = WAL")
-            connection.execute("PRAGMA synchronous = NORMAL")
-            create_tables(connection)
             self._local.connection = connection
         return connection
 
     def initialize(self):
-        self.connect()
+        """Open an existing database or explicitly create a new one."""
+        connection = self.connect()
+        has_schema = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1"
+        ).fetchone()
+        if has_schema is None:
+            return self.initialize_new_database()
+        return connection
+
+    def initialize_new_database(self):
+        """Create the initial schema. Never called implicitly by connect()."""
+        from database.schema import create_tables
+
+        connection = self.connect()
+        create_tables(connection)
+        return connection
+
+    def validate_schema(self, required_tables=None):
+        required_tables = set(required_tables or ())
+        rows = self.connect().execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+        existing = {row[0] for row in rows}
+        return sorted(required_tables - existing)
+
+    def run_migrations(self, migrations):
+        """Run an explicitly supplied migration sequence."""
+        connection = self.connect()
+        for migration in migrations:
+            migration(connection)
+        return connection
 
     def cursor(self):
         return self.connect().cursor()

@@ -1,5 +1,6 @@
 import asyncio
 
+from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -26,6 +27,24 @@ from telegram.account_manager import telegram_account_manager
 from dashboard.ui_theme import refresh_widget_style
 
 
+class _AsyncCallWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, callable_):
+        super().__init__()
+        self._callable = callable_
+
+    def run(self):
+        try:
+            value = self._callable()
+            if asyncio.iscoroutine(value):
+                value = asyncio.run(value)
+            self.finished.emit(value)
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
 class InternalSourceSettingsPage(QWidget):
     """Single global configuration point for Inspector INTERNAL publication."""
 
@@ -47,14 +66,25 @@ class InternalSourceSettingsPage(QWidget):
             or profile_telegram_channel_repository.get_available_channels
         )
         self._test_sender = test_sender or self._send_test_message
+        self._uses_default_test_sender = test_sender is None
+        self._workers = []
         self._destinations = {}
         self._service = InternalPublicationConfigurationService(
             repository=self._config_repository,
             account_provider=self._account_manager.get_account,
-            destinations_provider=self._destinations_provider,
+            destinations_provider=self._service_destinations,
         )
         self._build_ui()
         self.load()
+
+    def _service_destinations(self, account_id):
+        if (
+            hasattr(self, "account_combo")
+            and self.account_combo.currentData() == account_id
+            and self._destinations
+        ):
+            return list(self._destinations.values())
+        return self._destinations_provider(account_id)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -230,9 +260,80 @@ class InternalSourceSettingsPage(QWidget):
         self._update_actions()
 
     def refresh_destinations(self):
+        loader = getattr(
+            self._account_manager,
+            "list_sendable_destinations",
+            None,
+        )
+        account_id = self.account_combo.currentData()
+        if callable(loader) and account_id is not None:
+            self.refresh_destinations_button.setEnabled(False)
+            self._start_worker(
+                lambda: loader(account_id),
+                self._apply_live_destinations,
+                self._destination_error,
+            )
+            return None
         selected = self.destination_combo.currentData()
         self._load_destinations(selected)
         return self.destination_combo.count() - 1
+
+    def _start_worker(self, callable_, success, failure):
+        thread = QThread(self)
+        worker = _AsyncCallWorker(callable_)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(success)
+        worker.failed.connect(failure)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(
+            lambda: self._workers.remove(thread)
+            if thread in self._workers
+            else None
+        )
+        self._workers.append(thread)
+        thread.start()
+
+    def _apply_live_destinations(self, items):
+        selected = self.destination_combo.currentData()
+        self.destination_combo.blockSignals(True)
+        self.destination_combo.clear()
+        self.destination_combo.addItem("Seleccione un chat o canal", None)
+        self._destinations = {}
+        for item in items:
+            chat_id = int(item["chat_id"])
+            normalized = {
+                **item,
+                "chat_id": chat_id,
+                "title": item.get("title") or str(chat_id),
+                "type": self._destination_type(item),
+            }
+            self._destinations[chat_id] = normalized
+            self.destination_combo.addItem(
+                f"{normalized['title']} · {normalized['type']} · {chat_id}",
+                chat_id,
+            )
+        self.destination_combo.setCurrentIndex(
+            max(0, self.destination_combo.findData(selected))
+        )
+        self.destination_combo.blockSignals(False)
+        self.refresh_destinations_button.setEnabled(
+            self.publish_checkbox.isChecked()
+        )
+        self._show_destination()
+
+    def _destination_error(self, message):
+        self.refresh_destinations_button.setEnabled(
+            self.publish_checkbox.isChecked()
+        )
+        self.destination_status_label.setText(message)
+        self.destination_status_label.setProperty(
+            "connectionState", "ERROR"
+        )
+        refresh_widget_style(self.destination_status_label)
 
     def _show_destination(self, *_):
         item = self._destinations.get(
@@ -328,6 +429,14 @@ class InternalSourceSettingsPage(QWidget):
                 raise RuntimeError("Cuenta desconectada")
             if chat_id not in self._destinations:
                 raise RuntimeError("Destino inválido")
+            if self._uses_default_test_sender:
+                self.test_button.setEnabled(False)
+                self._start_worker(
+                    lambda: self._test_sender(account_id, chat_id),
+                    self._test_send_ok,
+                    self._test_send_error,
+                )
+                return True
             self._test_sender(account_id, chat_id)
         except Exception as error:
             QMessageBox.critical(
@@ -342,3 +451,19 @@ class InternalSourceSettingsPage(QWidget):
             "Mensaje de prueba enviado correctamente.",
         )
         return True
+
+    def _test_send_ok(self, _result=None):
+        self._update_actions()
+        QMessageBox.information(
+            self,
+            "Prueba Telegram",
+            "Mensaje de prueba enviado correctamente.",
+        )
+
+    def _test_send_error(self, message):
+        self._update_actions()
+        QMessageBox.critical(
+            self,
+            "Prueba Telegram",
+            f"No se pudo enviar el mensaje de prueba: {message}",
+        )

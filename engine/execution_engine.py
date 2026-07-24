@@ -30,6 +30,12 @@ class ExecutionEngine:
     def stop(self):
         self.running = False
 
+    def _get_trade_manager(self):
+        if self._trade_manager is None:
+            from core.trade_manager import trade_manager
+            self._trade_manager = trade_manager
+        return self._trade_manager
+
     def execute(self, signal, profile, account):
         if not self.running:
             return False
@@ -61,16 +67,11 @@ class ExecutionEngine:
             setattr(account_signal, field, getattr(account, field, default))
         account_signal.magic = getattr(account, "magic_number", 0)
 
-        if self._trade_manager is not None:
-            return self._trade_manager.process_signal(
-                signal=account_signal,
-                profile=profile,
-                account=account,
-            )
-
-        # Import execution integrations only when the real visual runtime
-        # actually needs them. Tests and offline startup must not import MT5.
-        from trading.execution_pipeline import execution_pipeline
+        return self._get_trade_manager().process_signal(
+            signal=account_signal,
+            profile=profile,
+            account=account,
+        )
 
         if mode == "SIMULATION":
             execution_pipeline.simulate_with_market_data(

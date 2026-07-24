@@ -1,8 +1,11 @@
 from datetime import datetime
 from pathlib import Path
 import shutil
+import asyncio
+import threading
 
-from PySide6.QtCore import QEasingCurve, Qt, QSize, QSettings, QTimer, QPropertyAnimation
+from PySide6.QtCore import (QEasingCurve, Qt, QSize, QSettings, QTimer,
+                           QPropertyAnimation, Signal)
 from PySide6.QtGui import QAction, QFont, QIcon, QImage, QKeySequence, QPainter, QPainterPath, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -51,7 +54,8 @@ from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
 from version import APPLICATION_NAME, VERSION
-from core.config_service import load_active_config, get_execution_mode
+from core.config_service import (load_active_config, get_execution_mode,
+                                 get_mt5_account, get_telegram_account)
 from database.database_manager import database_manager
 from repositories.settings_repository import settings_repository
 from engine.kraken_engine import kraken_engine
@@ -96,6 +100,7 @@ class EnterpriseToolbar(QToolBar):
 
 
 class MainWindow(QMainWindow):
+    connection_finished = Signal(str, bool, str)
 
     def __init__(self):
 
@@ -262,6 +267,7 @@ class MainWindow(QMainWindow):
         self.topMode = QLabel("Modo: OFF")
         self.topMT5 = QLabel("MT5: desconectado")
         self.topTelegram = QLabel("Telegram: desconectado")
+        self.topInternal = QLabel("INTERNAL: detenido")
         self.topDatabase = QLabel("SQLite: disponible")
         self.topVersion = QLabel(f"v{VERSION}")
         self.topClock = QLabel()
@@ -269,6 +275,7 @@ class MainWindow(QMainWindow):
             (self.topMode, "radio", WARNING),
             (self.topMT5, "activity", NEGATIVE),
             (self.topTelegram, "send", NEGATIVE),
+            (self.topInternal, "scan-line", NEGATIVE),
             (self.topDatabase, "database-backup", POSITIVE),
             (self.topVersion, "circle-check", POSITIVE),
             (self.topClock, "history", POSITIVE),
@@ -418,6 +425,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.stack, 1)
 
         self.dashboardPage = DashboardPage()
+        self.dashboardPage.connection_action_requested.connect(
+            self.toggle_connection
+        )
+        self.connection_finished.connect(self._connection_finished)
 
         self.operationsPage = OperationsPage()
 
@@ -712,6 +723,82 @@ class MainWindow(QMainWindow):
             "Telegram",
             telegram_status,
         )
+        runtime_status = kraken_engine.get_status()
+        if runtime_status is not None:
+            state = runtime_status.internal_state.value
+            label = {
+                "STOPPED": "detenido",
+                "STARTING": "iniciando",
+                "RUNNING": "activo",
+                "STOPPING": "deteniendo",
+                "ERROR": "error",
+            }.get(state, state.lower())
+            color_state = {
+                "STOPPED": "DISCONNECTED",
+                "STARTING": "CONNECTING",
+                "RUNNING": "CONNECTED",
+                "STOPPING": "CONNECTING",
+                "ERROR": "ERROR",
+            }.get(state, "ERROR")
+            self.topInternal.setText(f"INTERNAL: {label}")
+            self.topInternal.setProperty(
+                "connectionState", color_state
+            )
+            self.topInternal.setToolTip(
+                runtime_status.last_error or "Fuente CSV KrakenBMSPInspector"
+            )
+            refresh_widget_style(self.topInternal)
+
+    def toggle_connection(self, service):
+        """Connect or disconnect in a worker, never on Qt's UI thread."""
+        def work():
+            try:
+                load_active_config()
+                if service == "MT5":
+                    from mt5.connector import mt5_connector
+                    if mt5_connector.is_connected():
+                        mt5_connector.disconnect()
+                    else:
+                        account = get_mt5_account()
+                        if account is None:
+                            raise RuntimeError("No hay una cuenta MT5 activa.")
+                        mt5_connector.connect(account)
+                else:
+                    from telegram.account_manager import (
+                        telegram_account_manager,
+                    )
+                    account = get_telegram_account()
+                    if account is None:
+                        raise RuntimeError(
+                            "No hay una cuenta Telegram activa."
+                        )
+                    if (
+                        telegram_account_manager.connection_state(account.id)
+                        == "CONNECTED"
+                    ):
+                        asyncio.run(
+                            telegram_account_manager.disconnect(account.id)
+                        )
+                    else:
+                        asyncio.run(
+                            telegram_account_manager.connect(account.id)
+                        )
+                self.connection_finished.emit(service, True, "")
+            except Exception as error:
+                self.connection_finished.emit(
+                    service, False, str(error)
+                )
+
+        threading.Thread(
+            target=work,
+            name=f"Kraken{service}Connection",
+            daemon=True,
+        ).start()
+
+    def _connection_finished(self, service, success, error):
+        self.refresh_connectivity_status()
+        if not success:
+            self.log(f"Error de conexión {service}: {error}")
 
     def _apply_connectivity_status(self, service, snapshot):
         if service == "MT5":

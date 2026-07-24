@@ -4,6 +4,7 @@ from enum import Enum
 class ExecutionMode(Enum):
     OFF = "OFF"
     SIMULATION = "SIMULATION"
+    PAPER = "PAPER"
     DEMO = "DEMO"
     LIVE = "LIVE"
 

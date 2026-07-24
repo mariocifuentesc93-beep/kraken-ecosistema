@@ -4,7 +4,6 @@ from repositories.telegram_account_repository import telegram_account_repository
 from repositories.symbol_repository import symbol_repository
 from repositories.settings_repository import settings_repository
 
-
 _active_profile = None
 _active_mt5 = None
 _active_telegram = None
@@ -259,6 +258,3 @@ def get_summary():
         "execution_mode": get_execution_mode(),
 
     }
-
-
-load_active_config()

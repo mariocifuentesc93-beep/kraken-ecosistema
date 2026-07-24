@@ -19,8 +19,8 @@ def validate_startup():
     """Return actionable startup errors without opening the main window."""
     errors = []
     try:
-        database_manager.initialize()
-        missing = sorted(table for table in REQUIRED_TABLES if not database_manager.table_exists(table))
+        database_manager.connect()
+        missing = database_manager.validate_schema(REQUIRED_TABLES)
         if missing:
             errors.append("Faltan tablas requeridas: " + ", ".join(missing))
     except Exception as error:

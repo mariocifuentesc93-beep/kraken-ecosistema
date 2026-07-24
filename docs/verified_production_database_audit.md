@@ -21,7 +21,7 @@ digest lógico por tabla.
 
 Archivo fuera del repositorio:
 
-`C:\Users\jhon mario cifuentes\Documents\KrakenBackups\kraken_verified_before_global_internal_20260724_004057.db`
+`<directorio_de_respaldos>\kraken_verified_before_global_internal_20260724_004057.db`
 
 - Base activa: 204800 bytes.
 - Respaldo: 204800 bytes.

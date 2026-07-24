@@ -90,6 +90,7 @@ class KpiCard(QFrame):
 
 
 class DashboardPage(QWidget):
+    connection_action_requested = Signal(str)
     navigate_requested=Signal(str); action_requested=Signal(str); notifications_requested=Signal()
     def __init__(self): super().__init__(); self.build_ui(); self.connect_events(); self.refresh()
     def connect_events(self):
@@ -198,10 +199,20 @@ class DashboardPage(QWidget):
         set_visual_role(dot,"statusDot")
         status_label = QLabel(status)
         set_visual_role(status_label,"cardTitle")
-        diagnostic = QPushButton("Diagnóstico")
+        diagnostic = QPushButton("Conectar")
         diagnostic.setMinimumSize(72, 22)
         set_visual_role(diagnostic,variant="compact")
-        diagnostic.clicked.connect(lambda checked=False, target=page: self.navigate_requested.emit(target))
+        if service in ("MT5", "Telegram"):
+            diagnostic.clicked.connect(
+                lambda checked=False, target=service:
+                self.connection_action_requested.emit(target)
+            )
+        else:
+            diagnostic.setText("Diagnóstico")
+            diagnostic.clicked.connect(
+                lambda checked=False, target=page:
+                self.navigate_requested.emit(target)
+            )
         layout.addWidget(icon)
         layout.addWidget(name)
         layout.addWidget(dot)
@@ -213,6 +224,7 @@ class DashboardPage(QWidget):
             "dot": dot,
             "status": status_label,
             "row": row,
+            "action": diagnostic,
         }
 
     def set_connectivity_status(self, service, snapshot):
@@ -228,6 +240,16 @@ class DashboardPage(QWidget):
             colored_icon("circle-check", snapshot.color).pixmap(13, 13)
         )
         controls["row"].setToolTip(snapshot.tooltip)
+        action = controls.get("action")
+        if action is not None and service in ("MT5", "Telegram"):
+            text, enabled = {
+                "DISCONNECTED": ("Conectar", True),
+                "CONNECTING": ("Conectando...", False),
+                "CONNECTED": ("Desconectar", True),
+                "ERROR": ("Reintentar", True),
+            }.get(snapshot.state, ("Reintentar", True))
+            action.setText(text)
+            action.setEnabled(enabled)
         self.connection_updated.setText(
             f"Última actualización:\n"
             f"{datetime.now():%d/%m/%Y %I:%M:%S %p}"

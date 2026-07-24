@@ -49,7 +49,7 @@ class EnterpriseIconSystemTests(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(window.toolbar.iconSize(), QSize(ICON_SIZE, ICON_SIZE))
         self.assertEqual(window.menu.iconSize(), QSize(ICON_SIZE, ICON_SIZE))
-        self.assertEqual(len(window.status_icon_chips), 6)
+        self.assertEqual(len(window.status_icon_chips), 7)
         for chip in window.status_icon_chips:
             self.assertTrue(chip.property("enterpriseIconChip"))
         from dashboard.pages.dashboard_page import KpiGlyph

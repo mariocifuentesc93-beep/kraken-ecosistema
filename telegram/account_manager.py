@@ -15,8 +15,7 @@ class TelegramAccountManager:
         self.active_account = None
         self._connection_states = {}
         self._last_errors = {}
-
-        self.reload()
+        self._loaded = False
 
     # ==========================================================
     # CARGA
@@ -25,6 +24,7 @@ class TelegramAccountManager:
     def reload(self):
 
         self.accounts = telegram_account_repository.get_enabled()
+        self._loaded = True
 
         self.active_account = None
 
@@ -49,11 +49,13 @@ class TelegramAccountManager:
     # ==========================================================
 
     def get_accounts(self):
-
+        if not self._loaded:
+            self.reload()
         return self.accounts
 
     def get_account(self, account_id):
-
+        if not self._loaded:
+            self.reload()
         for account in self.accounts:
 
             if account.id == account_id:
@@ -63,7 +65,8 @@ class TelegramAccountManager:
         return None
 
     def get_active_account(self):
-
+        if not self._loaded:
+            self.reload()
         return self.active_account
 
     def set_active_account(self, account_id):
@@ -256,6 +259,41 @@ class TelegramAccountManager:
             )
         except (ConnectionError, asyncio.TimeoutError, OSError) as error:
             return False, False, str(error)
+
+    async def list_sendable_destinations(self, account_id):
+        """Return dialogs where the already-connected account may send."""
+        client = self.peek_client(account_id)
+        if client is None or not client.is_connected():
+            raise RuntimeError("La cuenta Telegram no está conectada.")
+        destinations = []
+        async for dialog in client.iter_dialogs():
+            entity = dialog.entity
+            if getattr(entity, "left", False):
+                continue
+            if getattr(entity, "broadcast", False):
+                rights = getattr(entity, "admin_rights", None)
+                if not (
+                    getattr(entity, "creator", False)
+                    or getattr(rights, "post_messages", False)
+                ):
+                    continue
+                destination_type = "Canal"
+            elif getattr(entity, "megagroup", False):
+                destination_type = "Supergrupo"
+            elif getattr(entity, "bot", False) or getattr(
+                entity, "first_name", None
+            ):
+                destination_type = "Privado"
+            else:
+                destination_type = "Grupo"
+            destinations.append(
+                {
+                    "title": dialog.name or str(dialog.id),
+                    "type": destination_type,
+                    "chat_id": int(dialog.id),
+                }
+            )
+        return destinations
 
     async def disconnect(self, account_id=None, timeout=10):
 

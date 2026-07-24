@@ -17,6 +17,7 @@ class KrakenEngine:
         ingestion_service_instance=None,
         execution_engine_instance=None,
         operation_monitor_instance=None,
+        runtime_coordinator_instance=None,
     ):
 
         self.status = RuntimeStatus.STOPPED
@@ -25,6 +26,27 @@ class KrakenEngine:
         self._ingestion_service = ingestion_service_instance
         self._execution_engine = execution_engine_instance
         self._operation_monitor = operation_monitor_instance
+        self._runtime_coordinator = runtime_coordinator_instance
+        self._explicit_components = any(
+            component is not None
+            for component in (
+                signal_engine_instance,
+                ingestion_service_instance,
+                execution_engine_instance,
+                operation_monitor_instance,
+            )
+        )
+
+    def _get_runtime_coordinator(self):
+        if self._runtime_coordinator is None:
+            from services.runtime_coordinator import RuntimeCoordinator
+            self._runtime_coordinator = RuntimeCoordinator(
+                signal_engine=self._get_signal_engine(),
+                execution_engine=self._get_execution_engine(),
+                operation_monitor=self._get_operation_monitor(),
+                enable_sources=not self._explicit_components,
+            )
+        return self._runtime_coordinator
 
     def _get_signal_engine(self):
 
@@ -68,11 +90,13 @@ class KrakenEngine:
         if self.status == RuntimeStatus.RUNNING:
             return
 
+        self.status = RuntimeStatus.STARTING
+        try:
+            self._get_runtime_coordinator().start()
+        except Exception:
+            self.status = RuntimeStatus.ERROR
+            raise
         self.status = RuntimeStatus.RUNNING
-
-        self._get_signal_engine().start()
-        self._get_execution_engine().start()
-        self._get_operation_monitor().start()
 
         event_bus.applicationStarted.emit(
             ApplicationStartedEvent()
@@ -100,20 +124,8 @@ class KrakenEngine:
         if self.status == RuntimeStatus.STOPPED:
             return
 
-        self._get_operation_monitor().stop()
-        self._get_execution_engine().stop()
-        self._get_signal_engine().stop()
-
-        for client in self.telegram_clients:
-
-            try:
-
-                if client.is_connected():
-                    client.disconnect()
-
-            except Exception:
-                pass
-
+        self.status = RuntimeStatus.STOPPING
+        self._get_runtime_coordinator().stop()
         self.telegram_clients.clear()
 
         self.status = RuntimeStatus.STOPPED
@@ -128,6 +140,11 @@ class KrakenEngine:
 
         print()
         print("=" * 60)
+
+    def get_status(self):
+        if self._runtime_coordinator is None:
+            return None
+        return self._runtime_coordinator.get_status()
         print("🛑 KRAKEN ENGINE STOPPED")
         print("=" * 60)
 

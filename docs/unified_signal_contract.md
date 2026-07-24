@@ -134,8 +134,8 @@ La herramienta exige una ruta explícita y nunca selecciona automáticamente
 `database/kraken.db`:
 
 ```powershell
-python -m database.signal_contract_migration upgrade C:\ruta\temporal.db
-python -m database.signal_contract_migration rollback C:\ruta\temporal.db
+python -m database.signal_contract_migration upgrade <ruta_temporal.db>
+python -m database.signal_contract_migration rollback <ruta_temporal.db>
 ```
 
 ## Flujo Telegram
