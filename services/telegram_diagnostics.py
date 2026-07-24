@@ -58,7 +58,11 @@ class TelegramDiagnostics:
     def _client(self, account):
         if account.id not in self.clients:
             self.clients[account.id] = self.client_factory(account.session_name, int(account.api_id), account.api_hash)
-        return self.clients[account.id]
+        client = self.clients[account.id]
+        from telegram.account_manager import telegram_account_manager
+
+        telegram_account_manager.register_client(account.id, client)
+        return client
 
     async def test_connection(self, account, timeout=10):
         report = self._report(account, self.CONNECTING)

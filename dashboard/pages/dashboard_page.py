@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QPus
 
 from dashboard.styles import BORDER_COLOR, CARD_COLOR, ERROR_COLOR, INFO_COLOR, PRIMARY_COLOR, SECONDARY_TEXT, WARNING_COLOR
 from dashboard.ui_theme import configure_active_tables
-from dashboard.ui_theme import set_visual_role
+from dashboard.ui_theme import refresh_widget_style, set_visual_role
 from dashboard.icons import ICON_INFO, colored_icon, set_label_icon
 from repositories.profile_repository import profile_repository
 from repositories.signal_repository import signal_repository
@@ -157,9 +157,9 @@ class DashboardPage(QWidget):
         set_visual_role(heading,"panelTitle")
         layout.addWidget(heading)
         self.connection_rows = {}
-        for service, status, page in (("MT5", "Conectado", "MT5"), ("Telegram", "Conectado", "Telegram"), ("SQLite", "Disponible", "Configuración")):
-            row, status_label = self._connection_row(service, status, page)
-            self.connection_rows[service] = status_label
+        for service, status, page in (("MT5", "Desconectado", "MT5"), ("Telegram", "Desconectado", "Telegram"), ("SQLite", "Disponible", "Configuración")):
+            row, controls = self._connection_row(service, status, page)
+            self.connection_rows[service] = controls
             layout.addWidget(row)
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
@@ -208,7 +208,30 @@ class DashboardPage(QWidget):
         layout.addWidget(status_label)
         layout.addStretch()
         layout.addWidget(diagnostic)
-        return row, status_label
+        return row, {
+            "icon": icon,
+            "dot": dot,
+            "status": status_label,
+            "row": row,
+        }
+
+    def set_connectivity_status(self, service, snapshot):
+        controls = self.connection_rows.get(service)
+        if controls is None:
+            return
+        controls["status"].setText(snapshot.label)
+        controls["status"].setProperty("connectionState", snapshot.state)
+        controls["dot"].setProperty("connectionState", snapshot.state)
+        refresh_widget_style(controls["status"])
+        refresh_widget_style(controls["dot"])
+        controls["icon"].setPixmap(
+            colored_icon("circle-check", snapshot.color).pixmap(13, 13)
+        )
+        controls["row"].setToolTip(snapshot.tooltip)
+        self.connection_updated.setText(
+            f"Última actualización:\n"
+            f"{datetime.now():%d/%m/%Y %I:%M:%S %p}"
+        )
 
     def quick_panel(self):
         box = QFrame()
@@ -284,7 +307,7 @@ class DashboardPage(QWidget):
             "Filtro activo",
         )
         for key,(value,detail) in values.items(): self.kpis[key].set_value(value,detail)
-        self.subtitle.setText(f"Perfil activo: {active.name}" if active else "Configure un perfil para comenzar"); self.curve.set_points(metrics["curve"]); self.connection_text.setText(f"MT5   • Desconectado\nTelegram   • Desconectado\nSQLite   • Disponible\n\nActualizado: {datetime.now():%H:%M:%S}")
+        self.subtitle.setText(f"Perfil activo: {active.name}" if active else "Configure un perfil para comenzar"); self.curve.set_points(metrics["curve"])
         operations=list(reversed(rows[-6:])); self.operations.setRowCount(len(operations))
         for row,op in enumerate(operations):
             values=(op.get("id",""),op.get("symbol",""),op.get("direction",""),op.get("entry",""),op.get("exit",""),f"{float(op.get('net') or 0):.2f}",op.get("status",""),op.get("closed_at",""))

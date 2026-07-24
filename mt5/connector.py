@@ -8,7 +8,9 @@ class MT5Connector:
 
     def __init__(self):
         self.connected = False
+        self.connecting = False
         self.current_account = None
+        self.account = None
         self.last_error = ""
 
     def _error(self, message):
@@ -28,19 +30,24 @@ class MT5Connector:
     def connect(self, account, timeout_ms=10_000, retries=2):
         if account is None:
             return self._error("No se seleccionó una cuenta MT5.")
+        self.connecting = True
+        self.account = account
         terminal = getattr(account, "terminal_path", "")
-        for attempt in range(retries + 1):
-            kwargs = {"timeout": timeout_ms}
-            if terminal:
-                kwargs["path"] = terminal
-            if mt5.initialize(**kwargs):
-                self.connected = True
-                self.last_error = ""
-                return True
-            self.last_error = f"MT5 no respondió: {mt5.last_error()}"
-            if attempt < retries:
-                time.sleep(0.25 * (attempt + 1))
-        return self._error(self.last_error)
+        try:
+            for attempt in range(retries + 1):
+                kwargs = {"timeout": timeout_ms}
+                if terminal:
+                    kwargs["path"] = terminal
+                if mt5.initialize(**kwargs):
+                    self.connected = True
+                    self.last_error = ""
+                    return True
+                self.last_error = f"MT5 no respondió: {mt5.last_error()}"
+                if attempt < retries:
+                    time.sleep(0.25 * (attempt + 1))
+            return self._error(self.last_error)
+        finally:
+            self.connecting = False
 
     def login(self, account, timeout_ms=10_000, retries=2):
         if not self._credentials_are_complete(account):
@@ -76,7 +83,10 @@ class MT5Connector:
     def disconnect(self):
         mt5.shutdown()
         self.connected = False
+        self.connecting = False
         self.current_account = None
+        self.account = None
+        self.last_error = ""
 
     def is_connected(self):
         self.connected = mt5.terminal_info() is not None

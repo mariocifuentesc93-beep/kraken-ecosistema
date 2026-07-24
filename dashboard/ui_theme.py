@@ -23,6 +23,14 @@ def application_style():
     QLabel[role="positive"] {{ color:{PRIMARY_COLOR}; }}
     QLabel[role="negative"] {{ color:{ERROR_COLOR}; }}
     QLabel[role="statusDot"] {{ background:{PRIMARY_COLOR}; border:0; border-radius:3px; }}
+    QLabel[connectionState="DISCONNECTED"] {{ color:#7F8C8D; font-weight:700; }}
+    QLabel[connectionState="CONNECTING"] {{ color:#FFC107; font-weight:700; }}
+    QLabel[connectionState="CONNECTED"] {{ color:#00C853; font-weight:700; }}
+    QLabel[connectionState="ERROR"] {{ color:#E53935; font-weight:700; }}
+    QLabel[role="statusDot"][connectionState="DISCONNECTED"] {{ background:#7F8C8D; }}
+    QLabel[role="statusDot"][connectionState="CONNECTING"] {{ background:#FFC107; }}
+    QLabel[role="statusDot"][connectionState="CONNECTED"] {{ background:#00C853; }}
+    QLabel[role="statusDot"][connectionState="ERROR"] {{ background:#E53935; }}
     QLabel[role="iconBadge"] {{ background:#112633; border:1px solid {BORDER_COLOR}; border-radius:7px; }}
     QFrame[role="separator"] {{ background:{BORDER_COLOR}; border:0; }}
     QFrame[role="panel"], QWidget[role="panel"], QGroupBox {{ background:{CARD_COLOR}; border:1px solid {BORDER_COLOR}; border-radius:8px; }}

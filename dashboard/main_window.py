@@ -58,11 +58,17 @@ from engine.kraken_engine import kraken_engine
 from utils.live_readiness import live_mode_issues
 from dashboard.ui_theme import (NEGATIVE, POSITIVE, WARNING, application_style,
                                 apply_standard_components, apply_terminal_palette,
-                                configure_active_tables, status_chip)
+                                configure_active_tables, refresh_widget_style,
+                                status_chip)
 from dashboard.branding import application_icon, logo_pixmap
 from dashboard.icons import (ICON_SIZE, apply_standard_icons, colored_icon, icon_chip,
                              install_icon_system)
 from repositories.profile_repository import profile_repository
+from services.connectivity_status_service import (
+    CONNECTED,
+    ConnectivityStatus,
+    connectivity_status_service,
+)
 from dashboard.widgets.enterprise import decorate_enterprise_page
 from dashboard.layout_manager import enterprise_layout
 from dashboard.professional_forms import professional_forms
@@ -685,7 +691,49 @@ class MainWindow(QMainWindow):
 
         self.total_profit = 0
 
+        self.connectivity_timer = QTimer(self)
+        self.connectivity_timer.setInterval(2000)
+        self.connectivity_timer.timeout.connect(
+            self.refresh_connectivity_status
+        )
+        self.connectivity_timer.start()
+        self.refresh_connectivity_status()
         self.update_statusbar()
+
+    def refresh_connectivity_status(self):
+        """Refresh real service state on the Qt main thread."""
+        mt5_status = connectivity_status_service.get_mt5_status()
+        telegram_status = connectivity_status_service.get_telegram_status()
+        self.mt5_online = mt5_status.connected
+        self.telegram_online = telegram_status.connected
+        self.update_statusbar()
+        self._render_connectivity_status("MT5", mt5_status)
+        self._render_connectivity_status(
+            "Telegram",
+            telegram_status,
+        )
+
+    def _apply_connectivity_status(self, service, snapshot):
+        if service == "MT5":
+            self.mt5_online = snapshot.connected
+        else:
+            self.telegram_online = snapshot.connected
+        self.update_statusbar()
+        self._render_connectivity_status(service, snapshot)
+
+    def _render_connectivity_status(self, service, snapshot):
+        label = self.topMT5 if service == "MT5" else self.topTelegram
+        label.setText(f"{service}: {snapshot.label.lower()}")
+        label.setProperty("connectionState", snapshot.state)
+        refresh_widget_style(label)
+        label.setToolTip(snapshot.tooltip)
+        if service == "MT5":
+            self.lblMT5.setText(f"MT5: {snapshot.label.upper()}")
+        else:
+            self.lblTelegram.setText(
+                f"Telegram: {snapshot.label.upper()}"
+            )
+        self.dashboardPage.set_connectivity_status(service, snapshot)
 
     def update_statusbar(self):
 
@@ -864,35 +912,17 @@ class MainWindow(QMainWindow):
         self.update_statusbar()
 
     def set_telegram_status(self, online):
-
-        self.telegram_online = online
-
-        self.update_statusbar()
-
-        self.notify(
-
-            "Telegram conectado"
-
-            if online
-
-            else "Telegram desconectado"
-
+        state = CONNECTED if online else "DISCONNECTED"
+        self._apply_connectivity_status(
+            "Telegram",
+            ConnectivityStatus("Telegram", state),
         )
 
     def set_mt5_status(self, online):
-
-        self.mt5_online = online
-
-        self.update_statusbar()
-
-        self.notify(
-
-            "MT5 conectado"
-
-            if online
-
-            else "MT5 desconectado"
-
+        state = CONNECTED if online else "DISCONNECTED"
+        self._apply_connectivity_status(
+            "MT5",
+            ConnectivityStatus("MT5", state),
         )
 
     def set_profile_count(self, count):
