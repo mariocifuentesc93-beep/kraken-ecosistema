@@ -129,6 +129,10 @@ class TelegramAccountManager:
             self.clients[account_id] = client
         return client
 
+    def unregister_client(self, account_id):
+        """Forget a shared client without creating or reconnecting another."""
+        return self.clients.pop(account_id, None)
+
     def peek_client(self, account_id=None):
         """Return an existing client without creating a Telethon session."""
         account = (
@@ -377,12 +381,16 @@ class TelegramAccountManager:
         """Disconnect clients before the Qt event loop and Python exit."""
         if not self.clients:
             return
-        try:
-            asyncio.run(self.disconnect_all())
-        except RuntimeError:
-            # Qt invokes shutdown on its main thread, where no asyncio loop is
-            # normally running. Leave ownership with an active external loop.
-            pass
+        from telegram.async_runner import telegram_async_runner
+
+        if telegram_async_runner.running:
+            telegram_async_runner.run(self.disconnect_all(), timeout=5)
+        else:
+            # A Telethon client must never be moved to a temporary event loop.
+            # Normal application shutdown disconnects it before stopping the
+            # persistent runner; this branch only forgets stale references.
+            self.clients.clear()
+            self._connection_states.clear()
 
 
 telegram_account_manager = TelegramAccountManager()

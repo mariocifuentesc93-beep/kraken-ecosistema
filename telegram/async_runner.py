@@ -57,9 +57,13 @@ class AsyncioThreadRunner:
             )
 
     def run(self, coroutine, timeout=30):
-        self.start()
-        future = asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+        future = self.submit(coroutine)
         return future.result(timeout)
+
+    def submit(self, coroutine):
+        """Schedule work on the single persistent Telegram event loop."""
+        self.start()
+        return asyncio.run_coroutine_threadsafe(coroutine, self._loop)
 
     def shutdown(self, timeout=5):
         with self._lock:

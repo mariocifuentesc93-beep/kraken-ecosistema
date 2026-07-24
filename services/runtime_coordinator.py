@@ -1,6 +1,5 @@
 """Single explicit lifecycle owner for the professional Kraken runtime."""
 
-import asyncio
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,20 +16,32 @@ class RuntimeSnapshot:
 
 
 class TelegramListenerRuntime:
-    """Own Telethon's event loop without blocking Qt's main thread."""
+    """Run Telethon on the persistent Telegram authorization loop."""
 
-    def __init__(self, account_manager=None, listener_factory=None):
+    def __init__(
+        self,
+        account_manager=None,
+        listener_factory=None,
+        async_runner=None,
+    ):
         self._account_manager = account_manager
         self._listener_factory = listener_factory
-        self._thread = None
-        self._loop = None
-        self._stop_event = None
+        self._async_runner = async_runner
+        self._future = None
+        self._stop_requested = threading.Event()
         self.state = RuntimeStatus.STOPPED
         self.last_error = ""
 
     @property
     def running(self):
-        return self._thread is not None and self._thread.is_alive()
+        return self._future is not None and not self._future.done()
+
+    def _runner(self):
+        if self._async_runner is None:
+            from telegram.async_runner import telegram_async_runner
+
+            self._async_runner = telegram_async_runner
+        return self._async_runner
 
     def _manager(self):
         if self._account_manager is None:
@@ -56,63 +67,54 @@ class TelegramListenerRuntime:
                 "La cuenta Telegram no está autorizada."
             )
         self._listener()(client, account_id=account.id)
-        while not self._stop_event.is_set():
+        while not self._stop_requested.is_set():
+            import asyncio
+
             await asyncio.sleep(0.1)
         await manager.disconnect(account.id)
 
-    def _run(self):
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
-        self._stop_event = asyncio.Event()
+    def _completed(self, future):
         try:
-            self._loop.run_until_complete(self._serve())
-            self.state = RuntimeStatus.STOPPED
+            future.result()
+            if self.state != RuntimeStatus.STOPPING:
+                self.state = RuntimeStatus.STOPPED
         except Exception as error:
             self.last_error = str(error)
             self.state = RuntimeStatus.ERROR
-        finally:
-            try:
-                from database.database_manager import database_manager
-                database_manager.close()
-            except Exception:
-                pass
-            self._loop.close()
-            self._loop = None
 
     def start(self):
         if self.running:
             return False
         self.state = RuntimeStatus.STARTING
         self.last_error = ""
-        self._thread = threading.Thread(
-            target=self._run,
-            name="KrakenTelegramRuntime",
-            daemon=True,
-        )
-        self._thread.start()
+        self._stop_requested.clear()
+        self._future = self._runner().submit(self._serve())
+        self._future.add_done_callback(self._completed)
         self.state = RuntimeStatus.RUNNING
         return True
 
     def stop(self, timeout=5.0):
-        if self._thread is None:
+        if self._future is None:
             self.state = RuntimeStatus.STOPPED
             return False
         self.state = RuntimeStatus.STOPPING
-        if self._loop is not None and self._stop_event is not None:
-            self._loop.call_soon_threadsafe(self._stop_event.set)
-        self._thread.join(timeout)
-        self._thread = None
+        self._stop_requested.set()
+        try:
+            self._future.result(timeout)
+        except Exception as error:
+            self.last_error = str(error)
+            self.state = RuntimeStatus.ERROR
+        self._future = None
         if self.state != RuntimeStatus.ERROR:
             self.state = RuntimeStatus.STOPPED
         return True
 
     def send_message(self, account_id, chat_id, text, timeout=10.0):
         client = self._manager().peek_client(account_id)
-        if client is None or self._loop is None or not client.is_connected():
+        if client is None or not client.is_connected():
             raise RuntimeError("La cuenta Telegram no está conectada.")
-        future = asyncio.run_coroutine_threadsafe(
+        future = self._runner().submit(
             client.send_message(chat_id, text),
-            self._loop,
         )
         return future.result(timeout)
 

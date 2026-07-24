@@ -24,9 +24,15 @@ class TelegramDiagnostics:
     AUTHORIZED = "AUTHORIZED"
     ERROR = "ERROR"
 
-    def __init__(self, client_factory=None, package_available=None):
+    def __init__(
+        self,
+        client_factory=None,
+        package_available=None,
+        account_manager=None,
+    ):
         self.client_factory = TelegramClient if client_factory is None else client_factory
         self.package_available = package_available
+        self.account_manager = account_manager
         self.clients = {}
 
     def _package_available(self):
@@ -57,7 +63,21 @@ class TelegramDiagnostics:
 
     def _client(self, account):
         if account.id not in self.clients:
-            self.clients[account.id] = self.client_factory(account.session_name, int(account.api_id), account.api_hash)
+            shared = (
+                self.account_manager.peek_client(account.id)
+                if self.account_manager is not None
+                else None
+            )
+            self.clients[account.id] = shared or self.client_factory(
+                account.session_name,
+                int(account.api_id),
+                account.api_hash,
+            )
+            if self.account_manager is not None:
+                self.account_manager.register_client(
+                    account.id,
+                    self.clients[account.id],
+                )
         return self.clients[account.id]
 
     async def test_connection(self, account, timeout=10):
@@ -151,12 +171,14 @@ class TelegramDiagnostics:
         return self._persist(account, report, self.DISCONNECTED)
 
     async def disconnect_all(self):
-        for client in list(self.clients.values()):
+        for account_id, client in list(self.clients.items()):
             try:
                 if client.is_connected():
                     await client.disconnect()
             except Exception:
                 pass
+            if self.account_manager is not None:
+                self.account_manager.unregister_client(account_id)
         self.clients.clear()
 
     async def delete_local_session(self, account):
@@ -203,4 +225,9 @@ class TelegramDiagnostics:
         Path(destination).write_text(self.to_text(report), encoding="utf-8")
 
 
-telegram_diagnostics = TelegramDiagnostics()
+from telegram.account_manager import telegram_account_manager
+
+
+telegram_diagnostics = TelegramDiagnostics(
+    account_manager=telegram_account_manager
+)
