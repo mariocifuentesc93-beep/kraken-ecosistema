@@ -14,6 +14,7 @@ class KrakenEngine:
     def __init__(
         self,
         signal_engine_instance=None,
+        ingestion_service_instance=None,
         execution_engine_instance=None,
         operation_monitor_instance=None,
     ):
@@ -21,6 +22,7 @@ class KrakenEngine:
         self.status = RuntimeStatus.STOPPED
         self.telegram_clients = []
         self._signal_engine = signal_engine_instance
+        self._ingestion_service = ingestion_service_instance
         self._execution_engine = execution_engine_instance
         self._operation_monitor = operation_monitor_instance
 
@@ -38,6 +40,18 @@ class KrakenEngine:
             self._execution_engine = execution_engine
 
         return self._execution_engine
+
+    def _get_ingestion_service(self):
+
+        if self._ingestion_service is None:
+            from services.signal_ingestion_service import (
+                SignalIngestionService,
+            )
+            self._ingestion_service = SignalIngestionService(
+                signal_engine_instance=self._get_signal_engine(),
+            )
+
+        return self._ingestion_service
 
     def _get_operation_monitor(self):
 
@@ -131,7 +145,7 @@ class KrakenEngine:
             print("Kraken detenido.")
             return False
 
-        return self._get_signal_engine().process(
+        return self._get_ingestion_service().ingest(
             signal=signal,
             chat_id=chat_id,
             account_id=account_id,

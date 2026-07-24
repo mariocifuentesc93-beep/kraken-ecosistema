@@ -59,7 +59,7 @@ class SignalEngine:
         account_id=None,
     ):
         """
-        Procesa una señal Telegram normalizada.
+        Procesa una señal normalizada y ya persistida.
 
         Este método es el único responsable de resolver los perfiles asociados
         al chat. Cada perfil recibe una copia independiente del Signal.
@@ -69,9 +69,10 @@ class SignalEngine:
             event_bus.warning("SignalEngine detenido.")
             return False
 
-        signal.source = "TELEGRAM"
-        signal.chat_id = chat_id
-        signal.telegram_account_id = account_id
+        if chat_id is not None:
+            signal.chat_id = chat_id
+        if account_id is not None:
+            signal.telegram_account_id = account_id
 
         event_bus.signalReceived.emit(
             SignalReceivedEvent(

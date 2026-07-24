@@ -5,6 +5,7 @@ import pytest
 
 from database.signal_contract_migration import upgrade
 from models.signal import Signal
+from repositories.signal_repository import SignalRepository
 
 
 @pytest.fixture
@@ -30,6 +31,11 @@ def valid_signal():
         take_profits=[73517.70, 73529.41, 73545.02],
         raw_message="SIGNAL - EmasVol20 buy",
     )
+
+
+@pytest.fixture
+def temporary_signal_repository(unified_database):
+    return SignalRepository(unified_database)
 
 
 @pytest.fixture
