@@ -1,0 +1,8 @@
+﻿scan_time;event;symbol;timeframe;object_name;object_type;price_0;text;tooltip;unknown_column
+2026-07-23 10:00:00;CREATED;EmasVol20;M5;BMSP_12304_entry_label;OBJ_TEXT;73506.50;ENTRY BUY #12304;;ignored
+2026-07-23 10:00:01;CREATED;EmasVol20;M5;BMSP_12304_entry_line;OBJ_HLINE;73505.99;;;ignored
+2026-07-23 10:00:01;CREATED;EmasVol20;M5;BMSP_12304_sl_line;OBJ_HLINE;73486.47;;;ignored
+2026-07-23 10:00:01;CREATED;EmasVol20;M5;BMSP_12304_tp1_line;OBJ_HLINE;73517.7;;;ignored
+2026-07-23 10:00:01;CREATED;EmasVol20;M5;BMSP_12304_tp2_line;OBJ_HLINE;73529.41;;;ignored
+2026-07-23 10:00:01;CREATED;EmasVol20;M5;BMSP_12304_tp3_line;OBJ_HLINE;73545.02;;;ignored
+2026-07-23 10:00:01;CREATED;EmasVol20;M5;BMSP_12304_triangle;OBJ_ARROW_BUY;73505.99;;;ignored
