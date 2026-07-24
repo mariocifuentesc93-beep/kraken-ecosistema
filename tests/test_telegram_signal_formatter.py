@@ -1,5 +1,10 @@
 from models.signal import Signal
-from telegram.signal_publisher import format_internal_telegram_signal
+import pytest
+
+from telegram.signal_publisher import (
+    format_internal_telegram_signal,
+    format_signal_price,
+)
 
 
 def make_signal(direction="BUY"):
@@ -23,7 +28,7 @@ def test_buy_format_is_exact_and_does_not_expose_internal_key():
         "SL: 253891.42\n"
         "TP1: 253649.44\n"
         "TP2: 253558.69\n"
-        "TP3: 253437.7\n\n"
+        "TP3: 253437.70\n\n"
         "Signal ID: 12305"
     )
     assert "INTERNAL:LIONX100:12305" not in message
@@ -31,18 +36,32 @@ def test_buy_format_is_exact_and_does_not_expose_internal_key():
 
 def test_sell_format_is_exact():
     message = format_internal_telegram_signal(make_signal("sell"))
-    assert message.startswith("SIGNAL - LionX100 (SELL)\n\n")
-    assert message.endswith("Signal ID: 12305")
+    assert message == (
+        "SIGNAL - LionX100 (SELL)\n\n"
+        "Entry: 253740.18\n"
+        "SL: 253891.42\n"
+        "TP1: 253649.44\n"
+        "TP2: 253558.69\n"
+        "TP3: 253437.70\n\n"
+        "Signal ID: 12305"
+    )
+    assert "INTERNAL:LIONX100:12305" not in message
+    assert not any(marker in message for marker in ("*", "#", "<", ">"))
+    assert "🚨" not in message
 
 
-def test_prices_keep_at_most_four_decimals_without_trailing_zeroes():
-    signal = make_signal()
-    signal.entry = 73505.9900
-    signal.stop_loss = 239659.4703
-    signal.take_profits = [73517.7000, 1.23456, 10.0000]
-    message = format_internal_telegram_signal(signal)
-    assert "Entry: 73505.99" in message
-    assert "SL: 239659.4703" in message
-    assert "TP1: 73517.7" in message
-    assert "TP2: 1.2346" in message
-    assert "TP3: 10" in message
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (73505.9900, "73505.99"),
+        (73517.7000, "73517.70"),
+        (253437.7000, "253437.70"),
+        (239659.4703, "239659.4703"),
+        (100.0000, "100.00"),
+        (100.1000, "100.10"),
+        (100.1230, "100.123"),
+        (100.1234, "100.1234"),
+    ],
+)
+def test_prices_keep_between_two_and_four_decimals(value, expected):
+    assert format_signal_price(value) == expected

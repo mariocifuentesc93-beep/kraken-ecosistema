@@ -14,8 +14,10 @@ def format_signal_price(value):
         )
     except (InvalidOperation, ValueError, TypeError) as error:
         raise ValueError(f"Precio inválido: {value!r}") from error
-    text = format(number, "f").rstrip("0").rstrip(".")
-    return text or "0"
+    integer, decimals = format(number, ".4f").split(".")
+    decimals = decimals.rstrip("0")
+    decimals = decimals.ljust(2, "0")
+    return f"{integer}.{decimals}"
 
 
 def format_internal_telegram_signal(signal):
