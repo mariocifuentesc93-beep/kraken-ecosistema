@@ -191,6 +191,9 @@ def refresh_widget_style(widget):
 
 def apply_standard_components(root):
     """Normalize controls, states, shadows and interaction across a page."""
+    from dashboard.icons import apply_standard_icons
+
+    apply_standard_icons(root)
     for button in root.findChildren(QPushButton):
         button.installEventFilter(_hover_animator)
     for line_edit in root.findChildren(QLineEdit):

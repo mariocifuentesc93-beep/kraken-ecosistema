@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from dashboard.widgets.section_widget import SectionWidget
 from dashboard.widgets.connection_indicator import ConnectionIndicator
+from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
 
 
 class ChannelDialog(QDialog):
@@ -29,7 +30,7 @@ class ChannelDialog(QDialog):
 
         self.setWindowTitle("Canal Telegram")
 
-        self.resize(1000, 720)
+        fit_dialog_to_screen(self, 1000, 680)
 
         self.build_ui()
 

@@ -76,7 +76,13 @@ class Profile:
 
     max_daily_profit: float = 0.0
 
+    max_drawdown: float = 0.0
+
     max_open_trades: int = 0
+
+    # Minimum internal quality score (0-100) required for a signal.
+    # Zero leaves score filtering disabled.
+    min_signal_score: float = 0.0
 
     # =====================================================
     # EJECUCIÓN
@@ -85,6 +91,9 @@ class Profile:
     execution_mode: str = "OFF"
 
     tp_level: int = 1
+
+    # Action applied once TP1 is reached.  LIVE execution remains blocked.
+    tp1_management: str = "PROTECT_TP1"
 
     execute_market: bool = True
 
@@ -147,8 +156,10 @@ class Profile:
 
         self.max_daily_loss = float(self.max_daily_loss)
         self.max_daily_profit = float(self.max_daily_profit)
+        self.max_drawdown = float(self.max_drawdown)
 
         self.max_open_trades = int(self.max_open_trades)
+        self.min_signal_score = float(self.min_signal_score)
 
         self.magic_number = int(self.magic_number)
 

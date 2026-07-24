@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from dashboard.widgets.section_widget import SectionWidget
 from dashboard.widgets.connection_indicator import ConnectionIndicator
+from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
 
 
 class TelegramAccountDialog(QDialog):
@@ -27,7 +28,7 @@ class TelegramAccountDialog(QDialog):
 
         self.setWindowTitle("Cuenta Telegram")
 
-        self.resize(950, 720)
+        fit_dialog_to_screen(self, 950, 680)
 
         self.build_ui()
 

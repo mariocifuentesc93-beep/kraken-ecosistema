@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from core.config_service import load_active_config
@@ -23,13 +24,19 @@ class ActiveWorkflowSmokeTests(unittest.TestCase):
         cls.application = QApplication.instance() or QApplication([])
         cls._information = QMessageBox.information
         cls._question = QMessageBox.question
+        cls._warning = QMessageBox.warning
+        cls._critical = QMessageBox.critical
         QMessageBox.information = staticmethod(lambda *args: None)
         QMessageBox.question = staticmethod(lambda *args: QMessageBox.Yes)
+        QMessageBox.warning = staticmethod(lambda *args: None)
+        QMessageBox.critical = staticmethod(lambda *args: None)
 
     @classmethod
     def tearDownClass(cls):
         QMessageBox.information = cls._information
         QMessageBox.question = cls._question
+        QMessageBox.warning = cls._warning
+        QMessageBox.critical = cls._critical
 
     def setUp(self):
         self.original_database = database_manager.database
@@ -51,7 +58,14 @@ class ActiveWorkflowSmokeTests(unittest.TestCase):
         window = MainWindow()
         self.assertEqual(window.stack.count(), 18)
         for index in range(window.stack.count()):
-            window.menu.setCurrentRow(index)
+            page_name = window.stack.widget(index).objectName() or None
+            item = next(
+                (candidate for candidate in window.page_items.values()
+                 if candidate.data(Qt.UserRole) == index),
+                None,
+            )
+            self.assertIsNotNone(item)
+            window.menu.setCurrentItem(item)
             self.assertIs(window.stack.currentWidget(), window.stack.widget(index))
 
         dialog = ProfileDialog(parent=window)
@@ -64,11 +78,11 @@ class ActiveWorkflowSmokeTests(unittest.TestCase):
         self.assertEqual(profile.execution_mode, "SIMULATION")
 
         edit_dialog = ProfileDialog(profile=profile, parent=window)
-        edit_dialog.txtDescription.setPlainText("Persisted edit")
+        edit_dialog.txtComment.setText("Persisted edit")
         edit_dialog.save_profile()
         database_manager.close()
         database_manager.initialize()
-        self.assertEqual(profile_repository.get_by_id(profile.id).description, "Persisted edit")
+        self.assertEqual(profile_repository.get_by_id(profile.id).comment, "Persisted edit")
 
         window.profilesPage.refresh()
         window.profilesPage.table.selectRow(0)

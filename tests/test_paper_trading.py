@@ -28,7 +28,7 @@ class PaperTradingTests(unittest.TestCase):
     def test_pending_activation_tp_partial_break_even_and_trailing(self):
         trade=paper_trading_engine.execute(self.signal(market=False,entry=100),self.profile,quote=self.quote(101,101.2)); self.assertEqual(trade["status"],"PENDING")
         self.assertEqual(paper_trading_engine.process_price(trade["id"],self.quote(99.8,100))["status"],"OPEN")
-        trade=paper_trading_engine.process_price(trade["id"],self.quote(110,110.2)); self.assertTrue(trade["metadata"]["break_even"]); self.assertLess(trade["remaining_volume"],trade["volume"])
+        trade=paper_trading_engine.process_price(trade["id"],self.quote(110,110.2)); self.assertTrue(trade["metadata"]["tp1_protected"]); self.assertEqual(trade["stop_loss"],110); self.assertEqual(trade["remaining_volume"],trade["volume"])
         trade=paper_trading_engine.process_price(trade["id"],self.quote(120,120.2)); self.assertTrue(trade["metadata"]["trailing"])
         trade=paper_trading_engine.process_price(trade["id"],self.quote(130,130.2)); self.assertEqual(trade["status"],"CLOSED")
     def test_sl_duplicate_balance_and_reset(self):

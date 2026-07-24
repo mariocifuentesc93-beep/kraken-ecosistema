@@ -35,6 +35,11 @@ def process_signal_message(text, chat_id=None, account_id=None, profile=None, so
     if signal_repository.is_duplicate(signal.raw_message, chat_id):
         errors.append("Señal duplicada")
     signal.score = _score(signal, valid and not errors)
+    minimum_score = float(getattr(profile, "min_signal_score", 0) or 0)
+    if not errors and minimum_score and signal.score < minimum_score:
+        errors.append(
+            f"Puntaje insuficiente ({signal.score:.0f}/100; mínimo {minimum_score:.0f})"
+        )
     signal.metadata["parsed_fields"] = {
         "symbol": signal.symbol, "direction": signal.direction,
         "entry": signal.entry, "stop_loss": signal.stop_loss,

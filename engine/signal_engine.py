@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from engine.profile_engine import profile_engine
 
 from repositories.profile_repository import profile_repository
@@ -131,9 +133,13 @@ class SignalEngine:
 
         for profile in profiles:
 
-            if not getattr(profile, "enabled", True):
+            if not getattr(profile, "is_active", False):
 
                 continue
+
+            # Each active profile receives an isolated copy so profile-specific
+            # risk, account and execution decisions never overwrite one another.
+            profile_signal = deepcopy(signal)
 
             event_bus.profileStarted.emit(
 
@@ -141,7 +147,7 @@ class SignalEngine:
 
                     profile=profile,
 
-                    signal=signal,
+                    signal=profile_signal,
 
                 )
 
@@ -152,7 +158,7 @@ class SignalEngine:
 
             try:
 
-                signal.profile_id = profile.id
+                profile_signal.profile_id = profile.id
 
             except Exception:
 
@@ -160,7 +166,7 @@ class SignalEngine:
 
             result = profile_engine.process_signal(
 
-                signal,
+                profile_signal,
 
                 profile,
 
@@ -172,7 +178,7 @@ class SignalEngine:
 
                     profile=profile,
 
-                    signal=signal,
+                    signal=profile_signal,
 
                     success=result,
 

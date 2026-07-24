@@ -47,6 +47,47 @@ class ProfileTelegramChannelRepository:
         )
         return [dict(row) for row in cursor.fetchall()]
 
+    def get_available_channels(self, account_id):
+        """Return distinct configured chats for the selected Telegram account."""
+        if account_id is None:
+            return []
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            SELECT chat_id, MAX(title) AS title, MAX(username) AS username
+            FROM profile_telegram_channels
+            WHERE account_id=?
+            GROUP BY chat_id
+            ORDER BY title, chat_id
+            """,
+            (account_id,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def set_profile_channel(self, profile_id, account_id, channel):
+        """Assign one configured channel to a profile without affecting other profiles."""
+        cursor = database_manager.cursor()
+        cursor.execute(
+            "DELETE FROM profile_telegram_channels WHERE profile_id=?",
+            (profile_id,),
+        )
+        if channel is not None and account_id is not None:
+            cursor.execute(
+                """
+                INSERT INTO profile_telegram_channels
+                (profile_id, account_id, chat_id, title, username, enabled, priority)
+                VALUES (?, ?, ?, ?, ?, 1, 1)
+                """,
+                (
+                    profile_id,
+                    account_id,
+                    channel["chat_id"],
+                    channel.get("title", ""),
+                    channel.get("username", ""),
+                ),
+            )
+        database_manager.commit()
+
     def set_channel_enabled(self, chat_id, enabled):
         cursor = database_manager.cursor()
         cursor.execute(

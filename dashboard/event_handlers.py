@@ -297,8 +297,8 @@ class DashboardEventHandlers(QObject):
 
     def on_warning(self, text):
 
-        self.window.notify(f"⚠ {text}")
+        self.window.notify(f"ADVERTENCIA · {text}")
 
     def on_error(self, text):
 
-        self.window.notify(f"❌ {text}")
+        self.window.notify(f"ERROR · {text}")

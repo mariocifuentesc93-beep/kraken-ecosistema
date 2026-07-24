@@ -14,6 +14,9 @@ TERMINAL_STATES = {"REJECTED", "CANCELLED", "ERROR", "EXPIRED", "CLOSED"}
 class ExecutionPipeline:
     def create(self, signal, profile, account=None, execution_mode="SIMULATION"):
         operation = Operation(signal=signal, profile=profile, account=account, status="NEW")
+        operation.metadata["tp1_management"] = getattr(
+            profile, "tp1_management", "PROTECT_TP1"
+        )
         operation.opened_at = datetime.now()
         operation_repository.create(operation)
         self.transition(operation, "NEW", "Se creó la operación", execution_mode)
@@ -102,7 +105,7 @@ class ExecutionPipeline:
         is_buy = str(getattr(signal, "direction", "")).upper() == "BUY"
         price = quote["bid"] if is_buy else quote["ask"]
         market_price_event_repository.record(operation, quote, "PRICE_EVALUATED")
-        stop_loss = float(getattr(signal, "stop_loss", 0) or 0)
+        stop_loss = float(getattr(operation, "stop_loss", 0) or 0)
         if stop_loss and ((is_buy and price <= stop_loss) or (not is_buy and price >= stop_loss)):
             operation.result = "SL"
             return self.transition(operation, "CLOSED", "Stop Loss detectado", "SIMULATION")
@@ -113,6 +116,18 @@ class ExecutionPipeline:
             state = f"TP{index}"
             if hit(float(target)) and operation.status not in {state, "TP3"}:
                 self.transition(operation, state, f"{state} detectado", "SIMULATION")
+                management = operation.metadata.get("tp1_management", "PROTECT_TP1")
+                if (
+                    management == "PROTECT_TP1"
+                    and index in (1, 2)
+                    and index < len(targets[:3])
+                ):
+                    operation.stop_loss = float(target)
+                    operation.metadata[f"tp{index}_protected"] = True
+                    if index == 2:
+                        operation.metadata["trailing"] = True
+                    operation_repository.update(operation)
+                    continue
                 if index == len(targets[:3]) or index == 3:
                     operation.result = state
                     return self.transition(operation, "CLOSED", f"Cierre {state}", "SIMULATION")

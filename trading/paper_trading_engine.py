@@ -40,6 +40,9 @@ class PaperTradingEngine:
         spread = abs(quote["ask"] - quote["bid"]) * volume * self.CONTRACT_SIZE
         slip = float(account["slippage"]) * volume * self.CONTRACT_SIZE
         trade = {"paper_account_id":account["id"],"operation_id":operation.id,"signal_key":key,"profile_id":profile.id,"symbol":signal.symbol,"direction":signal.direction,"status":"PENDING" if pending else "OPEN","volume":volume,"remaining_volume":volume,"entry_price":None if pending else base + (account["slippage"] if buy else -account["slippage"]),"stop_loss":signal.stop_loss,"take_profits":list(signal.take_profits),"gross_pl":0,"spread_cost":spread,"slippage_cost":slip,"commission_cost":float(account["commission"])*volume,"net_pl":0,"initial_risk":risk,"margin_estimate":entry*volume*self.CONTRACT_SIZE/100,"opened_at":None if pending else datetime.now().isoformat(),"closed_at":None,"duration_seconds":0,"updated_at":datetime.now().isoformat(),"metadata":{"break_even":False,"trailing":False,"partial_count":0,"requested_entry":signal.entry if pending else 0,"initial_risk_price":abs(entry-float(signal.stop_loss or entry))}}
+        trade["metadata"]["tp1_management"] = getattr(
+            profile, "tp1_management", "PROTECT_TP1"
+        )
         return paper_trading_repository.create_trade(trade)
 
     def process_price(self, trade_id, quote):
@@ -57,7 +60,20 @@ class PaperTradingEngine:
         targets=trade["take_profits"]
         for index,target in enumerate(targets[:3],1):
             if trade["metadata"].get(f"tp{index}") or not ((buy and price>=target) or (not buy and price<=target)): continue
-            trade["metadata"][f"tp{index}"]=True; portion=trade["remaining_volume"] if index==len(targets[:3]) else trade["volume"]/3
+            trade["metadata"][f"tp{index}"] = True
+            tp1_management = trade["metadata"].get("tp1_management", "PROTECT_TP1")
+            if (
+                index in (1, 2)
+                and index < len(targets[:3])
+                and tp1_management == "PROTECT_TP1"
+            ):
+                # Keep the full position open for TP2/TP3 while locking profit.
+                trade["stop_loss"] = float(target)
+                trade["metadata"][f"tp{index}_protected"] = True
+                if index == 2:
+                    trade["metadata"]["trailing"] = True
+                continue
+            portion=trade["remaining_volume"] if index==len(targets[:3]) else trade["volume"]/3
             self._realize(trade, price, min(portion,trade["remaining_volume"])); trade["metadata"]["partial_count"]+=1
             if index==1: trade["stop_loss"]=trade["entry_price"]; trade["metadata"]["break_even"]=True
             if index==2: trade["metadata"]["trailing"]=True

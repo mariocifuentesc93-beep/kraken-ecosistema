@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QTabWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -22,11 +21,13 @@ from dashboard.widgets.section_widget import SectionWidget
 from dashboard.widgets.statistics_panel import StatisticsPanel
 from dashboard.widgets.symbol_selector import SymbolSelector
 from dashboard.widgets.telegram_selector import TelegramSelector
+from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
 from models.profile import Profile
 from repositories.mt5_account_repository import mt5_account_repository
 from repositories.profile_repository import profile_repository
 from repositories.symbol_repository import symbol_repository
 from repositories.telegram_account_repository import telegram_account_repository
+from repositories.profile_telegram_repository import profile_telegram_channel_repository
 
 
 class ProfileDialog(QDialog):
@@ -39,7 +40,7 @@ class ProfileDialog(QDialog):
         self._profile_symbols = {}
 
         self.setWindowTitle("Perfil Kraken")
-        self.resize(1200, 850)
+        fit_dialog_to_screen(self, 1200, 700)
 
         self.build_ui()
         self.load_repository_data()
@@ -94,19 +95,13 @@ class ProfileDialog(QDialog):
         form = QFormLayout()
 
         self.txtName = QLineEdit()
-        self.txtDescription = QTextEdit()
         self.cboMode = QComboBox()
         self.cboMode.addItems(["OFF", "SIMULATION", "DEMO", "LIVE"])
-        self.spnCapital = QDoubleSpinBox()
-        self.spnCapital.setMaximum(999999999)
         self.spnMagic = QSpinBox()
         self.spnMagic.setMaximum(999999999)
         self.txtComment = QLineEdit()
 
         form.addRow("Nombre", self.txtName)
-        form.addRow("Descripción", self.txtDescription)
-        form.addRow("Modo", self.cboMode)
-        form.addRow("Capital", self.spnCapital)
         form.addRow("Magic Number", self.spnMagic)
         form.addRow("Comentario", self.txtComment)
 
@@ -123,19 +118,41 @@ class ProfileDialog(QDialog):
 
         self.cboExecution = QComboBox()
         self.cboExecution.addItems(["OFF", "SIMULATION", "DEMO", "LIVE"])
+        self.cboExecution.setToolTip(
+            "Define el modo de ejecuci\u00f3n de este perfil. "
+            "Este es el \u00fanico modo configurable del perfil."
+        )
+        # operation_mode remains a legacy persisted field.  Keep it synchronized
+        # without presenting a second, conflicting selector to the operator.
+        self.cboExecution.currentTextChanged.connect(self.cboMode.setCurrentText)
         self.cboRiskMode = QComboBox()
-        self.cboRiskMode.addItems(["PERCENT", "AMOUNT", "LOT"])
+        self.cboRiskMode.addItems(["PERCENT", "AMOUNT"])
         self.spnMaxTrades = QSpinBox()
+        self.spnMaxTrades.setToolTip(
+            "Máximo de operaciones abiertas al mismo tiempo para este perfil. "
+            "No limita la cantidad de operaciones cerradas durante el día."
+        )
         self.spnScore = QDoubleSpinBox()
+        self.spnScore.setRange(0.0, 100.0)
+        self.spnScore.setDecimals(0)
+        self.spnScore.setSuffix(" / 100")
+        self.spnScore.setToolTip(
+            "Puntaje mínimo de calidad calculado por Kraken Bot para aceptar "
+            "una señal. Use 0 para no filtrar por puntaje."
+        )
         self.spnTP = QSpinBox()
 
-        form.addRow("Modo", self.cboExecution)
+        form.addRow("Modo de ejecuci\u00f3n", self.cboExecution)
         form.addRow("Riesgo", self.cboRiskMode)
         form.addRow("Máx. Operaciones", self.spnMaxTrades)
-        form.addRow("Score mínimo", self.spnScore)
+        form.addRow("Puntaje mínimo", self.spnScore)
         form.addRow("TP Objetivo", self.spnTP)
 
         section.addLayout(form)
+        max_trades_label = form.labelForField(self.spnMaxTrades)
+        if max_trades_label is not None:
+            max_trades_label.setText("Máx. operaciones simultáneas")
+            max_trades_label.setToolTip(self.spnMaxTrades.toolTip())
         layout.addWidget(section)
         layout.addStretch()
         self.tabs.addTab(page, "Trading")
@@ -157,6 +174,16 @@ class ProfileDialog(QDialog):
         section = SectionWidget("Cuentas MT5")
         self.mt5Selector = AccountSelector()
         section.addWidget(self.mt5Selector)
+        self.lblMt5Capital = QLabel(
+            "Capital MT5: seleccione una cuenta para consultar el saldo disponible."
+        )
+        self.lblMt5Capital.setWordWrap(True)
+        self.lblMt5Capital.setToolTip(
+            "El capital se toma del balance sincronizado de la cuenta MT5. "
+            "No se configura manualmente en el perfil."
+        )
+        section.addWidget(self.lblMt5Capital)
+        self.mt5Selector.selectionChanged.connect(self._update_mt5_capital)
         layout.addWidget(section)
         layout.addStretch()
         self.tabs.addTab(page, "MT5")
@@ -167,6 +194,18 @@ class ProfileDialog(QDialog):
         section = SectionWidget("Cuentas Telegram")
         self.telegramSelector = TelegramSelector()
         section.addWidget(self.telegramSelector)
+        self.lblTelegramChannel = QLabel(
+            "Seleccione primero una cuenta de Telegram para ver sus canales configurados."
+        )
+        self.cboTelegramChannel = QComboBox()
+        self.cboTelegramChannel.setEnabled(False)
+        self.cboTelegramChannel.setToolTip(
+            "El canal seleccionado recibirá señales para este perfil. "
+            "El mismo canal puede asignarse a otros perfiles."
+        )
+        section.addWidget(self.lblTelegramChannel)
+        section.addWidget(self.cboTelegramChannel)
+        self.telegramSelector.selectionChanged.connect(self._load_telegram_channels)
         layout.addWidget(section)
         layout.addStretch()
         self.tabs.addTab(page, "Telegram")
@@ -227,27 +266,43 @@ class ProfileDialog(QDialog):
 
         profile = self.profile
         self.txtName.setText(profile.name)
-        self.txtDescription.setPlainText(profile.description)
         self.txtComment.setText(profile.comment)
         self.spnMagic.setValue(profile.magic_number)
-        self.cboMode.setCurrentText(profile.operation_mode)
-        self.cboExecution.setCurrentText(profile.execution_mode)
-        self.cboRiskMode.setCurrentText(profile.risk_mode)
+        execution_mode = profile.execution_mode or profile.operation_mode or "OFF"
+        self.cboExecution.setCurrentText(execution_mode)
+        self.cboMode.setCurrentText(execution_mode)
+        risk_mode = profile.risk_mode if profile.risk_mode in {"PERCENT", "AMOUNT"} else "PERCENT"
+        self.cboRiskMode.setCurrentText(risk_mode)
         self.spnMaxTrades.setValue(profile.max_open_trades)
+        self.spnScore.setValue(profile.min_signal_score)
         self.spnTP.setValue(profile.tp_level)
+        tp1_index = self.riskWidget.tp1Management.findData(
+            getattr(profile, "tp1_management", "PROTECT_TP1")
+        )
+        self.riskWidget.tp1Management.setCurrentIndex(max(0, tp1_index))
 
-        self._set_risk_widget_mode(profile.risk_mode)
-        if profile.risk_mode == "PERCENT":
+        self._set_risk_widget_mode(risk_mode)
+        if risk_mode == "PERCENT":
             self.riskWidget.value.setValue(profile.risk_percent)
-        elif profile.risk_mode == "AMOUNT":
-            self.riskWidget.value.setValue(profile.risk_amount)
         else:
-            self.riskWidget.value.setValue(profile.fixed_lot)
+            self.riskWidget.value.setValue(profile.risk_amount)
+        daily_limit_enabled = (
+            profile.max_daily_loss > 0 or profile.max_daily_profit > 0
+        )
+        self.riskWidget.daily.setChecked(daily_limit_enabled)
+        self.riskWidget.dailyLossLimit.setValue(profile.max_daily_loss)
+        self.riskWidget.dailyProfitLimit.setValue(profile.max_daily_profit)
+        self.riskWidget.drawdown.setChecked(profile.max_drawdown > 0)
+        self.riskWidget.drawdownLimit.setValue(profile.max_drawdown)
 
         self.mt5Selector.setSelected(self._as_id_list(profile.default_mt5_account))
         self.telegramSelector.setSelected(
             self._as_id_list(profile.telegram_account_id)
         )
+        self._load_telegram_channels()
+        selected_channel = self.cboTelegramChannel.findData(profile.telegram_channel_id)
+        if selected_channel >= 0:
+            self.cboTelegramChannel.setCurrentIndex(selected_channel)
 
         self._profile_symbols = {
             symbol.symbol: symbol
@@ -278,28 +333,92 @@ class ProfileDialog(QDialog):
 
         return {
             "name": self.txtName.text().strip(),
-            "description": self.txtDescription.toPlainText(),
+            # Description is retained for compatibility with existing profiles;
+            # comments are the single user-facing field for observations.
+            "description": self.profile.description if self.profile else "",
             "comment": self.txtComment.text(),
-            "operation_mode": self.cboMode.currentText(),
+            "operation_mode": self.cboExecution.currentText(),
             "magic_number": self.spnMagic.value(),
             "execution_mode": self.cboExecution.currentText(),
             "risk_mode": risk_mode,
             "risk_percent": risk_value if risk_mode == "PERCENT" else 0.0,
             "risk_amount": risk_value if risk_mode == "AMOUNT" else 0.0,
-            "fixed_lot": risk_value if risk_mode == "LOT" else 0.0,
+            "fixed_lot": self.profile.fixed_lot if self.profile else 0.0,
             "max_open_trades": self.spnMaxTrades.value(),
+            "min_signal_score": self.spnScore.value(),
+            "max_daily_loss": (
+                self.riskWidget.dailyLossLimit.value()
+                if self.riskWidget.daily.isChecked() else 0.0
+            ),
+            "max_daily_profit": (
+                self.riskWidget.dailyProfitLimit.value()
+                if self.riskWidget.daily.isChecked() else 0.0
+            ),
+            "max_drawdown": (
+                self.riskWidget.drawdownLimit.value()
+                if self.riskWidget.drawdown.isChecked() else 0.0
+            ),
             "tp_level": self.spnTP.value(),
+            "tp1_management": self.riskWidget.tp1Management.currentData(),
             "default_mt5_account": self._selected_account_id(self.mt5Selector),
             "telegram_account_id": self._selected_account_id(
                 self.telegramSelector
             ),
+            "telegram_channel_id": self.cboTelegramChannel.currentData(),
         }
 
     def set_mt5_accounts(self, accounts):
         self.mt5Selector.loadAccounts(accounts)
+        self._update_mt5_capital()
+
+    def _update_mt5_capital(self):
+        accounts = self.mt5Selector.selectedAccounts()
+        if not accounts:
+            self.lblMt5Capital.setText(
+                "Capital MT5: seleccione una cuenta para consultar el saldo disponible."
+            )
+            return
+
+        balance = sum(float(getattr(account, "balance", 0.0) or 0.0) for account in accounts)
+        connected = [account for account in accounts if getattr(account, "connected", False)]
+        if connected:
+            source = "saldo sincronizado"
+        else:
+            source = "último saldo guardado; conecte MT5 para actualizarlo"
+        self.lblMt5Capital.setText(
+            f"Capital MT5 ({len(accounts)} cuenta(s)): ${balance:,.2f} — {source}."
+        )
 
     def set_telegram_accounts(self, accounts):
         self.telegramSelector.loadAccounts(accounts)
+        self._load_telegram_channels()
+
+    def _load_telegram_channels(self):
+        account_id = self._selected_account_id(self.telegramSelector)
+        previous_channel = self.cboTelegramChannel.currentData()
+        self.cboTelegramChannel.clear()
+        if account_id is None:
+            self.cboTelegramChannel.setEnabled(False)
+            self.lblTelegramChannel.setText(
+                "Seleccione primero una cuenta de Telegram para ver sus canales configurados."
+            )
+            return
+
+        channels = profile_telegram_channel_repository.get_available_channels(account_id)
+        self.cboTelegramChannel.setEnabled(bool(channels))
+        if not channels:
+            self.lblTelegramChannel.setText(
+                "Esta cuenta aún no tiene canales configurados. Agréguelos desde Canales."
+            )
+            return
+
+        self.lblTelegramChannel.setText("Canal que utilizará este perfil")
+        for channel in channels:
+            title = channel.get("title") or channel.get("username") or str(channel["chat_id"])
+            self.cboTelegramChannel.addItem(title, channel["chat_id"])
+        index = self.cboTelegramChannel.findData(previous_channel)
+        if index >= 0:
+            self.cboTelegramChannel.setCurrentIndex(index)
 
     def set_symbols(self, symbols):
         self.symbolSelector.loadSymbols([
@@ -343,6 +462,7 @@ class ProfileDialog(QDialog):
                 profile_repository.create(profile)
             else:
                 profile_repository.update(profile)
+            self._save_telegram_channel(profile)
             self._save_symbols(profile.id)
         except Exception as error:
             QMessageBox.critical(
@@ -386,14 +506,29 @@ class ProfileDialog(QDialog):
                 "trade",
             )
 
+    def _save_telegram_channel(self, profile):
+        account_id = profile.telegram_account_id
+        chat_id = profile.telegram_channel_id
+        channel = None
+        if account_id is not None and chat_id is not None:
+            for candidate in profile_telegram_channel_repository.get_available_channels(account_id):
+                if candidate["chat_id"] == chat_id:
+                    channel = candidate
+                    break
+        profile_telegram_channel_repository.set_profile_channel(
+            profile.id,
+            account_id,
+            channel,
+        )
+
     def _set_risk_widget_mode(self, mode):
         buttons = {
             "PERCENT": self.riskWidget.percent,
             "AMOUNT": self.riskWidget.amount,
-            "LOT": self.riskWidget.lot,
         }
         button = buttons.get(mode, self.riskWidget.percent)
         button.setChecked(True)
+        self.riskWidget._update_value_presentation()
 
     def _sync_risk_mode(self, *_):
         self.cboRiskMode.setCurrentText(self._risk_mode())
@@ -401,8 +536,6 @@ class ProfileDialog(QDialog):
     def _risk_mode(self):
         if self.riskWidget.amount.isChecked():
             return "AMOUNT"
-        if self.riskWidget.lot.isChecked():
-            return "LOT"
         return "PERCENT"
 
     @staticmethod

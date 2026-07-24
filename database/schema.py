@@ -65,11 +65,17 @@ def create_tables(connection: sqlite3.Connection):
 
         max_daily_profit REAL DEFAULT 0,
 
+        max_drawdown REAL DEFAULT 0,
+
         max_open_trades INTEGER DEFAULT 0,
+
+        min_signal_score REAL DEFAULT 0,
 
         execution_mode TEXT DEFAULT 'OFF',
 
         tp_level INTEGER DEFAULT 1,
+
+        tp1_management TEXT DEFAULT 'PROTECT_TP1',
 
         execute_market INTEGER DEFAULT 1,
 
@@ -112,6 +118,9 @@ def create_tables(connection: sqlite3.Connection):
     for column, definition in {
         "min_lot": "REAL DEFAULT 0.01",
         "max_lot": "REAL DEFAULT 100.0",
+        "min_signal_score": "REAL DEFAULT 0",
+        "max_drawdown": "REAL DEFAULT 0",
+        "tp1_management": "TEXT DEFAULT 'PROTECT_TP1'",
         "magic_number": "INTEGER DEFAULT 10001",
         "comment": "TEXT DEFAULT ''",
         "deviation": "INTEGER DEFAULT 20",

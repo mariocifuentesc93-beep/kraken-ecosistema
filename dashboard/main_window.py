@@ -57,7 +57,8 @@ from dashboard.ui_theme import (NEGATIVE, POSITIVE, WARNING, application_style,
                                 apply_standard_components, apply_terminal_palette,
                                 configure_active_tables, status_chip)
 from dashboard.branding import application_icon, logo_pixmap
-from dashboard.icons import colored_icon
+from dashboard.icons import (ICON_SIZE, apply_standard_icons, colored_icon, icon_chip,
+                             install_icon_system)
 from repositories.profile_repository import profile_repository
 from dashboard.widgets.enterprise import decorate_enterprise_page
 from dashboard.layout_manager import enterprise_layout
@@ -73,6 +74,18 @@ class ResponsiveStack(QStackedWidget):
         return QSize(0, 0)
 
 
+class EnterpriseToolbar(QToolBar):
+    """Keep the shell toolbar contract stable as icon-bearing chips change."""
+
+    def sizeHint(self):
+        hint = super().sizeHint()
+        hint.setHeight(enterprise_layout.TOOLBAR_HEIGHT)
+        return hint
+
+    def minimumSizeHint(self):
+        return QSize(0, enterprise_layout.TOOLBAR_HEIGHT)
+
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -84,9 +97,11 @@ class MainWindow(QMainWindow):
 
         self.resize(1600, 900)
         apply_terminal_palette()
+        install_icon_system()
         self.setStyleSheet(application_style())
 
         self.build_ui()
+        apply_standard_icons(self)
 
     def build_ui(self):
 
@@ -114,12 +129,12 @@ class MainWindow(QMainWindow):
 
     def build_toolbar(self):
 
-        self.toolbar = QToolBar()
+        self.toolbar = EnterpriseToolbar()
         self.toolbar.setObjectName("CommandStrip")
-        self.toolbar.setStyleSheet("QToolBar#CommandStrip { background:#09131D; border:0; border-bottom:1px solid #1E3445; padding:5px 7px; }")
+        self.toolbar.setStyleSheet("QToolBar#CommandStrip { background:#09131D; border:0; border-bottom:1px solid #1E3445; padding:6px 7px 7px 7px; }")
 
         self.toolbar.setMovable(False)
-        self.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonIconOnly)
 
         self.toolbar.setIconSize(
             QSize(14, 14)
@@ -241,13 +256,29 @@ class MainWindow(QMainWindow):
         self.topDatabase = QLabel("SQLite: disponible")
         self.topVersion = QLabel(f"v{VERSION}")
         self.topClock = QLabel()
-        for widget, color in ((self.topMode, WARNING), (self.topMT5, NEGATIVE), (self.topTelegram, NEGATIVE), (self.topDatabase, POSITIVE), (self.topVersion, POSITIVE)):
-            widget.setStyleSheet(status_chip(color)); self.topStatus.addWidget(widget)
-        self.topClock.setStyleSheet(status_chip(POSITIVE)); self.topStatus.addWidget(self.topClock)
+        chips = (
+            (self.topMode, "radio", WARNING),
+            (self.topMT5, "activity", NEGATIVE),
+            (self.topTelegram, "send", NEGATIVE),
+            (self.topDatabase, "database-backup", POSITIVE),
+            (self.topVersion, "circle-check", POSITIVE),
+            (self.topClock, "history", POSITIVE),
+        )
+        self.status_icon_chips = []
+        for widget, icon_name, color in chips:
+            chip = icon_chip(widget, icon_name, color)
+            chip.setObjectName("EnterpriseStatusChip")
+            chip.setStyleSheet(
+                f"QWidget#EnterpriseStatusChip {{ {status_chip(color)} }} "
+                "QWidget#EnterpriseStatusChip QLabel { background:transparent; border:0; padding:0; }"
+            )
+            self.status_icon_chips.append(chip)
+            self.topStatus.addWidget(chip)
         self.toolbar_right_margin = QWidget()
         self.toolbar_right_margin.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.toolbar_right_margin.setStyleSheet("background:transparent; border:0;")
         self.topStatus.addWidget(self.toolbar_right_margin)
+        self.toolbar.setFixedHeight(enterprise_layout.TOOLBAR_HEIGHT)
         self.clock_timer = QTimer(self); self.clock_timer.timeout.connect(self.update_clock); self.clock_timer.start(1000); self.update_clock()
 
     def build_central(self):
@@ -282,8 +313,10 @@ class MainWindow(QMainWindow):
         self.sidebar_toggle = QPushButton("‹  Contraer navegación")
         sidebar_layout.addWidget(self.sidebar_toggle)
         self.menu = EnterpriseNavigationList()
+        self.menu.setObjectName("EnterpriseNavigation")
+        self.menu.setProperty("enterpriseNavigation", True)
         self.menu.setSpacing(0)
-        self.menu.setIconSize(QSize(13, 13))
+        self.menu.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
         self.menu.setItemDelegate(EnterpriseNavigationDelegate(self.menu))
         self.menu.setToolTip("Navegación principal")
         sidebar_layout.addWidget(self.menu)
@@ -573,6 +606,7 @@ class MainWindow(QMainWindow):
             self.notificationDock
 
         )
+        self.notificationDock.toggleViewAction().setIcon(colored_icon("radio", "#45A3FF"))
         # Notifications are available from the dashboard header, not permanently
         # docked at the right side of the application.
         self.notificationDock.hide()
@@ -721,7 +755,7 @@ class MainWindow(QMainWindow):
         )
         for widget in self.sidebar_brand_widgets:
             widget.setVisible(not collapsed)
-        self.menu.setIconSize(QSize(18, 18) if collapsed else QSize(13, 13))
+        self.menu.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
         for row in range(self.menu.count()):
             item = self.menu.item(row)
             if item.data(Qt.UserRole) == -1:

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QPus
 from dashboard.styles import BORDER_COLOR, CARD_COLOR, ERROR_COLOR, INFO_COLOR, PRIMARY_COLOR, SECONDARY_TEXT, WARNING_COLOR
 from dashboard.ui_theme import configure_active_tables
 from dashboard.ui_theme import set_visual_role
-from dashboard.icons import colored_icon
+from dashboard.icons import ICON_INFO, colored_icon, set_label_icon
 from repositories.profile_repository import profile_repository
 from repositories.signal_repository import signal_repository
 from services.trading_analytics_service import trading_analytics_service
@@ -169,8 +169,8 @@ class DashboardPage(QWidget):
         footer.setContentsMargins(0, 1, 0, 0)
         self.connection_updated = QLabel(f"Última actualización:\n{datetime.now():%d/%m/%Y %I:%M:%S %p}")
         set_visual_role(self.connection_updated,"cardDetail")
-        refresh = QLabel("⟳")
-        refresh.setAlignment(Qt.AlignRight | Qt.AlignBottom)
+        refresh = QLabel()
+        set_label_icon(refresh, "refresh-cw", ICON_INFO)
         set_visual_role(refresh,"panelTitle")
         footer.addWidget(self.connection_updated)
         footer.addStretch()

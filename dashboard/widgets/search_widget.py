@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
 )
+from dashboard.icons import ICON_INFO, colored_icon
 
 
 class SearchWidget(QWidget):
@@ -30,7 +31,9 @@ class SearchWidget(QWidget):
             "Buscar..."
         )
 
-        self.button = QPushButton("🔍")
+        self.button = QPushButton()
+        self.button.setIcon(colored_icon("search-check", ICON_INFO))
+        self.button.setToolTip("Buscar")
 
         self.button.setFixedWidth(40)
 

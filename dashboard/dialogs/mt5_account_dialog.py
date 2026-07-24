@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from dashboard.widgets.section_widget import SectionWidget
 from dashboard.widgets.connection_indicator import ConnectionIndicator
+from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
 
 
 class MT5AccountDialog(QDialog):
@@ -29,7 +30,7 @@ class MT5AccountDialog(QDialog):
 
         self.setWindowTitle("Cuenta MetaTrader 5")
 
-        self.resize(900, 700)
+        fit_dialog_to_screen(self, 900, 680)
 
         self.build_ui()
 

@@ -11,6 +11,7 @@ from dashboard.styles import (
     card_style,
     title_style,
 )
+from dashboard.icons import ICON_COLOR, ICON_INFO, colored_icon
 
 
 class QuickActions(QWidget):
@@ -55,21 +56,14 @@ class QuickActions(QWidget):
 
         actions = [
 
-            ("👤 Nuevo Perfil", "profiles"),
-
-            ("📱 Telegram", "telegram"),
-
-            ("💹 MT5", "mt5"),
-
-            ("📈 Trading", "trading"),
-
-            ("📊 Analytics", "analytics"),
-
-            ("⚙ Configuración", "settings"),
-
-            ("📄 Reportes", "reports"),
-
-            ("📜 Logs", "logs"),
+            ("Nuevo Perfil", "profiles", "users"),
+            ("Telegram", "telegram", "send"),
+            ("MT5", "mt5", "activity"),
+            ("Trading", "trading", "briefcase-business"),
+            ("Analytics", "analytics", "chart-spline"),
+            ("Configuración", "settings", "settings"),
+            ("Reportes", "reports", "folder-open"),
+            ("Logs", "logs", "scroll-text"),
 
         ]
 
@@ -77,9 +71,10 @@ class QuickActions(QWidget):
 
         col = 0
 
-        for text, action in actions:
+        for text, action, icon_name in actions:
 
             button = QPushButton(text)
+            button.setIcon(colored_icon(icon_name, ICON_INFO if action in ("telegram", "analytics") else ICON_COLOR))
 
             button.setMinimumHeight(45)
 

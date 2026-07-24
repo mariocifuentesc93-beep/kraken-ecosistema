@@ -50,10 +50,13 @@ class ProfileRepository:
 
                 max_daily_loss,
                 max_daily_profit,
+                max_drawdown,
                 max_open_trades,
+                min_signal_score,
 
                 execution_mode,
                 tp_level,
+                tp1_management,
                 execute_market,
 
                 magic_number,
@@ -74,7 +77,7 @@ class ProfileRepository:
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -103,10 +106,13 @@ class ProfileRepository:
 
                 profile.max_daily_loss,
                 profile.max_daily_profit,
+                profile.max_drawdown,
                 profile.max_open_trades,
+                profile.min_signal_score,
 
                 profile.execution_mode,
                 profile.tp_level,
+                profile.tp1_management,
                 int(profile.execute_market),
 
                 profile.magic_number,
@@ -176,10 +182,13 @@ class ProfileRepository:
 
                 max_daily_loss=?,
                 max_daily_profit=?,
+                max_drawdown=?,
                 max_open_trades=?,
+                min_signal_score=?,
 
                 execution_mode=?,
                 tp_level=?,
+                tp1_management=?,
                 execute_market=?,
 
                 magic_number=?,
@@ -226,10 +235,13 @@ class ProfileRepository:
 
                 profile.max_daily_loss,
                 profile.max_daily_profit,
+                profile.max_drawdown,
                 profile.max_open_trades,
+                profile.min_signal_score,
 
                 profile.execution_mode,
                 profile.tp_level,
+                profile.tp1_management,
                 int(profile.execute_market),
 
                 profile.magic_number,
@@ -292,6 +304,14 @@ class ProfileRepository:
 
     def get_active(self):
 
+        profiles = self.get_active_profiles()
+        return profiles[0] if profiles else None
+
+    # ---------------------------------------------------------
+
+    def get_active_profiles(self):
+        """Return every profile currently eligible to process a signal."""
+
         cursor = database_manager.cursor()
 
         cursor.execute(
@@ -304,16 +324,11 @@ class ProfileRepository:
                 active=1
                 AND enabled=1
 
-            LIMIT 1
+            ORDER BY name
             """
         )
 
-        row = cursor.fetchone()
-
-        if row is None:
-            return None
-
-        return Profile(**dict(row))
+        return [Profile(**dict(row)) for row in cursor.fetchall()]
 
     # ---------------------------------------------------------
 
@@ -378,6 +393,7 @@ class ProfileRepository:
             WHERE
                 ptc.chat_id=?
                 AND ptc.enabled=1
+                AND p.active=1
                 AND p.enabled=1
 
             ORDER BY p.name
