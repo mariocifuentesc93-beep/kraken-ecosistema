@@ -1,0 +1,12 @@
+# Copie este archivo como config.yaml solo si necesita la configuración
+# heredada local. La configuración profesional se administra desde Kraken.
+telegram:
+  api_id: 123456
+  api_hash: "REPLACE_ME"
+  phone: "+0000000000"
+  session: "sessions/telegram_account"
+
+trading:
+  risk_percent: 1
+  tp_level: 1
+  execute_market: false
