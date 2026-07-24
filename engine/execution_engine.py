@@ -1,6 +1,19 @@
 from copy import deepcopy
 
 
+INTERNAL_SAFE_EXECUTION_MODES = {"OFF", "SIMULATION"}
+
+
+def execution_mode_value(value):
+    return str(getattr(value, "value", value) or "").strip().upper()
+
+
+def internal_execution_allowed(profile) -> bool:
+    return execution_mode_value(
+        getattr(profile, "execution_mode", None)
+    ) in INTERNAL_SAFE_EXECUTION_MODES
+
+
 class ExecutionEngine:
 
     def __init__(self, trade_manager_instance=None):
@@ -40,16 +53,36 @@ class ExecutionEngine:
         if not self.running:
             return False
 
+        if getattr(signal, "source", "") == "INTERNAL":
+            profile_mode = execution_mode_value(
+                getattr(profile, "execution_mode", None)
+            )
+            if profile_mode not in INTERNAL_SAFE_EXECUTION_MODES:
+                print(
+                    "[ExecutionEngine] INTERNAL bloqueado para "
+                    f"execution_mode={profile_mode or 'UNKNOWN'}."
+                )
+                return False
+            if profile_mode == "OFF":
+                print(
+                    "[ExecutionEngine] INTERNAL no se ejecuta con "
+                    "execution_mode=OFF."
+                )
+                return False
+
         account_signal = deepcopy(signal)
         account_signal.profile_id = profile.id
         account_signal.profile_name = profile.name
         account_signal.mt5_account_id = account.id
         account_signal.mt5_account_name = account.name
-        account_signal.execution_mode = getattr(
-            account,
-            "execution_mode",
-            getattr(account_signal, "execution_mode", None),
-        )
+        if getattr(signal, "source", "") == "INTERNAL":
+            account_signal.execution_mode = profile_mode
+        else:
+            account_signal.execution_mode = getattr(
+                account,
+                "execution_mode",
+                getattr(account_signal, "execution_mode", None),
+            )
         account_signal.risk_mode = getattr(
             account,
             "risk_mode",

@@ -13,15 +13,32 @@ class SignalEngine:
     def __init__(
         self,
         profiles_provider=None,
+        internal_profiles_provider=None,
         profile_engine_instance=None,
         validator=None,
+        source_router=None,
     ):
         self.running = False
         self._profiles_provider = profiles_provider
+        self._internal_profiles_provider = internal_profiles_provider
         self._profile_engine = profile_engine_instance
         self._validator = validator
+        self._source_router = source_router
 
-    def _get_profiles(self, chat_id):
+    def _get_profiles(self, signal, chat_id):
+        if signal.source == "INTERNAL":
+            if self._internal_profiles_provider is None:
+                from repositories.profile_repository import (
+                    profile_repository,
+                )
+                self._internal_profiles_provider = (
+                    profile_repository.get_internal_profiles
+                )
+            return self._internal_profiles_provider()
+
+        if signal.source != "TELEGRAM":
+            return []
+
         if self._profiles_provider is None:
             from repositories.profile_repository import profile_repository
             self._profiles_provider = (
@@ -29,6 +46,12 @@ class SignalEngine:
             )
 
         return self._profiles_provider(chat_id)
+
+    def _get_source_router(self):
+        if self._source_router is None:
+            from engine.profile_source_router import profile_source_router
+            self._source_router = profile_source_router
+        return self._source_router
 
     def _get_profile_engine(self):
         if self._profile_engine is None:
@@ -82,10 +105,15 @@ class SignalEngine:
             )
         )
 
-        profiles = self._get_profiles(chat_id)
+        profiles = self._get_profiles(signal, chat_id)
+        profiles = self._get_source_router().filter(profiles, signal)
 
         if not profiles:
-            reason = f"No existen perfiles asociados al chat {chat_id}"
+            reason = (
+                f"No existen perfiles habilitados para {signal.source}"
+            )
+            if signal.source == "TELEGRAM":
+                reason += f" en el chat {chat_id}"
             event_bus.signalRejected.emit(
                 SignalRejectedEvent(signal=signal, reason=reason)
             )

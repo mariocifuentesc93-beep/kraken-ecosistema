@@ -34,6 +34,7 @@ class ProfileRepository:
                 enabled,
 
                 operation_mode,
+                signal_source_mode,
 
                 telegram_account_id,
                 telegram_channel_id,
@@ -65,7 +66,7 @@ class ProfileRepository:
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -78,6 +79,7 @@ class ProfileRepository:
                 int(profile.enabled),
 
                 profile.operation_mode,
+                profile.signal_source_mode,
 
                 profile.telegram_account_id,
                 profile.telegram_channel_id,
@@ -142,6 +144,7 @@ class ProfileRepository:
                 enabled=?,
 
                 operation_mode=?,
+                signal_source_mode=?,
 
                 telegram_account_id=?,
                 telegram_channel_id=?,
@@ -183,6 +186,7 @@ class ProfileRepository:
                 int(profile.enabled),
 
                 profile.operation_mode,
+                profile.signal_source_mode,
 
                 profile.telegram_account_id,
                 profile.telegram_channel_id,
@@ -347,6 +351,28 @@ class ProfileRepository:
             ORDER BY p.name
             """,
             (chat_id,),
+        )
+
+        return [
+            Profile(**dict(row))
+            for row in cursor.fetchall()
+        ]
+
+    # ---------------------------------------------------------
+
+    def get_internal_profiles(self):
+
+        cursor = database_manager.cursor()
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM profiles
+            WHERE
+                enabled=1
+                AND signal_source_mode IN ('INTERNAL', 'BOTH')
+            ORDER BY name
+            """
         )
 
         return [

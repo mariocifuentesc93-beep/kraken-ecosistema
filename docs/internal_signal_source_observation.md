@@ -103,7 +103,7 @@ posterior inicia un nuevo periodo de estabilidad.
 
 `start()` crea un hilo daemon. `stop()` lo termina sin bloquear el hilo
 principal. El callback recibe la ruta estable y puede invocar explícitamente
-`InternalSignalSource.scan_file()`.
+`InternalSignalSource.process_file()`.
 
 ### `internal/checkpoint_store.py`
 

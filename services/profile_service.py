@@ -39,6 +39,7 @@ class ProfileService:
         active=True,
         enabled=True,
         operation_mode="telegram",
+        signal_source_mode="TELEGRAM",
         telegram_account_id=None,
         default_mt5_account=None,
         risk_mode="PERCENT",
@@ -62,6 +63,8 @@ class ProfileService:
             enabled=enabled,
 
             operation_mode=operation_mode,
+
+            signal_source_mode=signal_source_mode,
 
             telegram_account_id=telegram_account_id,
 
@@ -108,6 +111,12 @@ class ProfileService:
             enabled=getattr(profile, "enabled", True),
 
             operation_mode=profile.operation_mode,
+
+            signal_source_mode=getattr(
+                profile,
+                "signal_source_mode",
+                "TELEGRAM",
+            ),
 
             telegram_account_id=getattr(profile, "telegram_account_id", None),
 

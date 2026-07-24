@@ -40,13 +40,20 @@ def temporary_signal_repository(unified_database):
 
 @pytest.fixture
 def profile_factory():
-    def factory(profile_id, name=None, enabled=True):
+    def factory(
+        profile_id,
+        name=None,
+        enabled=True,
+        signal_source_mode="TELEGRAM",
+        execution_mode="SIMULATION",
+    ):
         return SimpleNamespace(
             id=profile_id,
             name=name or f"Profile {profile_id}",
             enabled=enabled,
             telegram_account_id=7,
-            execution_mode="SIMULATION",
+            signal_source_mode=signal_source_mode,
+            execution_mode=execution_mode,
             tp_level=1,
             execute_market=True,
         )

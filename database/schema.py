@@ -28,6 +28,8 @@ def create_tables(connection: sqlite3.Connection):
 
         operation_mode TEXT DEFAULT 'telegram',
 
+        signal_source_mode TEXT DEFAULT 'TELEGRAM',
+
         telegram_account_id INTEGER,
 
         telegram_channel_id INTEGER,

@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+from core.signal_sources import normalize_signal_source_mode
+
 
 @dataclass
 class Profile:
@@ -33,6 +35,8 @@ class Profile:
     enabled: bool = True
 
     operation_mode: str = "telegram"
+
+    signal_source_mode: str = "TELEGRAM"
 
     # =====================================================
     # TELEGRAM
@@ -138,6 +142,9 @@ class Profile:
         self.execute_market = bool(self.execute_market)
         self.allow_buy = bool(self.allow_buy)
         self.allow_sell = bool(self.allow_sell)
+        self.signal_source_mode = normalize_signal_source_mode(
+            self.signal_source_mode
+        )
 
         self.risk_percent = float(self.risk_percent)
         self.risk_amount = float(self.risk_amount)
