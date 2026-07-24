@@ -345,36 +345,54 @@ def create_tables(connection: sqlite3.Connection):
     """)
 
     # ==========================================================
-    # PROFILE -> TELEGRAM CHANNELS
+    # GLOBAL TELEGRAM CHANNEL CATALOG
+    # ==========================================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_channels(
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        telegram_account_id INTEGER NOT NULL,
+        chat_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        username TEXT,
+        chat_type TEXT NOT NULL DEFAULT 'UNKNOWN',
+        can_read INTEGER NOT NULL DEFAULT 1,
+        can_send INTEGER NOT NULL DEFAULT 0,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        available INTEGER NOT NULL DEFAULT 1,
+        last_synced_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(telegram_account_id)
+            REFERENCES telegram_accounts(id)
+            ON DELETE CASCADE,
+        UNIQUE(telegram_account_id, chat_id)
+    )
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_telegram_channels_account
+    ON telegram_channels(telegram_account_id)
+    """)
+
+    # ==========================================================
+    # PROFILE -> TELEGRAM CHANNELS (MANY TO MANY)
     # ==========================================================
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS profile_telegram_channels(
-
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-
         profile_id INTEGER NOT NULL,
-
-        account_id INTEGER NOT NULL,
-
-        chat_id INTEGER NOT NULL,
-
-        title TEXT,
-
-        username TEXT,
-
-        enabled INTEGER DEFAULT 1,
-
-        priority INTEGER DEFAULT 1,
-
-        FOREIGN KEY(profile_id)
-            REFERENCES profiles(id)
-            ON DELETE CASCADE,
-
-        FOREIGN KEY(account_id)
-            REFERENCES telegram_accounts(id)
-            ON DELETE CASCADE
-
+        telegram_channel_id INTEGER NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        priority INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE,
+        FOREIGN KEY(telegram_channel_id)
+            REFERENCES telegram_channels(id) ON DELETE CASCADE,
+        UNIQUE(profile_id, telegram_channel_id)
     )
     """)
 

@@ -121,14 +121,22 @@ class TelegramDiagnostics:
         client = client or self._client(account)
         results = []
         for channel in profile_telegram_channel_repository.get_channels():
-            if channel["account_id"] != account.id:
+            channel_account_id = channel.get(
+                "telegram_account_id", channel.get("account_id")
+            )
+            if channel_account_id != account.id:
                 continue
             try:
                 entity = await client.get_entity(channel["chat_id"])
-                title = getattr(entity, "title", "") or channel.get("title", "")
+                title = (
+                    getattr(entity, "title", "")
+                    or channel.get("name")
+                    or channel.get("title", "")
+                )
                 accessible, error = True, ""
             except Exception as exc:
-                title, accessible, error = channel.get("title", ""), False, str(exc)
+                title = channel.get("name") or channel.get("title", "")
+                accessible, error = False, str(exc)
             results.append({"channel_id": channel["id"], "chat_id": channel["chat_id"], "title": title,
                             "accessible": accessible, "account_has_access": accessible,
                             "enabled": bool(channel["enabled"]), "last_error": error})

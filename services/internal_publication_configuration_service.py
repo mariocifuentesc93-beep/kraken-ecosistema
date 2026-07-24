@@ -4,6 +4,12 @@ from models.internal_publication_config import InternalPublicationConfig
 class InternalPublicationConfigurationService:
     """Validate the global destination against existing Kraken Telegram data."""
 
+    @staticmethod
+    def _value(destination, key, default=None):
+        if isinstance(destination, dict):
+            return destination.get(key, default)
+        return getattr(destination, key, default)
+
     def __init__(
         self,
         repository,
@@ -20,22 +26,25 @@ class InternalPublicationConfigurationService:
     @staticmethod
     def _destination_name(destination):
         return str(
-            destination.get("title")
-            or destination.get("name")
-            or destination.get("username")
-            or destination["chat_id"]
+            InternalPublicationConfigurationService._value(destination, "title")
+            or InternalPublicationConfigurationService._value(destination, "name")
+            or InternalPublicationConfigurationService._value(destination, "username")
+            or InternalPublicationConfigurationService._value(destination, "chat_id")
         ).strip()
 
     @staticmethod
     def _destination_type(destination):
         explicit = str(
-            destination.get("type")
-            or destination.get("entity_type")
+            InternalPublicationConfigurationService._value(destination, "type")
+            or InternalPublicationConfigurationService._value(destination, "chat_type")
+            or InternalPublicationConfigurationService._value(destination, "entity_type")
             or ""
         ).strip()
         if explicit:
             return explicit
-        return "Canal" if destination.get("username") else "Grupo"
+        return "Canal" if InternalPublicationConfigurationService._value(
+            destination, "username"
+        ) else "Grupo"
 
     def validate(self, enabled, telegram_account_id, chat_id):
         enabled = bool(enabled)
@@ -63,7 +72,8 @@ class InternalPublicationConfigurationService:
             (
                 item
                 for item in destinations
-                if int(item["chat_id"]) == config.telegram_output_chat_id
+                if int(self._value(item, "chat_id"))
+                == config.telegram_output_chat_id
             ),
             None,
         )

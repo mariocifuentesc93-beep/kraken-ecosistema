@@ -1,10 +1,14 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QDialog,
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -28,6 +32,7 @@ from repositories.profile_repository import profile_repository
 from repositories.symbol_repository import symbol_repository
 from repositories.telegram_account_repository import telegram_account_repository
 from repositories.profile_telegram_repository import profile_telegram_channel_repository
+from repositories.telegram_channel_repository import telegram_channel_repository
 
 
 class ProfileDialog(QDialog):
@@ -204,14 +209,15 @@ class ProfileDialog(QDialog):
         self.lblTelegramChannel = QLabel(
             "Seleccione primero una cuenta de Telegram para ver sus canales configurados."
         )
-        self.cboTelegramChannel = QComboBox()
-        self.cboTelegramChannel.setEnabled(False)
-        self.cboTelegramChannel.setToolTip(
-            "El canal seleccionado recibirá señales para este perfil. "
-            "El mismo canal puede asignarse a otros perfiles."
+        self.lstTelegramChannels = QListWidget()
+        self.lstTelegramChannels.setSelectionMode(QAbstractItemView.NoSelection)
+        self.lstTelegramChannels.setEnabled(False)
+        self.lstTelegramChannels.setToolTip(
+            "Seleccione uno o varios canales de lectura. "
+            "El mismo canal puede utilizarse en varios perfiles."
         )
         section.addWidget(self.lblTelegramChannel)
-        section.addWidget(self.cboTelegramChannel)
+        section.addWidget(self.lstTelegramChannels)
         self.telegramSelector.selectionChanged.connect(self._load_telegram_channels)
         layout.addWidget(section)
 
@@ -311,9 +317,16 @@ class ProfileDialog(QDialog):
             self._as_id_list(profile.telegram_account_id)
         )
         self._load_telegram_channels()
-        selected_channel = self.cboTelegramChannel.findData(profile.telegram_channel_id)
-        if selected_channel >= 0:
-            self.cboTelegramChannel.setCurrentIndex(selected_channel)
+        selected_channels = set(
+            profile_telegram_channel_repository.get_selected_channel_ids(profile.id)
+        )
+        for index in range(self.lstTelegramChannels.count()):
+            item = self.lstTelegramChannels.item(index)
+            item.setCheckState(
+                Qt.Checked
+                if item.data(Qt.UserRole) in selected_channels
+                else Qt.Unchecked
+            )
         self._profile_symbols = {
             symbol.symbol: symbol
             for symbol in symbol_repository.get_all(profile.id)
@@ -375,7 +388,7 @@ class ProfileDialog(QDialog):
             "telegram_account_id": self._selected_account_id(
                 self.telegramSelector
             ),
-            "telegram_channel_id": self.cboTelegramChannel.currentData(),
+            "telegram_channel_id": None,
         }
 
     def set_mt5_accounts(self, accounts):
@@ -406,30 +419,37 @@ class ProfileDialog(QDialog):
 
     def _load_telegram_channels(self, *_):
         account_id = self._selected_account_id(self.telegramSelector)
-        previous_channel = self.cboTelegramChannel.currentData()
-        self.cboTelegramChannel.clear()
+        previous_channels = set(self._selected_telegram_channel_ids())
+        self.lstTelegramChannels.clear()
         if account_id is None:
-            self.cboTelegramChannel.setEnabled(False)
+            self.lstTelegramChannels.setEnabled(False)
             self.lblTelegramChannel.setText(
                 "Seleccione primero una cuenta de Telegram para ver sus canales configurados."
             )
             return
 
-        channels = profile_telegram_channel_repository.get_available_channels(account_id)
-        self.cboTelegramChannel.setEnabled(bool(channels))
+        channels = telegram_channel_repository.list_by_account(account_id)
+        self.lstTelegramChannels.setEnabled(bool(channels))
         if not channels:
             self.lblTelegramChannel.setText(
-                "Esta cuenta aún no tiene canales configurados. Agréguelos desde Canales."
+                "Esta cuenta aún no tiene chats sincronizados. Actualícelos desde Canales."
             )
             return
 
-        self.lblTelegramChannel.setText("Canal que utilizará este perfil")
+        self.lblTelegramChannel.setText("Canales de lectura para este perfil")
         for channel in channels:
-            title = channel.get("title") or channel.get("username") or str(channel["chat_id"])
-            self.cboTelegramChannel.addItem(title, channel["chat_id"])
-        index = self.cboTelegramChannel.findData(previous_channel)
-        if index >= 0:
-            self.cboTelegramChannel.setCurrentIndex(index)
+            username = f" · @{channel.username}" if channel.username else ""
+            availability = "" if channel.available else " · No disponible"
+            item = QListWidgetItem(
+                f"{channel.name} · {channel.chat_type.title()}{username} · "
+                f"{channel.chat_id}{availability}"
+            )
+            item.setData(Qt.UserRole, channel.id)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.Checked if channel.id in previous_channels else Qt.Unchecked
+            )
+            self.lstTelegramChannels.addItem(item)
 
     def set_symbols(self, symbols):
         self.symbolSelector.loadSymbols([
@@ -518,19 +538,18 @@ class ProfileDialog(QDialog):
             )
 
     def _save_telegram_channel(self, profile):
-        account_id = profile.telegram_account_id
-        chat_id = profile.telegram_channel_id
-        channel = None
-        if account_id is not None and chat_id is not None:
-            for candidate in profile_telegram_channel_repository.get_available_channels(account_id):
-                if candidate["chat_id"] == chat_id:
-                    channel = candidate
-                    break
-        profile_telegram_channel_repository.set_profile_channel(
-            profile.id,
-            account_id,
-            channel,
+        channel_ids = self._selected_telegram_channel_ids()
+        profile_telegram_channel_repository.set_profile_channels(
+            profile.id, channel_ids
         )
+        profile.telegram_channel_id = channel_ids[0] if channel_ids else None
+
+    def _selected_telegram_channel_ids(self):
+        return [
+            self.lstTelegramChannels.item(index).data(Qt.UserRole)
+            for index in range(self.lstTelegramChannels.count())
+            if self.lstTelegramChannels.item(index).checkState() == Qt.Checked
+        ]
 
     def _set_risk_widget_mode(self, mode):
         buttons = {

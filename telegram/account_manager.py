@@ -295,6 +295,51 @@ class TelegramAccountManager:
             )
         return destinations
 
+    async def list_dialog_catalog(self, account_id):
+        """Return every readable dialog with account-scoped metadata."""
+        client = self.peek_client(account_id)
+        if client is None or not client.is_connected():
+            raise RuntimeError("La cuenta Telegram no está conectada.")
+
+        dialogs = []
+        async for dialog in client.iter_dialogs():
+            entity = dialog.entity
+            if getattr(entity, "left", False):
+                continue
+
+            can_send = True
+            if getattr(entity, "broadcast", False):
+                rights = getattr(entity, "admin_rights", None)
+                can_send = bool(
+                    getattr(entity, "creator", False)
+                    or getattr(rights, "post_messages", False)
+                )
+                chat_type = "CANAL"
+            elif getattr(entity, "megagroup", False):
+                rights = getattr(entity, "banned_rights", None)
+                can_send = not bool(getattr(rights, "send_messages", False))
+                chat_type = "SUPERGRUPO"
+            elif getattr(entity, "bot", False) or getattr(
+                entity, "first_name", None
+            ):
+                chat_type = "PRIVADO"
+            else:
+                rights = getattr(entity, "banned_rights", None)
+                can_send = not bool(getattr(rights, "send_messages", False))
+                chat_type = "GRUPO"
+
+            dialogs.append(
+                {
+                    "chat_id": int(dialog.id),
+                    "name": dialog.name or str(dialog.id),
+                    "username": getattr(entity, "username", None),
+                    "chat_type": chat_type,
+                    "can_read": True,
+                    "can_send": can_send,
+                }
+            )
+        return dialogs
+
     async def disconnect(self, account_id=None, timeout=10):
 
         client = self.get_client(account_id)

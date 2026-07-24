@@ -178,8 +178,8 @@ class RuntimeCoordinator:
             from repositories.internal_publication_config_repository import (
                 internal_publication_config_repository,
             )
-            from repositories.profile_telegram_repository import (
-                profile_telegram_channel_repository,
+            from repositories.telegram_channel_repository import (
+                telegram_channel_repository,
             )
             from repositories.telegram_publication_repository import (
                 TelegramPublicationRepository,
@@ -209,8 +209,7 @@ class RuntimeCoordinator:
                 config_provider=internal_publication_config_repository.get,
                 account_provider=telegram_account_manager.get_account,
                 destinations_provider=(
-                    profile_telegram_channel_repository
-                    .get_available_channels
+                    telegram_channel_repository.list_sendable
                 ),
             )
             self._internal_source = InternalSignalSource(

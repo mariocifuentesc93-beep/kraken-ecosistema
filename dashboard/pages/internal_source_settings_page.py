@@ -17,13 +17,13 @@ from dashboard.widgets.section_widget import SectionWidget
 from repositories.internal_publication_config_repository import (
     internal_publication_config_repository,
 )
-from repositories.profile_telegram_repository import (
-    profile_telegram_channel_repository,
-)
+from repositories.telegram_channel_repository import telegram_channel_repository
 from services.internal_publication_configuration_service import (
     InternalPublicationConfigurationService,
 )
 from telegram.account_manager import telegram_account_manager
+from telegram.async_runner import telegram_async_runner
+from services.telegram_channel_sync_service import TelegramChannelSyncService
 from dashboard.ui_theme import refresh_widget_style
 
 
@@ -61,9 +61,14 @@ class InternalSourceSettingsPage(QWidget):
             config_repository or internal_publication_config_repository
         )
         self._account_manager = account_manager or telegram_account_manager
+        self._uses_catalog_provider = destinations_provider is None
         self._destinations_provider = (
             destinations_provider
-            or profile_telegram_channel_repository.get_available_channels
+            or self._catalog_destinations
+        )
+        self._sync_service = TelegramChannelSyncService(
+            channel_repository=telegram_channel_repository,
+            account_manager=self._account_manager,
         )
         self._test_sender = test_sender or self._send_test_message
         self._uses_default_test_sender = test_sender is None
@@ -76,6 +81,17 @@ class InternalSourceSettingsPage(QWidget):
         )
         self._build_ui()
         self.load()
+
+    @staticmethod
+    def _catalog_destinations(account_id):
+        return [
+            {
+                **channel.__dict__,
+                "title": channel.name,
+                "type": channel.chat_type,
+            }
+            for channel in telegram_channel_repository.list_sendable(account_id)
+        ]
 
     def _service_destinations(self, account_id):
         if (
@@ -264,23 +280,27 @@ class InternalSourceSettingsPage(QWidget):
         self._update_actions()
 
     def refresh_destinations(self):
-        loader = getattr(
-            self._account_manager,
-            "list_sendable_destinations",
-            None,
-        )
         account_id = self.account_combo.currentData()
-        if callable(loader) and account_id is not None:
+        if account_id is not None and self._uses_catalog_provider:
             self.refresh_destinations_button.setEnabled(False)
             self._start_worker(
-                lambda: loader(account_id),
-                self._apply_live_destinations,
+                lambda: telegram_async_runner.run(
+                    self._sync_service.synchronize(account_id)
+                ),
+                lambda _items: self._reload_after_sync(),
                 self._destination_error,
             )
             return None
         selected = self.destination_combo.currentData()
         self._load_destinations(selected)
         return self.destination_combo.count() - 1
+
+    def _reload_after_sync(self):
+        selected = self.destination_combo.currentData()
+        self.refresh_destinations_button.setEnabled(
+            self.publish_checkbox.isChecked()
+        )
+        self._load_destinations(selected)
 
     def _start_worker(self, callable_, success, failure):
         thread = QThread(self)

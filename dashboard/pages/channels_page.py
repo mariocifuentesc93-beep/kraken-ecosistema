@@ -1,45 +1,93 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, QThread, Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
+    QComboBox,
     QHBoxLayout,
+    QLabel,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
-    QMessageBox,
+    QVBoxLayout,
+    QWidget,
 )
 
-from dashboard.dialogs.channel_dialog import ChannelDialog
-from repositories.profile_repository import profile_repository
-from repositories.profile_telegram_repository import profile_telegram_channel_repository
+from repositories.telegram_account_repository import telegram_account_repository
+from repositories.telegram_channel_repository import telegram_channel_repository
+from services.telegram_channel_sync_service import TelegramChannelSyncService
+from telegram.async_runner import telegram_async_runner
+
+
+class _CatalogSyncWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, service, account_id):
+        super().__init__()
+        self._service = service
+        self._account_id = account_id
+
+    def run(self):
+        try:
+            result = telegram_async_runner.run(
+                self._service.synchronize(self._account_id)
+            )
+            self.finished.emit(result)
+        except Exception as error:
+            self.failed.emit(str(error))
 
 
 class ChannelsPage(QWidget):
+    """Account-scoped catalog synchronized from Telegram."""
 
-    def __init__(self):
-        super().__init__()
-        self.build_ui()
-        self.refresh()
+    def __init__(
+        self,
+        account_repository=None,
+        channel_repository=None,
+        sync_service=None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._accounts = account_repository or telegram_account_repository
+        self._channels = channel_repository or telegram_channel_repository
+        self._sync_service = sync_service or TelegramChannelSyncService(
+            account_repository=self._accounts,
+            channel_repository=self._channels,
+        )
+        self._thread = None
+        self._worker = None
+        self._build_ui()
+        self.refresh_accounts()
 
-    def build_ui(self):
+    def _build_ui(self):
         layout = QVBoxLayout(self)
         toolbar = QHBoxLayout()
+        toolbar.addWidget(QLabel("Cuenta Telegram"))
+        self.account_combo = QComboBox()
+        toolbar.addWidget(self.account_combo, 1)
+        self.update_button = QPushButton("Actualizar chats")
+        self.details_button = QPushButton("Ver detalles")
+        self.test_button = QPushButton("Probar acceso")
+        self.toggle_button = QPushButton("Activar / Desactivar catálogo")
+        self.reload_button = QPushButton("Recargar")
+        for button in (
+            self.update_button,
+            self.details_button,
+            self.test_button,
+            self.toggle_button,
+            self.reload_button,
+        ):
+            toolbar.addWidget(button)
         layout.addLayout(toolbar)
 
-        self.btn_new = QPushButton("Nuevo")
-        self.btn_edit = QPushButton("Editar")
-        self.btn_delete = QPushButton("Eliminar")
-        self.btn_refresh = QPushButton("Actualizar")
-        for button in (self.btn_new, self.btn_edit, self.btn_delete):
-            toolbar.addWidget(button)
-        toolbar.addStretch()
-        toolbar.addWidget(self.btn_refresh)
-
-        self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+        self.table = QTableWidget(0, 8)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Canal", "Chat ID", "Usuario", "Perfil", "Activo", "Prioridad"]
+            [
+                "Nombre", "Tipo", "Username", "Chat ID",
+                "Puede leer", "Puede enviar", "Estado", "Última sincronización",
+            ]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -47,91 +95,145 @@ class ChannelsPage(QWidget):
         self.table.setAlternatingRowColors(True)
         layout.addWidget(self.table)
 
-        self.btn_new.clicked.connect(self.new_channel)
-        self.btn_edit.clicked.connect(self.edit_channel)
-        self.btn_delete.clicked.connect(self.delete_channel)
-        self.btn_refresh.clicked.connect(self.refresh)
+        self.account_combo.currentIndexChanged.connect(self.refresh)
+        self.update_button.clicked.connect(self.synchronize)
+        self.reload_button.clicked.connect(self.refresh)
+        self.details_button.clicked.connect(self.show_details)
+        self.test_button.clicked.connect(self.show_details)
+        self.toggle_button.clicked.connect(self.toggle_enabled)
 
-    def refresh(self):
-        channels = profile_telegram_channel_repository.get_channels()
-        profiles = {profile.id: profile.name for profile in profile_repository.get_all()}
+    def refresh_accounts(self):
+        selected = self.account_combo.currentData()
+        self.account_combo.blockSignals(True)
+        self.account_combo.clear()
+        accounts = self._accounts.get_all()
+        if not accounts:
+            self.account_combo.addItem("(No configurada)", None)
+        else:
+            self.account_combo.addItem("Seleccione una cuenta", None)
+            for account in accounts:
+                self.account_combo.addItem(account.display_name, account.id)
+        self.account_combo.setCurrentIndex(
+            max(0, self.account_combo.findData(selected))
+        )
+        self.account_combo.blockSignals(False)
+        self.refresh()
+
+    def refresh(self, *_):
+        account_id = self.account_combo.currentData()
+        channels = self._channels.list_by_account(account_id)
         self.table.setRowCount(len(channels))
         for row, channel in enumerate(channels):
             values = [
-                channel["id"], channel.get("title", ""), channel["chat_id"],
-                channel.get("username", ""),
-                profiles.get(channel["profile_id"], "Perfil eliminado"),
-                "Sí" if channel.get("enabled") else "No", channel.get("priority", 1),
+                channel.name,
+                self._type_label(channel.chat_type),
+                f"@{channel.username}" if channel.username else "—",
+                channel.chat_id,
+                "Sí" if channel.can_read else "No",
+                "Sí" if channel.can_send else "No",
+                (
+                    "Activo" if channel.enabled and channel.available
+                    else "No disponible" if not channel.available
+                    else "Desactivado"
+                ),
+                channel.last_synced_at or "—",
             ]
             for column, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
-                item.setTextAlignment(Qt.AlignCenter)
+                item.setData(Qt.UserRole, channel.id)
                 self.table.setItem(row, column, item)
+        if account_id is None:
+            self.status_label.setText(
+                "No hay ninguna cuenta Telegram configurada."
+                if self.account_combo.count() == 1
+                else "Seleccione una cuenta Telegram."
+            )
+        elif not channels:
+            self.status_label.setText(
+                "No se encontraron canales, grupos o chats disponibles."
+            )
+        else:
+            self.status_label.setText(
+                f"{len(channels)} chat(s) en el catálogo de esta cuenta."
+            )
 
-    def selected_channel(self):
+    @staticmethod
+    def _type_label(value):
+        return {
+            "CANAL": "Canal",
+            "GRUPO": "Grupo",
+            "SUPERGRUPO": "Supergrupo",
+            "PRIVADO": "Chat privado",
+        }.get(str(value).upper(), str(value).title())
+
+    def synchronize(self):
+        account_id = self.account_combo.currentData()
+        if account_id is None:
+            QMessageBox.information(
+                self, "Canales", "Seleccione una cuenta Telegram."
+            )
+            return
+        account = self._accounts.get_by_id(account_id)
+        if account is None or not account.authorized:
+            self.status_label.setText(
+                "La cuenta está desconectada. Conéctala para actualizar chats."
+            )
+            return
+        if self._thread is not None:
+            return
+        self.update_button.setEnabled(False)
+        self.status_label.setText("Actualizando chats…")
+        self._thread = QThread(self)
+        self._worker = _CatalogSyncWorker(self._sync_service, account_id)
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.finished.connect(self._sync_finished)
+        self._worker.failed.connect(self._sync_failed)
+        self._worker.finished.connect(self._thread.quit)
+        self._worker.failed.connect(self._thread.quit)
+        self._thread.finished.connect(self._worker.deleteLater)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.finished.connect(self._clear_worker)
+        self._thread.start()
+
+    def _sync_finished(self, _channels):
+        self.refresh()
+        self.status_label.setText("Catálogo actualizado correctamente.")
+
+    def _sync_failed(self, message):
+        self.status_label.setText(f"No se pudo actualizar: {message}")
+
+    def _clear_worker(self):
+        self.update_button.setEnabled(True)
+        self._thread = None
+        self._worker = None
+
+    def _selected_channel(self):
         row = self.table.currentRow()
         if row < 0:
             return None
-        return profile_telegram_channel_repository.get_by_id(
-            int(self.table.item(row, 0).text())
+        return self._channels.get_by_id(
+            self.table.item(row, 0).data(Qt.UserRole)
         )
 
-    def _dialog(self, channel=None):
-        profiles = profile_repository.get_all()
-        if not profiles:
-            QMessageBox.warning(self, "Canales", "Cree un perfil antes de administrar canales.")
-            return None
-        dialog = ChannelDialog(parent=self)
-        dialog.set_profiles(profiles)
-        if channel is not None:
-            dialog.load_channel(channel)
-        return dialog
-
-    def _save_channel(self, dialog, existing=None):
-        data = dialog.get_channel_data()
-        try:
-            chat_id = int(data["chat_id"])
-            profile = profile_repository.get_by_id(data["profile"])
-            if profile is None or not profile.telegram_account_id:
-                raise ValueError("El perfil seleccionado debe tener una cuenta de Telegram asignada.")
-            priority = data["priority"] + 1
-            if existing is None:
-                channel_id = profile_telegram_channel_repository.create_channel(
-                    chat_id, data["name"], profile.id, profile.telegram_account_id
-                )
-            else:
-                channel_id = existing["id"]
-            profile_telegram_channel_repository.update_channel(
-                channel_id, chat_id, data["name"], data["username"], profile.id,
-                profile.telegram_account_id, data["enabled"], priority
-            )
-        except (TypeError, ValueError) as error:
-            QMessageBox.critical(self, "Canales", f"No se pudo guardar el canal: {error}")
+    def show_details(self):
+        channel = self._selected_channel()
+        if channel is None:
+            QMessageBox.information(self, "Canales", "Seleccione un chat.")
             return
+        QMessageBox.information(
+            self,
+            "Detalles del chat",
+            f"{channel.name}\n{self._type_label(channel.chat_type)}\n"
+            f"Chat ID: {channel.chat_id}\n"
+            f"Lectura: {'Sí' if channel.can_read else 'No'}\n"
+            f"Envío: {'Sí' if channel.can_send else 'No'}",
+        )
+
+    def toggle_enabled(self):
+        channel = self._selected_channel()
+        if channel is None:
+            QMessageBox.information(self, "Canales", "Seleccione un chat.")
+            return
+        self._channels.set_enabled(channel.id, not channel.enabled)
         self.refresh()
-
-    def new_channel(self):
-        dialog = self._dialog()
-        if dialog is not None and dialog.exec():
-            self._save_channel(dialog)
-
-    def edit_channel(self):
-        channel = self.selected_channel()
-        if channel is None:
-            QMessageBox.warning(self, "Canales", "Seleccione un canal.")
-            return
-        dialog = self._dialog(channel)
-        if dialog is not None and dialog.exec():
-            self._save_channel(dialog, channel)
-
-    def delete_channel(self):
-        channel = self.selected_channel()
-        if channel is None:
-            QMessageBox.warning(self, "Canales", "Seleccione un canal.")
-            return
-        if QMessageBox.question(
-            self, "Eliminar canal", f"¿Desea eliminar el canal '{channel.get('title', '')}'?",
-            QMessageBox.Yes | QMessageBox.No,
-        ) == QMessageBox.Yes:
-            profile_telegram_channel_repository.delete_channel(channel["id"])
-            self.refresh()
