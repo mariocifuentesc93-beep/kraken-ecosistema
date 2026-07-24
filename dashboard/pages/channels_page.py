@@ -95,12 +95,22 @@ class ChannelsPage(QWidget):
         self.table.setAlternatingRowColors(True)
         layout.addWidget(self.table)
 
-        self.account_combo.currentIndexChanged.connect(self.refresh)
+        self.account_combo.currentIndexChanged.connect(
+            self._refresh_channels
+        )
         self.update_button.clicked.connect(self.synchronize)
-        self.reload_button.clicked.connect(self.refresh)
+        self.reload_button.clicked.connect(self.refresh_accounts)
         self.details_button.clicked.connect(self.show_details)
         self.test_button.clicked.connect(self.show_details)
         self.toggle_button.clicked.connect(self.toggle_enabled)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh_accounts()
+
+    def refresh(self, *_):
+        """Reload the global account catalog and its selected channels."""
+        self.refresh_accounts()
 
     def refresh_accounts(self):
         selected = self.account_combo.currentData()
@@ -113,13 +123,14 @@ class ChannelsPage(QWidget):
             self.account_combo.addItem("Seleccione una cuenta", None)
             for account in accounts:
                 self.account_combo.addItem(account.display_name, account.id)
-        self.account_combo.setCurrentIndex(
-            max(0, self.account_combo.findData(selected))
-        )
+        selected_index = self.account_combo.findData(selected)
+        if selected is None and len(accounts) == 1:
+            selected_index = self.account_combo.findData(accounts[0].id)
+        self.account_combo.setCurrentIndex(max(0, selected_index))
         self.account_combo.blockSignals(False)
-        self.refresh()
+        self._refresh_channels()
 
-    def refresh(self, *_):
+    def _refresh_channels(self, *_):
         account_id = self.account_combo.currentData()
         channels = self._channels.list_by_account(account_id)
         self.table.setRowCount(len(channels))
