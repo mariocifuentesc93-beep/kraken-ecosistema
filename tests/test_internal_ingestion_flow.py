@@ -180,8 +180,8 @@ def test_internal_simulation_runs_controlled_full_pipeline(
         def __init__(self):
             self.calls = []
 
-        def publish(self, signal, profiles):
-            self.calls.append((signal, profiles))
+        def publish(self, signal):
+            self.calls.append(signal)
             return []
 
     publication = RecordingPublicationService()
@@ -196,7 +196,7 @@ def test_internal_simulation_runs_controlled_full_pipeline(
     assert result.accepted is True
     assert result.routed is True
     assert result.routed_profiles == (profile,)
-    assert publication.calls == [(result.signal, (profile,))]
+    assert publication.calls == [result.signal]
     assert len(manager.calls) == 1
     signal, received_profile, received_account = manager.calls[0]
     assert signal.source == "INTERNAL"

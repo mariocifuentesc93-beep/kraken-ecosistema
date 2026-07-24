@@ -46,12 +46,6 @@ class Profile:
 
     telegram_channel_id: Optional[int] = None
 
-    publish_internal_to_telegram: bool = False
-
-    telegram_output_account_id: Optional[int] = None
-
-    telegram_output_chat_id: Optional[int] = None
-
     # =====================================================
     # MT5
     # =====================================================
@@ -157,9 +151,6 @@ class Profile:
         self.execute_market = bool(self.execute_market)
         self.allow_buy = bool(self.allow_buy)
         self.allow_sell = bool(self.allow_sell)
-        self.publish_internal_to_telegram = bool(
-            self.publish_internal_to_telegram
-        )
         self.signal_source_mode = normalize_signal_source_mode(
             self.signal_source_mode
         )

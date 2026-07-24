@@ -35,6 +35,9 @@ from dashboard.pages.telegram_accounts_page import TelegramAccountsPage
 from dashboard.pages.channels_page import ChannelsPage
 from dashboard.pages.symbols_page import SymbolsPage
 from dashboard.pages.settings_page import SettingsPage
+from dashboard.pages.internal_source_settings_page import (
+    InternalSourceSettingsPage,
+)
 from dashboard.pages.logs_page import LogsPage
 from dashboard.pages.signal_inspector_page import SignalInspectorPage
 from dashboard.pages.trade_timeline_page import TradeTimelinePage
@@ -359,19 +362,21 @@ class MainWindow(QMainWindow):
 
             "Replay",
 
-            "Configuración"
+            "Configuración",
+
+            "Inspector INTERNAL",
 
         ]
 
         icon_map = ["layout-dashboard", "list-checks", "chart-no-axes-combined", "users",
                     "activity", "send", "radio-tower", "tags", "scroll-text", "search-check",
                     "history", "chart-spline", "circle-check", "briefcase-business", "calendar-days",
-                    "chart-no-axes-combined", "play", "settings"]
+                    "chart-no-axes-combined", "play", "settings", "radio-tower"]
         groups = (("OPERATION", range(0, 4)), ("TRADING", (12, 13, 16, 14, 15)),
                   ("MARKET", range(4, 8)), ("ANALYSIS", (9, 10, 11, 8)),
-                  ("CONFIGURATION", (3, 17)))
+                  ("CONFIGURATION", (3, 18, 17)))
         # Perfiles belongs to Operación; keep Configuración free of the duplicate.
-        groups = groups[:-1] + ((groups[-1][0], (17,)),)
+        groups = groups[:-1] + ((groups[-1][0], (18, 17)),)
         self.page_items = {}
         self.navigation_groups = {}
         for group, indices in groups:
@@ -389,7 +394,7 @@ class MainWindow(QMainWindow):
                 page = pages[index]; icon = icon_map[index] if index < len(icon_map) else "circle-check"
                 item = QListWidgetItem(colored_icon(icon, "#C7D2DC"), page)
                 item.setData(Qt.UserRole, index); item.setData(GROUP_ROLE, group); item.setData(FULL_TEXT_ROLE, page); item.setToolTip(page); self.menu.addItem(item); self.page_items[page] = item; self.navigation_groups[group][1].append(item)
-            if tuple(indices) == (17,):
+            if group == "CONFIGURATION":
                 for title, action_code, icon in (("Backup", -2, "database-backup"), ("Restaurar", -3, "folder-open")):
                     action_item = QListWidgetItem(colored_icon(icon, "#C7D2DC"), title)
                     action_item.setData(Qt.UserRole, action_code)
@@ -442,6 +447,8 @@ class MainWindow(QMainWindow):
 
         self.settingsPage = SettingsPage()
 
+        self.internalSourceSettingsPage = InternalSourceSettingsPage()
+
         self.stack.addWidget(self.dashboardPage)
 
         self.stack.addWidget(self.operationsPage)
@@ -478,6 +485,8 @@ class MainWindow(QMainWindow):
 
         self.stack.addWidget(self.settingsPage)
 
+        self.stack.addWidget(self.internalSourceSettingsPage)
+
         page_details = (
             (self.operationsPage, "Operaciones", "Consulte las operaciones generadas por simulación y paper trading."),
             (self.statisticsPage, "Estadísticas", "Revise el rendimiento consolidado de las operaciones registradas."),
@@ -496,6 +505,11 @@ class MainWindow(QMainWindow):
             (self.analyticsPage, "Analíticas", "Las métricas se generan con operaciones simuladas o paper trading."),
             (self.replayPage, "Replay", "Seleccione una fecha con operaciones para reproducir su línea de tiempo."),
             (self.settingsPage, "Configuración", "Ajuste el modo y protecciones antes de iniciar el motor."),
+            (
+                self.internalSourceSettingsPage,
+                "Inspector INTERNAL",
+                "Configure una sola cuenta y destino para publicar cada señal INTERNAL.",
+            ),
         )
         page_heading_icons = {
             "Perfiles": "users",
@@ -515,6 +529,7 @@ class MainWindow(QMainWindow):
             "Analíticas": "chart-no-axes-combined",
             "Replay": "play",
             "Configuración": "settings",
+            "Inspector INTERNAL": "radio-tower",
         }
         for page, title, guidance in page_details:
             decorate_enterprise_page(
@@ -529,6 +544,7 @@ class MainWindow(QMainWindow):
         apply_standard_components(self.liveReadinessPage)
         for form_page in (
             self.settingsPage,
+            self.internalSourceSettingsPage,
             self.paperTradingPage,
             self.replayPage,
             self.telegramPage,

@@ -37,7 +37,7 @@ class EnterpriseLayoutTests(unittest.TestCase):
         window = MainWindow()
         window.show()
         pages = [window.stack.widget(index) for index in range(window.stack.count())]
-        self.assertEqual(len(pages), 18)
+        self.assertEqual(len(pages), 19)
         for page in pages:
             self.assertTrue(page.property("enterpriseLayoutManaged"), page.__class__.__name__)
             self.assertIsInstance(page.layout(), (QVBoxLayout, QHBoxLayout, QGridLayout))

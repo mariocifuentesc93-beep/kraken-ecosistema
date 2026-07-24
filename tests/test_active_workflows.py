@@ -56,7 +56,7 @@ class ActiveWorkflowSmokeTests(unittest.TestCase):
         from dashboard.main_window import MainWindow
 
         window = MainWindow()
-        self.assertEqual(window.stack.count(), 18)
+        self.assertEqual(window.stack.count(), 19)
         for index in range(window.stack.count()):
             page_name = window.stack.widget(index).objectName() or None
             item = next(

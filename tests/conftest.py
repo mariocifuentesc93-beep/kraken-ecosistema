@@ -42,7 +42,7 @@ def isolate_phase_tests_from_prior_mt5_imports(request):
         for name, module in previous.items():
             if module is not None:
                 sys.modules[name] = module
-from database.internal_telegram_publication_migration import (
+from database.telegram_publication_migration import (
     upgrade as upgrade_publication,
 )
 from repositories.telegram_publication_repository import (
@@ -118,9 +118,6 @@ def profile_factory():
         enabled=True,
         signal_source_mode="TELEGRAM",
         execution_mode="SIMULATION",
-        publish_internal_to_telegram=False,
-        telegram_output_account_id=None,
-        telegram_output_chat_id=None,
     ):
         return SimpleNamespace(
             id=profile_id,
@@ -129,9 +126,6 @@ def profile_factory():
             telegram_account_id=7,
             signal_source_mode=signal_source_mode,
             execution_mode=execution_mode,
-            publish_internal_to_telegram=publish_internal_to_telegram,
-            telegram_output_account_id=telegram_output_account_id,
-            telegram_output_chat_id=telegram_output_chat_id,
             tp_level=1,
             execute_market=True,
         )

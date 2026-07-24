@@ -1,12 +1,86 @@
-# Publicación opcional de señales INTERNAL en Telegram
+# Publicación global de señales INTERNAL
 
-## Alcance
+La publicación de una señal producida por `KrakenBMSPInspector` es global. Una
+señal INTERNAL existe una sola vez y su publicación no depende de los perfiles
+que la reciban para validación o ejecución.
 
-La Fase 5 añade Telegram como destino opcional de una señal `INTERNAL`.
-La recepción desde Telegram no cambia y las señales `TELEGRAM` no se publican.
-La ejecución `INTERNAL` continúa bloqueada en `DEMO` y `LIVE`.
+## Flujo
 
-## Formato oficial
+```text
+KrakenBMSPInspector
+        |
+        v
+InternalSignalSource
+        |
+        +------> SignalIngestionService
+        |
+        +------> InternalSignalPublicationService
+                       |
+                       v
+                TelegramSignalPublisher
+```
+
+`SignalIngestionService`, `SignalRepository`, `ProfileSourceRouter`,
+`TradeManager`, riesgo y MT5 conservan sus contratos. La fuente publica
+únicamente después de que la señal fue persistida y aceptada por ingestión.
+
+## Configuración
+
+La pantalla **Inspector INTERNAL** contiene el único punto de configuración:
+
+- habilitar o deshabilitar publicación;
+- seleccionar una cuenta ya registrada en Kraken;
+- seleccionar un chat, grupo o canal disponible para esa cuenta;
+- consultar nombre, tipo y Chat ID;
+- probar el envío;
+- guardar la configuración.
+
+Los valores se almacenan en la tabla global `settings`:
+
+```text
+internal.telegram_publication.enabled
+internal.telegram_publication.telegram_account_id
+internal.telegram_publication.telegram_output_chat_id
+```
+
+No existen campos de publicación INTERNAL en `Profile`. Los perfiles continúan
+seleccionando fuentes `OFF`, `TELEGRAM`, `INTERNAL` o `BOTH`, pero no el destino
+de publicación.
+
+## Cuentas y destinos
+
+La cuenta se resuelve mediante `TelegramAccountManager`; no existe un segundo
+sistema de cuentas. Los destinos se obtienen de los chats y canales ya
+registrados para la cuenta. La interfaz muestra:
+
+```text
+Nombre · Tipo · Chat ID
+```
+
+La configuración habilitada es inválida cuando la cuenta o el destino no
+existen. La configuración deshabilitada puede conservar el destino vacío.
+
+## Idempotencia
+
+La tabla `telegram_publications` mantiene una restricción UNIQUE sobre:
+
+```text
+signal.idempotency_key
+telegram_account_id
+telegram_output_chat_id
+```
+
+No incluye `profile_id`. Por tanto:
+
+- la misma señal no se envía dos veces al mismo destino;
+- dos señales distintas pueden enviarse al mismo destino;
+- un fallo queda en estado `FAILED`;
+- el reintento requiere `retry_failed=True`;
+- un registro `SENT` nunca se reenvía.
+
+## Formato
+
+El mensaje es texto plano, sin Markdown, HTML ni emojis:
 
 ```text
 SIGNAL - LionX100 (SELL)
@@ -15,121 +89,17 @@ Entry: 253740.18
 SL: 253891.42
 TP1: 253649.44
 TP2: 253558.69
-TP3: 253437.7
+TP3: 253437.70
 
 Signal ID: 12305
 ```
 
-El texto es plano. La dirección se normaliza a mayúsculas, el símbolo conserva
-su nombre operativo y los precios conservan hasta cuatro decimales sin ceros
-finales innecesarios. El ID visible es `external_signal_id`; nunca se muestran
-la clave de idempotencia ni el ID SQLite.
-
-## Configuración por perfil
-
-Cada perfil dispone de:
-
-- `publish_internal_to_telegram`: desactivado por defecto;
-- `telegram_output_account_id`: cuenta de salida opcional;
-- `telegram_output_chat_id`: chat o canal de salida opcional.
-
-La cuenta y el chat de salida son explícitos e independientes de los canales
-de entrada. Un perfil con fuente `INTERNAL` o `BOTH` decide si publica. Un
-destino solo es válido cuando la opción está activa, la cuenta existe y está
-habilitada, y ambos identificadores son enteros válidos. El `chat_id` puede ser
-negativo; cero se reserva como ausencia de configuración.
-
-## Flujo
-
-```text
-InternalSignalSource
-  -> SignalIngestionService
-  -> validación e identidad
-  -> persistencia única
-  -> routing por perfil
-  -> InternalSignalPublicationService (solo si la ingestión fue aceptada)
-  -> TelegramSignalPublisher
-```
-
-`InternalSignalSource` no contiene reglas de destinos ni de Telegram. Solo
-invoca el servicio opcional después de recibir un resultado aceptado. El
-publicador no conoce CSV, perfiles, riesgo, MT5 ni ejecución.
-
-## Idempotencia por destino
-
-La identidad de publicación es:
-
-```text
-<signal.idempotency_key>:<telegram_account_id>:<chat_id>
-```
-
-Se aplica mediante el índice `UNIQUE` de las tres columnas. `profile_id` no
-forma parte de la identidad. Por tanto, dos perfiles que apuntan al mismo
-destino producen un solo mensaje; destinos diferentes reciben uno cada uno.
-
-## Tabla `telegram_publications`
-
-Campos:
-
-- `id`
-- `signal_id`
-- `idempotency_key`
-- `telegram_account_id`
-- `chat_id`
-- `status`
-- `attempt_count`
-- `last_error`
-- `sent_at`
-- `created_at`
-- `updated_at`
-
-Estados: `PENDING`, `SENT` y `FAILED`.
-
-Antes del envío se crea o recupera el registro. `SENT` no se reenvía.
-`FAILED` solo se reintenta cuando el llamador solicita explícitamente
-`retry_failed=True`. Un envío exitoso queda en `SENT`; un error queda en
-`FAILED`, aumenta `attempt_count` y conserva `last_error`.
-
-## Fallos y checkpoint
-
-Un fallo de Telegram es aislado: no revierte la señal, no altera su estado de
-ingestión, no repite el routing y no provoca una segunda ejecución. El
-checkpoint INTERNAL depende únicamente de que la ingestión haya creado una
-señal o reconocido un duplicado. El resultado de publicación no decide el
-checkpoint y, por tanto, el CSV no se reprocesa por un fallo de Telegram.
+Los precios conservan entre dos y cuatro decimales.
 
 ## Migración
 
-`database/internal_telegram_publication_migration.py` recibe siempre una ruta
-SQLite explícita. La migración añade los tres campos del perfil y la tabla de
-publicaciones, preservando perfiles y usando `False`/`NULL` como valores
-seguros. El rollback elimina exclusivamente el esquema de esta fase.
-
-La migración no se ejecuta automáticamente y no debe apuntarse a
-`database/kraken.db` sin una aprobación posterior.
-
-## Cliente Telegram
-
-`TelegramSignalPublisher` recibe un proveedor de clientes. No construye un
-cliente global al importarse. En esta fase las pruebas usan clientes falsos y
-no se abren sesiones Telethon. Un cliente asíncrono real deberá envolverse en
-un adaptador explícito antes de habilitar producción.
-
-## Límites de esta fase
-
-- no se publica una señal `TELEGRAM`;
-- no hay reintentos automáticos;
-- no se conecta un cliente Telethon real;
-- no se modifica riesgo ni lotaje;
-- no se habilita ejecución `INTERNAL` en `DEMO` o `LIVE`;
-- no se ejecuta la migración sobre la base de producción.
-
-## Pruebas
-
-Desde la raíz:
-
-```powershell
-python -m pytest -q
-```
-
-Las pruebas usan SQLite temporal, repositorios inyectados y clientes falsos.
+`database/telegram_publication_migration.py` crea exclusivamente la tabla e
+índice de publicaciones. El formato anterior, que añadía campos de salida a
+`profiles`, queda retirado. Bases que ya contengan esas columnas heredadas
+pueden abrirse: el repositorio ignora campos desconocidos, pero ninguna ruta
+normal vuelve a leerlos o escribirlos.

@@ -1,7 +1,22 @@
 from datetime import datetime
+from dataclasses import fields
 
 from models.profile import Profile
 from database.database_manager import database_manager
+
+
+PROFILE_FIELDS = {item.name for item in fields(Profile)}
+
+
+def _profile_from_row(row):
+    values = dict(row)
+    return Profile(
+        **{
+            key: value
+            for key, value in values.items()
+            if key in PROFILE_FIELDS
+        }
+    )
 
 
 class ProfileRepository:
@@ -38,9 +53,6 @@ class ProfileRepository:
 
                 telegram_account_id,
                 telegram_channel_id,
-                publish_internal_to_telegram,
-                telegram_output_account_id,
-                telegram_output_chat_id,
 
                 default_mt5_account,
 
@@ -81,7 +93,7 @@ class ProfileRepository:
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -98,9 +110,6 @@ class ProfileRepository:
 
                 profile.telegram_account_id,
                 profile.telegram_channel_id,
-                int(profile.publish_internal_to_telegram),
-                profile.telegram_output_account_id,
-                profile.telegram_output_chat_id,
 
                 profile.default_mt5_account,
 
@@ -178,9 +187,6 @@ class ProfileRepository:
 
                 telegram_account_id=?,
                 telegram_channel_id=?,
-                publish_internal_to_telegram=?,
-                telegram_output_account_id=?,
-                telegram_output_chat_id=?,
 
                 default_mt5_account=?,
 
@@ -235,9 +241,6 @@ class ProfileRepository:
 
                 profile.telegram_account_id,
                 profile.telegram_channel_id,
-                int(profile.publish_internal_to_telegram),
-                profile.telegram_output_account_id,
-                profile.telegram_output_chat_id,
 
                 profile.default_mt5_account,
 
@@ -314,7 +317,7 @@ class ProfileRepository:
         if row is None:
             return None
 
-        return Profile(**dict(row))
+        return _profile_from_row(row)
 
     # ---------------------------------------------------------
 
@@ -344,7 +347,7 @@ class ProfileRepository:
             """
         )
 
-        return [Profile(**dict(row)) for row in cursor.fetchall()]
+        return [_profile_from_row(row) for row in cursor.fetchall()]
 
     # ---------------------------------------------------------
 
@@ -363,7 +366,7 @@ class ProfileRepository:
         )
 
         return [
-            Profile(**dict(row))
+            _profile_from_row(row)
             for row in cursor.fetchall()
         ]
 
@@ -386,7 +389,7 @@ class ProfileRepository:
         )
 
         return [
-            Profile(**dict(row))
+            _profile_from_row(row)
             for row in cursor.fetchall()
         ]
 
@@ -418,7 +421,7 @@ class ProfileRepository:
         )
 
         return [
-            Profile(**dict(row))
+            _profile_from_row(row)
             for row in cursor.fetchall()
         ]
 
@@ -437,7 +440,7 @@ class ProfileRepository:
             ORDER BY name
             """
         )
-        return [Profile(**dict(row)) for row in cursor.fetchall()]
+        return [_profile_from_row(row) for row in cursor.fetchall()]
 
     # ---------------------------------------------------------
 

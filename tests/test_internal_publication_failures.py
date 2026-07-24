@@ -6,7 +6,7 @@ from tests.test_internal_ingestion_flow import (
     RecordingSignalEngine,
 )
 from services.signal_ingestion_service import SignalIngestionService
-from tests.test_internal_publication_service import profile, service
+from tests.test_internal_publication_service import service
 from tests.test_telegram_signal_publisher import FakeClient
 from tests.test_telegram_signal_formatter import make_signal
 
@@ -17,7 +17,6 @@ def test_failed_send_is_recorded_and_explicit_retry_can_send(
     failing = FakeClient(RuntimeError("offline"))
     first_service = service(
         publication_repository,
-        [profile()],
         failing,
     )
     first = first_service.publish(make_signal())
@@ -33,7 +32,6 @@ def test_failed_send_is_recorded_and_explicit_retry_can_send(
     successful = FakeClient()
     retry = service(
         publication_repository,
-        [profile()],
         successful,
     ).publish(make_signal(), retry_failed=True)
     row = publication_repository.get_by_id(row.id)
@@ -43,7 +41,7 @@ def test_failed_send_is_recorded_and_explicit_retry_can_send(
 
 
 class ExplodingPublicationService:
-    def publish(self, signal, profiles):
+    def publish(self, signal):
         raise RuntimeError("telegram unavailable")
 
 

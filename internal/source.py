@@ -143,10 +143,7 @@ class InternalSignalSource:
                 and self._publication_service is not None
             ):
                 try:
-                    self._publication_service.publish(
-                        result.signal,
-                        profiles=result.routed_profiles,
-                    )
+                    self._publication_service.publish(result.signal)
                 except Exception as error:
                     self._logger.exception(
                         "La publicación opcional falló para %s: %s",

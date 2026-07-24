@@ -47,12 +47,6 @@ def create_tables(connection: sqlite3.Connection):
 
         telegram_channel_id INTEGER,
 
-        publish_internal_to_telegram INTEGER NOT NULL DEFAULT 0,
-
-        telegram_output_account_id INTEGER,
-
-        telegram_output_chat_id INTEGER,
-
         default_mt5_account INTEGER,
 
         risk_enabled INTEGER DEFAULT 1,
@@ -141,9 +135,6 @@ def create_tables(connection: sqlite3.Connection):
         "net_profit": "REAL DEFAULT 0",
         "win_rate": "REAL DEFAULT 0",
         "signal_source_mode": "TEXT DEFAULT 'TELEGRAM'",
-        "publish_internal_to_telegram": "INTEGER NOT NULL DEFAULT 0",
-        "telegram_output_account_id": "INTEGER",
-        "telegram_output_chat_id": "INTEGER",
     }.items():
         if column not in profile_columns:
             cursor.execute(

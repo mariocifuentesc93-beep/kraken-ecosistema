@@ -1,5 +1,5 @@
 from database.database_manager import database_manager
-from models.profile import Profile
+from repositories.profile_repository import _profile_from_row
 
 
 class ProfileTelegramChannelRepository:
@@ -152,7 +152,7 @@ class ProfileTelegramChannelRepository:
         )
 
         return [
-            Profile(**dict(row))
+            _profile_from_row(row)
             for row in cursor.fetchall()
         ]
 
