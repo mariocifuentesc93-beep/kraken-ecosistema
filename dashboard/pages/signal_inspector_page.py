@@ -15,7 +15,16 @@ class SignalInspectorPage(QWidget):
         toolbar = QHBoxLayout()
         toolbar.addWidget(QLabel("Estado"))
         self.filter = QComboBox()
-        self.filter.addItems(["Todos", "ACCEPTED", "REJECTED", "EXECUTED", "SIMULATED"])
+        self.filter.addItems([
+            "Todos",
+            "RECEIVED",
+            "ROUTED",
+            "ACCEPTED",
+            "REJECTED",
+            "FAILED",
+            "EXECUTED",
+            "SIMULATED",
+        ])
         self.filter.currentTextChanged.connect(self.refresh)
         toolbar.addWidget(self.filter)
         self.refresh_button = QPushButton("Actualizar")
@@ -46,7 +55,12 @@ class SignalInspectorPage(QWidget):
                         if status == "Todos" or signal.status == status]
         self.table.setRowCount(len(self.signals))
         for row, signal in enumerate(self.signals):
-            values = [signal.id, signal.source, signal.profile_id or "", signal.symbol,
+            routed_profiles = signal.metadata.get("routed_profiles", [])
+            profile = ", ".join(
+                item.get("name", str(item.get("id", "")))
+                for item in routed_profiles
+            ) or signal.profile_name or signal.profile_id or ""
+            values = [signal.id, signal.source, profile, signal.symbol,
                       signal.status, f"{signal.score:.0f}", signal.execution_decision]
             for column, value in enumerate(values):
                 self.table.setItem(row, column, QTableWidgetItem(str(value)))
@@ -60,7 +74,12 @@ class SignalInspectorPage(QWidget):
             "raw_message": signal.raw_message,
             "parsed_fields": signal.metadata.get("parsed_fields", {}),
             "validation_status": signal.status,
+            "profile": signal.profile_name or signal.profile_id,
+            "routed_profiles": signal.metadata.get("routed_profiles", []),
+            "routing_attempts": signal.metadata.get("routing_attempts", []),
+            "failure_stage": signal.metadata.get("failure_stage", ""),
             "rejection_reason": signal.rejection_reason,
+            "traceback": signal.metadata.get("traceback", ""),
             "trade_request": signal.metadata.get("trade_request", {}),
             "final_execution_decision": signal.execution_decision,
         }

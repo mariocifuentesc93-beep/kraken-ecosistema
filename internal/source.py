@@ -128,7 +128,18 @@ class InternalSignalSource:
                 continue
 
             try:
-                result = self._get_ingestion_service().ingest(signal)
+                ingestion = self._get_ingestion_service()
+                if hasattr(ingestion, "record_event"):
+                    ingestion.record_event(
+                        signal,
+                        "PARSED",
+                        (
+                            f"Archivo={path} | direction={signal.direction} | "
+                            f"entry={signal.entry} | stop_loss={signal.stop_loss} | "
+                            f"take_profits={signal.take_profits}"
+                        ),
+                    )
+                result = ingestion.ingest(signal)
             except Exception as error:
                 self._logger.exception(
                     "Fallo transitorio ingiriendo INTERNAL %s: %s",
@@ -143,13 +154,40 @@ class InternalSignalSource:
                 and self._publication_service is not None
             ):
                 try:
-                    self._publication_service.publish(result.signal)
+                    publication_results = self._publication_service.publish(
+                        result.signal
+                    )
+                    if hasattr(ingestion, "record_event"):
+                        for publication in publication_results:
+                            level = (
+                                "error"
+                                if getattr(publication, "status", "") == "FAILED"
+                                else "info"
+                            )
+                            ingestion.record_event(
+                                result.signal,
+                                "TELEGRAM_PUBLICATION",
+                                (
+                                    f"status={getattr(publication, 'status', '')} | "
+                                    f"account={getattr(publication, 'telegram_account_id', None)} | "
+                                    f"chat={getattr(publication, 'chat_id', None)} | "
+                                    f"error={getattr(publication, 'error', None) or '-'}"
+                                ),
+                                level=level,
+                            )
                 except Exception as error:
                     self._logger.exception(
                         "La publicación opcional falló para %s: %s",
                         signal.idempotency_key,
                         error,
                     )
+                    if hasattr(ingestion, "record_event"):
+                        ingestion.record_event(
+                            result.signal,
+                            "TELEGRAM_PUBLICATION",
+                            f"Excepción: {error}",
+                            level="error",
+                        )
             conclusive = bool(
                 getattr(result, "created", False)
                 or getattr(result, "duplicate", False)

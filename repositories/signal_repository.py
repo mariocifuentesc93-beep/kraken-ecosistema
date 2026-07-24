@@ -189,6 +189,33 @@ class SignalRepository:
         connection.commit()
         return cursor.rowcount > 0
 
+    def update_outcome(self, signal: Signal):
+        connection = self._connection()
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(signals)")
+        }
+        values = {
+            "status": signal.status,
+            "score": signal.score,
+            "profile_id": signal.profile_id,
+            "metadata": json.dumps(signal.metadata, sort_keys=True),
+            "rejection_reason": signal.rejection_reason,
+            "execution_decision": signal.execution_decision,
+        }
+        selected = [
+            (column, value)
+            for column, value in values.items()
+            if column in columns
+        ]
+        assignments = ", ".join(f"{column}=?" for column, _ in selected)
+        cursor = connection.execute(
+            f"UPDATE signals SET {assignments} WHERE id=?",
+            tuple(value for _, value in selected) + (signal.id,),
+        )
+        connection.commit()
+        return cursor.rowcount > 0
+
     def update_profile(self, signal_id, profile_id):
         connection = self._connection()
         cursor = connection.execute(

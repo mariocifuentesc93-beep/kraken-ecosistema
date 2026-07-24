@@ -95,6 +95,11 @@ class SignalEngine:
         Este método es el único responsable de resolver los perfiles asociados
         al chat. Cada perfil recibe una copia independiente del Signal.
         """
+        original_metadata = deepcopy(signal.metadata)
+        original_profile_id = signal.profile_id
+        original_profile_name = signal.profile_name
+        original_reason = signal.rejection_reason
+        original_decision = signal.execution_decision
 
         if not self.running:
             event_bus.warning("SignalEngine detenido.")
@@ -126,9 +131,16 @@ class SignalEngine:
                 SignalRejectedEvent(signal=signal, reason=reason)
             )
             event_bus.warning(reason)
+            signal.rejection_reason = reason
+            signal.execution_decision = "REJECTED"
+            signal.metadata["failure_stage"] = "PROFILE_ROUTING"
+            signal.metadata["rejection_reason"] = reason
+            signal.metadata["execution_decision"] = "REJECTED"
             return False
 
         executed = False
+        routing_attempts = []
+        successful_profiles = []
 
         for profile in profiles:
             if not getattr(profile, "enabled", True):
@@ -142,6 +154,24 @@ class SignalEngine:
 
             if not valid:
                 reason = "; ".join(errors)
+                profile_signal.rejection_reason = reason
+                profile_signal.execution_decision = "REJECTED"
+                profile_signal.metadata["failure_stage"] = "VALIDATION"
+                profile_signal.metadata["rejection_reason"] = reason
+                profile_signal.metadata["execution_decision"] = "REJECTED"
+                routing_attempts.append(
+                    {
+                        "profile_id": profile.id,
+                        "profile_name": profile.name,
+                        "execution_mode": getattr(
+                            profile, "execution_mode", ""
+                        ),
+                        "success": False,
+                        "failure_stage": "VALIDATION",
+                        "reason": reason,
+                        "decision": "REJECTED",
+                    }
+                )
                 event_bus.signalRejected.emit(
                     SignalRejectedEvent(
                         signal=profile_signal,
@@ -157,23 +187,95 @@ class SignalEngine:
                 signal=profile_signal,
                 profile=profile,
             )
+            routing_attempts.append(
+                {
+                    "profile_id": profile.id,
+                    "profile_name": profile.name,
+                    "execution_mode": getattr(
+                        profile, "execution_mode", ""
+                    ),
+                    "success": bool(result),
+                    "failure_stage": profile_signal.metadata.get(
+                        "failure_stage", ""
+                    ),
+                    "reason": profile_signal.rejection_reason,
+                    "decision": profile_signal.execution_decision,
+                    "traceback": profile_signal.metadata.get(
+                        "traceback", ""
+                    ),
+                }
+            )
 
             if result:
                 executed = True
+                successful_profiles.append(profile)
                 if routed_profiles is not None:
                     routed_profiles.append(profile)
 
         if executed:
+            if successful_profiles:
+                signal.profile_id = successful_profiles[0].id
+                signal.profile_name = successful_profiles[0].name
+            signal.rejection_reason = ""
+            signal.execution_decision = (
+                "SIMULATED"
+                if routing_attempts
+                and all(
+                    item["execution_mode"] == "SIMULATION"
+                    for item in routing_attempts
+                    if item["success"]
+                )
+                else "EXECUTED"
+            )
+            signal.metadata["routing_attempts"] = routing_attempts
+            signal.metadata["routed_profiles"] = [
+                {
+                    "id": profile.id,
+                    "name": profile.name,
+                    "execution_mode": getattr(
+                        profile, "execution_mode", ""
+                    ),
+                }
+                for profile in successful_profiles
+            ]
+            signal.metadata["execution_decision"] = signal.execution_decision
             event_bus.signalProcessed.emit(
                 SignalProcessedEvent(signal=signal)
             )
             event_bus.log("La señal fue enviada correctamente.")
         else:
-            reason = "Ningún perfil pudo ejecutar la señal."
+            reason = next(
+                (
+                    item["reason"]
+                    for item in routing_attempts
+                    if item["reason"]
+                ),
+                "Ningún perfil pudo ejecutar la señal.",
+            )
+            signal.rejection_reason = reason
+            signal.execution_decision = "REJECTED"
+            signal.metadata["routing_attempts"] = routing_attempts
+            signal.metadata["failure_stage"] = next(
+                (
+                    item["failure_stage"]
+                    for item in routing_attempts
+                    if item["failure_stage"]
+                ),
+                "ROUTING",
+            )
+            signal.metadata["rejection_reason"] = reason
+            signal.metadata["execution_decision"] = "REJECTED"
             event_bus.signalRejected.emit(
                 SignalRejectedEvent(signal=signal, reason=reason)
             )
             event_bus.warning(reason)
+
+        if signal.id is None and signal.source == "TELEGRAM":
+            signal.metadata = original_metadata
+            signal.profile_id = original_profile_id
+            signal.profile_name = original_profile_name
+            signal.rejection_reason = original_reason
+            signal.execution_decision = original_decision
 
         return executed
 

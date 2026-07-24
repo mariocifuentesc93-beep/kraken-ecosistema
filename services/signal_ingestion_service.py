@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import logging
+import traceback
 from typing import Optional
 
 from models.signal import Signal, SignalIdentityError
@@ -38,10 +39,13 @@ class SignalIngestionService:
         repository=None,
         signal_engine_instance=None,
         logger=None,
+        event_log=None,
     ):
+        self._use_default_event_log = repository is None and event_log is None
         self._repository = repository
         self._signal_engine = signal_engine_instance
         self._logger = logger or logging.getLogger(__name__)
+        self._event_log = event_log
 
     def _get_repository(self):
         if self._repository is None:
@@ -54,10 +58,35 @@ class SignalIngestionService:
             self._signal_engine = signal_engine
         return self._signal_engine
 
+    def _get_event_log(self):
+        if self._event_log is None and self._use_default_event_log:
+            from repositories.log_repository import log_repository
+            self._event_log = log_repository
+        return self._event_log
+
+    def record_event(self, signal, stage, message, level="info"):
+        identity = getattr(signal, "idempotency_key", None) or "sin-identidad"
+        text = (
+            f"{stage} | {identity} | "
+            f"external_signal_id={getattr(signal, 'external_signal_id', None)} | "
+            f"symbol={getattr(signal, 'symbol', '')} | {message}"
+        )
+        getattr(self._logger, level, self._logger.info)(text)
+        event_log = self._get_event_log()
+        if event_log is not None:
+            getattr(event_log, level, event_log.info)(
+                "InternalSignal",
+                text,
+            )
+
     def _set_status(self, signal, status):
         signal.status = status
         try:
-            self._get_repository().update_status(signal.id, status)
+            repository = self._get_repository()
+            if hasattr(repository, "update_outcome"):
+                repository.update_outcome(signal)
+            else:
+                repository.update_status(signal.id, status)
             return None
         except Exception as error:
             self._logger.error(
@@ -97,6 +126,12 @@ class SignalIngestionService:
         except SignalIdentityError as error:
             reason = f"Identidad de señal inválida: {error}"
             self._logger.warning(reason)
+            self.record_event(
+                signal,
+                "IDENTITY_VALIDATION",
+                reason,
+                level="warning",
+            )
             return SignalIngestionResult(
                 accepted=False,
                 created=False,
@@ -108,6 +143,11 @@ class SignalIngestionService:
             )
 
         signal.status = STATUS_RECEIVED
+        self.record_event(
+            signal,
+            "DETECTED",
+            "Contrato INTERNAL validado; iniciando persistencia.",
+        )
         try:
             persistence = self._get_repository().create(signal)
         except Exception as error:
@@ -134,6 +174,11 @@ class SignalIngestionService:
                 reason,
                 persisted_signal.idempotency_key,
             )
+            self.record_event(
+                persisted_signal,
+                "DUPLICATE",
+                reason,
+            )
             return SignalIngestionResult(
                 accepted=False,
                 created=False,
@@ -154,9 +199,21 @@ class SignalIngestionService:
                 )
             )
         except Exception as error:
-            self._set_status(persisted_signal, STATUS_FAILED)
             reason = f"Falló el enrutamiento de la señal: {error}"
+            persisted_signal.rejection_reason = reason
+            persisted_signal.execution_decision = "FAILED"
+            persisted_signal.metadata["failure_stage"] = "ROUTING_EXCEPTION"
+            persisted_signal.metadata["rejection_reason"] = reason
+            persisted_signal.metadata["execution_decision"] = "FAILED"
+            persisted_signal.metadata["traceback"] = traceback.format_exc()
+            self._set_status(persisted_signal, STATUS_FAILED)
             self._logger.exception(reason)
+            self.record_event(
+                persisted_signal,
+                "ROUTING_EXCEPTION",
+                f"{reason}\n{persisted_signal.metadata['traceback']}",
+                level="error",
+            )
             return SignalIngestionResult(
                 accepted=False,
                 created=True,
@@ -168,9 +225,29 @@ class SignalIngestionService:
             )
 
         if not routed:
+            reason = (
+                persisted_signal.rejection_reason
+                or "SignalEngine no pudo enrutar la señal."
+            )
+            persisted_signal.rejection_reason = reason
+            persisted_signal.execution_decision = (
+                persisted_signal.execution_decision or "REJECTED"
+            )
+            persisted_signal.metadata.setdefault(
+                "failure_stage", "ROUTING"
+            )
+            persisted_signal.metadata["rejection_reason"] = reason
+            persisted_signal.metadata["execution_decision"] = (
+                persisted_signal.execution_decision
+            )
             self._set_status(persisted_signal, STATUS_FAILED)
-            reason = "SignalEngine no pudo enrutar la señal."
             self._logger.warning(reason)
+            self.record_event(
+                persisted_signal,
+                persisted_signal.metadata["failure_stage"],
+                reason,
+                level="warning",
+            )
             return SignalIngestionResult(
                 accepted=False,
                 created=True,
@@ -180,8 +257,20 @@ class SignalIngestionService:
                 routed=False,
             )
 
+        persisted_signal.rejection_reason = ""
+        persisted_signal.metadata.pop("failure_stage", None)
+        persisted_signal.metadata["rejection_reason"] = ""
         status_error = self._set_status(persisted_signal, STATUS_ROUTED)
         reason = "Señal persistida y enrutada correctamente."
+        self.record_event(
+            persisted_signal,
+            "ROUTED",
+            (
+                f"Perfiles={len(routed_profiles)} | "
+                f"perfil={persisted_signal.profile_name or '-'} | "
+                f"decisión={persisted_signal.execution_decision or '-'}"
+            ),
+        )
         return SignalIngestionResult(
             accepted=True,
             created=True,
