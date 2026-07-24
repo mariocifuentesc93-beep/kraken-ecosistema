@@ -71,6 +71,18 @@ class ProfileDialog(QDialog):
 
         self.active.setChecked(True)
 
+        self.publish_internal = QCheckBox(
+            "Publicar señales INTERNAL en Telegram"
+        )
+
+        self.output_account_id = QLineEdit()
+        self.output_account_id.setPlaceholderText("ID de cuenta de salida")
+
+        self.output_chat_id = QLineEdit()
+        self.output_chat_id.setPlaceholderText(
+            "Chat ID de salida, puede ser negativo"
+        )
+
         form.addRow("Nombre", self.name)
 
         form.addRow("Descripción", self.description)
@@ -82,6 +94,12 @@ class ProfileDialog(QDialog):
         form.addRow("Color", self.color)
 
         form.addRow("Activo", self.active)
+
+        form.addRow("Publicación INTERNAL", self.publish_internal)
+
+        form.addRow("Cuenta Telegram de salida", self.output_account_id)
+
+        form.addRow("Chat Telegram de salida", self.output_chat_id)
 
         layout.addLayout(form)
 
@@ -197,6 +215,30 @@ class ProfileDialog(QDialog):
 
         )
 
+        self.publish_internal.setChecked(
+            getattr(
+                self.profile,
+                "publish_internal_to_telegram",
+                False,
+            )
+        )
+        output_account = getattr(
+            self.profile,
+            "telegram_output_account_id",
+            None,
+        )
+        output_chat = getattr(
+            self.profile,
+            "telegram_output_chat_id",
+            None,
+        )
+        self.output_account_id.setText(
+            "" if output_account is None else str(output_account)
+        )
+        self.output_chat_id.setText(
+            "" if output_chat is None else str(output_chat)
+        )
+
     # ---------------------------------------------------------
 
     def validate_and_accept(self):
@@ -215,11 +257,31 @@ class ProfileDialog(QDialog):
 
             return
 
+        for label, widget in (
+            ("cuenta Telegram de salida", self.output_account_id),
+            ("chat Telegram de salida", self.output_chat_id),
+        ):
+            value = widget.text().strip()
+            if value:
+                try:
+                    int(value)
+                except ValueError:
+                    QMessageBox.warning(
+                        self,
+                        "Perfil",
+                        f"El valor de {label} debe ser un entero.",
+                    )
+                    return
+
         self.accept()
 
     # ---------------------------------------------------------
 
     def get_data(self):
+
+        def optional_integer(widget):
+            value = widget.text().strip()
+            return int(value) if value else None
 
         return {
 
@@ -234,5 +296,17 @@ class ProfileDialog(QDialog):
             "color": self.color.text(),
 
             "active": self.active.isChecked(),
+
+            "publish_internal_to_telegram": (
+                self.publish_internal.isChecked()
+            ),
+
+            "telegram_output_account_id": optional_integer(
+                self.output_account_id
+            ),
+
+            "telegram_output_chat_id": optional_integer(
+                self.output_chat_id
+            ),
 
         }

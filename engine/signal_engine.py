@@ -80,6 +80,7 @@ class SignalEngine:
         signal,
         chat_id,
         account_id=None,
+        routed_profiles=None,
     ):
         """
         Procesa una señal normalizada y ya persistida.
@@ -152,6 +153,8 @@ class SignalEngine:
 
             if result:
                 executed = True
+                if routed_profiles is not None:
+                    routed_profiles.append(profile)
 
         if executed:
             event_bus.signalProcessed.emit(

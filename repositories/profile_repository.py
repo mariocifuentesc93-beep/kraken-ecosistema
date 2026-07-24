@@ -38,6 +38,9 @@ class ProfileRepository:
 
                 telegram_account_id,
                 telegram_channel_id,
+                publish_internal_to_telegram,
+                telegram_output_account_id,
+                telegram_output_chat_id,
 
                 default_mt5_account,
 
@@ -66,7 +69,7 @@ class ProfileRepository:
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -83,6 +86,9 @@ class ProfileRepository:
 
                 profile.telegram_account_id,
                 profile.telegram_channel_id,
+                int(profile.publish_internal_to_telegram),
+                profile.telegram_output_account_id,
+                profile.telegram_output_chat_id,
 
                 profile.default_mt5_account,
 
@@ -148,6 +154,9 @@ class ProfileRepository:
 
                 telegram_account_id=?,
                 telegram_channel_id=?,
+                publish_internal_to_telegram=?,
+                telegram_output_account_id=?,
+                telegram_output_chat_id=?,
 
                 default_mt5_account=?,
 
@@ -190,6 +199,9 @@ class ProfileRepository:
 
                 profile.telegram_account_id,
                 profile.telegram_channel_id,
+                int(profile.publish_internal_to_telegram),
+                profile.telegram_output_account_id,
+                profile.telegram_output_chat_id,
 
                 profile.default_mt5_account,
 

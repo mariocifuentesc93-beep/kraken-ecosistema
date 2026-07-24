@@ -34,6 +34,12 @@ def create_tables(connection: sqlite3.Connection):
 
         telegram_channel_id INTEGER,
 
+        publish_internal_to_telegram INTEGER NOT NULL DEFAULT 0,
+
+        telegram_output_account_id INTEGER,
+
+        telegram_output_chat_id INTEGER,
+
         default_mt5_account INTEGER,
 
         risk_enabled INTEGER DEFAULT 1,
@@ -322,6 +328,41 @@ def create_tables(connection: sqlite3.Connection):
         CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_idempotency
         ON signals(idempotency_key)
         """)
+
+    # ==========================================================
+    # INTERNAL -> TELEGRAM PUBLICATIONS
+    # ==========================================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_publications(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        signal_id INTEGER NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        telegram_account_id INTEGER NOT NULL,
+        chat_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        sent_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(signal_id)
+            REFERENCES signals(id)
+            ON DELETE CASCADE,
+        FOREIGN KEY(telegram_account_id)
+            REFERENCES telegram_accounts(id)
+            ON DELETE RESTRICT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_publication_destination
+    ON telegram_publications(
+        idempotency_key,
+        telegram_account_id,
+        chat_id
+    )
+    """)
 
     # ==========================================================
     # OPERATIONS

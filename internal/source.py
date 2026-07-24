@@ -82,6 +82,7 @@ class InternalSignalSource:
         pattern="Kraken_BMSP_*.csv",
         observation_only=True,
         ingestion_service=None,
+        publication_service=None,
         logger=None,
     ):
         self.directory = Path(directory or default_internal_directory())
@@ -89,6 +90,7 @@ class InternalSignalSource:
         self.checkpoint_store = checkpoint_store
         self.observation_only = bool(observation_only)
         self._ingestion_service = ingestion_service
+        self._publication_service = publication_service
         self._logger = logger or logging.getLogger(__name__)
 
     def _get_ingestion_service(self):
@@ -136,6 +138,21 @@ class InternalSignalSource:
                 continue
 
             detected.append(result)
+            if (
+                getattr(result, "accepted", False)
+                and self._publication_service is not None
+            ):
+                try:
+                    self._publication_service.publish(
+                        result.signal,
+                        profiles=result.routed_profiles,
+                    )
+                except Exception as error:
+                    self._logger.exception(
+                        "La publicación opcional falló para %s: %s",
+                        signal.idempotency_key,
+                        error,
+                    )
             conclusive = bool(
                 getattr(result, "created", False)
                 or getattr(result, "duplicate", False)

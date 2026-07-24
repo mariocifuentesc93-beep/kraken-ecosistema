@@ -213,6 +213,15 @@ class ProfilesPage(QWidget):
             icon=data["icon"],
             active=data["active"],
             operation_mode=data["operation_mode"],
+            publish_internal_to_telegram=data[
+                "publish_internal_to_telegram"
+            ],
+            telegram_output_account_id=data[
+                "telegram_output_account_id"
+            ],
+            telegram_output_chat_id=data[
+                "telegram_output_chat_id"
+            ],
 
         )
 
@@ -246,6 +255,15 @@ class ProfilesPage(QWidget):
         self.current_profile.icon = data["icon"]
         self.current_profile.active = data["active"]
         self.current_profile.operation_mode = data["operation_mode"]
+        self.current_profile.publish_internal_to_telegram = data[
+            "publish_internal_to_telegram"
+        ]
+        self.current_profile.telegram_output_account_id = data[
+            "telegram_output_account_id"
+        ]
+        self.current_profile.telegram_output_chat_id = data[
+            "telegram_output_chat_id"
+        ]
 
         profile_controller.update(
 

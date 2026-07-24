@@ -41,6 +41,9 @@ class ProfileService:
         operation_mode="telegram",
         signal_source_mode="TELEGRAM",
         telegram_account_id=None,
+        publish_internal_to_telegram=False,
+        telegram_output_account_id=None,
+        telegram_output_chat_id=None,
         default_mt5_account=None,
         risk_mode="PERCENT",
         risk_percent=2.0,
@@ -67,6 +70,9 @@ class ProfileService:
             signal_source_mode=signal_source_mode,
 
             telegram_account_id=telegram_account_id,
+            publish_internal_to_telegram=publish_internal_to_telegram,
+            telegram_output_account_id=telegram_output_account_id,
+            telegram_output_chat_id=telegram_output_chat_id,
 
             default_mt5_account=default_mt5_account,
 
@@ -119,6 +125,21 @@ class ProfileService:
             ),
 
             telegram_account_id=getattr(profile, "telegram_account_id", None),
+            publish_internal_to_telegram=getattr(
+                profile,
+                "publish_internal_to_telegram",
+                False,
+            ),
+            telegram_output_account_id=getattr(
+                profile,
+                "telegram_output_account_id",
+                None,
+            ),
+            telegram_output_chat_id=getattr(
+                profile,
+                "telegram_output_chat_id",
+                None,
+            ),
 
             default_mt5_account=getattr(profile, "default_mt5_account", None),
 

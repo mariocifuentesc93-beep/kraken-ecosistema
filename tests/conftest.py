@@ -6,6 +6,12 @@ import pytest
 from database.signal_contract_migration import upgrade
 from models.signal import Signal
 from repositories.signal_repository import SignalRepository
+from database.internal_telegram_publication_migration import (
+    upgrade as upgrade_publication,
+)
+from repositories.telegram_publication_repository import (
+    TelegramPublicationRepository,
+)
 
 
 @pytest.fixture
@@ -39,6 +45,36 @@ def temporary_signal_repository(unified_database):
 
 
 @pytest.fixture
+def publication_repository(tmp_path):
+    connection = sqlite3.connect(tmp_path / "publications.db")
+    connection.row_factory = sqlite3.Row
+    connection.executescript(
+        """
+        CREATE TABLE profiles(
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            operation_mode TEXT DEFAULT 'telegram'
+        );
+        CREATE TABLE signals(
+            id INTEGER PRIMARY KEY,
+            idempotency_key TEXT NOT NULL UNIQUE
+        );
+        CREATE TABLE telegram_accounts(
+            id INTEGER PRIMARY KEY,
+            enabled INTEGER DEFAULT 1
+        );
+        INSERT INTO signals(id, idempotency_key)
+        VALUES (10, 'INTERNAL:LIONX100:12305');
+        INSERT INTO telegram_accounts(id, enabled) VALUES (7, 1);
+        """
+    )
+    upgrade_publication(connection)
+    repository = TelegramPublicationRepository(connection)
+    yield repository
+    connection.close()
+
+
+@pytest.fixture
 def profile_factory():
     def factory(
         profile_id,
@@ -46,6 +82,9 @@ def profile_factory():
         enabled=True,
         signal_source_mode="TELEGRAM",
         execution_mode="SIMULATION",
+        publish_internal_to_telegram=False,
+        telegram_output_account_id=None,
+        telegram_output_chat_id=None,
     ):
         return SimpleNamespace(
             id=profile_id,
@@ -54,6 +93,9 @@ def profile_factory():
             telegram_account_id=7,
             signal_source_mode=signal_source_mode,
             execution_mode=execution_mode,
+            publish_internal_to_telegram=publish_internal_to_telegram,
+            telegram_output_account_id=telegram_output_account_id,
+            telegram_output_chat_id=telegram_output_chat_id,
             tp_level=1,
             execute_market=True,
         )
