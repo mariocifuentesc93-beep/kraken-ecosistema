@@ -68,6 +68,9 @@ from dashboard.branding import application_icon, logo_pixmap
 from dashboard.icons import (ICON_SIZE, apply_standard_icons, colored_icon, icon_chip,
                              install_icon_system)
 from repositories.profile_repository import profile_repository
+from repositories.telegram_account_repository import (
+    telegram_account_repository,
+)
 from services.connectivity_status_service import (
     CONNECTED,
     ConnectivityStatus,
@@ -751,6 +754,14 @@ class MainWindow(QMainWindow):
 
     def toggle_connection(self, service):
         """Connect or disconnect in a worker, never on Qt's UI thread."""
+        if (
+            service == "Telegram"
+            and not telegram_account_repository.get_all()
+        ):
+            self.telegramPage.refresh()
+            self.navigate_to_page("Cuentas Telegram")
+            return
+
         def work():
             try:
                 load_active_config()

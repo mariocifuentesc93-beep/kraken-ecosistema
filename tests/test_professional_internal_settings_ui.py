@@ -49,6 +49,20 @@ class FakeAccountManager:
         return "CONNECTED" if self.connected else "DISCONNECTED"
 
 
+class EmptyAccountManager:
+    def reload(self):
+        return True
+
+    def get_accounts(self):
+        return []
+
+    def get_account(self, account_id):
+        return None
+
+    def connection_state(self, account_id=None):
+        return "DISCONNECTED"
+
+
 def destinations(account_id):
     if account_id != 7:
         return []
@@ -97,6 +111,29 @@ def test_global_internal_settings_are_not_profile_fields():
     )
     page._test_sender(7, -1001234567890)
     assert sent == [(7, -1001234567890)]
+    page.close()
+
+
+def test_clean_installation_shows_empty_internal_publication_state():
+    app = QApplication.instance() or QApplication([])
+    page = InternalSourceSettingsPage(
+        config_repository=MemoryConfigRepository(),
+        account_manager=EmptyAccountManager(),
+        destinations_provider=lambda _account_id: [],
+        test_sender=lambda *_: pytest.fail("No debe enviar"),
+    )
+    page.show()
+    app.processEvents()
+
+    assert page.publish_checkbox.isChecked() is False
+    assert page.account_combo.currentText() == "(No configurada)"
+    assert page.account_combo.currentData() is None
+    assert page.destination_combo.currentText() == "(No configurado)"
+    assert page.destination_combo.currentData() is None
+    assert page.chat_id_label.text() == "—"
+    assert page.destination_name.text() == "—"
+    assert page.destination_type.text() == "—"
+    assert page.test_button.isEnabled() is False
     page.close()
 
 

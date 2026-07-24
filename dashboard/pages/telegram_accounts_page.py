@@ -80,10 +80,16 @@ class TelegramAccountsPage(QWidget):
         accounts = telegram_account_repository.get_all()
         connected = sum(1 for account in accounts if account.connected)
         authorized = sum(1 for account in accounts if account.authorized)
-        self.summary.setText(
-            f"Cuentas configuradas: {len(accounts)} · Conectadas: {connected} · "
-            f"Autorizadas: {authorized}."
-        )
+        if accounts:
+            self.summary.setText(
+                f"Cuentas configuradas: {len(accounts)} · Conectadas: {connected} · "
+                f"Autorizadas: {authorized}."
+            )
+        else:
+            self.summary.setText(
+                "No hay ninguna cuenta de Telegram configurada.\n\n"
+                "Haz clic en Conectar para agregar una nueva cuenta."
+            )
         self.table.setRowCount(len(accounts))
         for row, account in enumerate(accounts):
             values = [

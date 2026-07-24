@@ -88,19 +88,17 @@ class InternalSourceSettingsPage(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        section = SectionWidget("Internal Signal Source")
+        section = SectionWidget("PUBLICACIÓN EN TELEGRAM")
         form = QGridLayout()
 
-        self.publish_checkbox = QCheckBox(
-            "Publicar señales INTERNAL en Telegram"
-        )
+        self.publish_checkbox = QCheckBox("Habilitado")
         self.account_combo = QComboBox()
         self.destination_combo = QComboBox()
-        self.destination_name = QLabel("-")
-        self.destination_type = QLabel("-")
-        self.chat_id_label = QLabel("-")
+        self.destination_name = QLabel("—")
+        self.destination_type = QLabel("—")
+        self.chat_id_label = QLabel("—")
         self.account_status_label = QLabel("Desconectado")
-        self.destination_status_label = QLabel("-")
+        self.destination_status_label = QLabel("Sin configurar")
         self.test_button = QPushButton("Probar envío")
         self.save_button = QPushButton("Guardar configuración")
         self.reload_button = QPushButton("Recargar")
@@ -200,8 +198,14 @@ class InternalSourceSettingsPage(QWidget):
     def _load_accounts(self, selected=None):
         self.account_combo.blockSignals(True)
         self.account_combo.clear()
-        self.account_combo.addItem("Seleccione una cuenta", None)
-        for account in self._accounts():
+        accounts = self._accounts()
+        self.account_combo.addItem(
+            "(No configurada)"
+            if not accounts
+            else "Seleccione una cuenta",
+            None,
+        )
+        for account in accounts:
             self.account_combo.addItem(
                 self._account_text(account),
                 account.id,
@@ -229,7 +233,7 @@ class InternalSourceSettingsPage(QWidget):
             selected = self.destination_combo.currentData()
         self.destination_combo.blockSignals(True)
         self.destination_combo.clear()
-        self.destination_combo.addItem("Seleccione un chat o canal", None)
+        self.destination_combo.addItem("(No configurado)", None)
         self._destinations = {}
         if account_id is not None:
             for item in self._destinations_provider(account_id):
@@ -301,7 +305,7 @@ class InternalSourceSettingsPage(QWidget):
         selected = self.destination_combo.currentData()
         self.destination_combo.blockSignals(True)
         self.destination_combo.clear()
-        self.destination_combo.addItem("Seleccione un chat o canal", None)
+        self.destination_combo.addItem("(No configurado)", None)
         self._destinations = {}
         for item in items:
             chat_id = int(item["chat_id"])
@@ -339,13 +343,13 @@ class InternalSourceSettingsPage(QWidget):
         item = self._destinations.get(
             self.destination_combo.currentData()
         )
-        self.destination_name.setText(item["title"] if item else "-")
-        self.destination_type.setText(item["type"] if item else "-")
+        self.destination_name.setText(item["title"] if item else "—")
+        self.destination_type.setText(item["type"] if item else "—")
         self.chat_id_label.setText(
-            str(item["chat_id"]) if item else "-"
+            str(item["chat_id"]) if item else "—"
         )
         self.destination_status_label.setText(
-            "Válido" if item else "Seleccione un destino válido"
+            "Válido" if item else "Sin configurar"
         )
         self.destination_status_label.setProperty(
             "connectionState", "CONNECTED" if item else "ERROR"
