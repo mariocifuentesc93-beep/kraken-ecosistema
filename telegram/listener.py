@@ -44,6 +44,7 @@ def register_telegram_listener(
         signal.telegram_account_id = account_id
         signal.chat_id = chat_id
         signal.message_id = message.id
+        signal.idempotency_key = signal.build_idempotency_key()
 
         signal_processor(
             signal=signal,
