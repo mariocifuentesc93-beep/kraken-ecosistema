@@ -27,6 +27,8 @@ class MT5Account:
 
     terminal_path: str = ""
 
+    mt5_terminal_id: Optional[int] = None
+
     # =====================================================
     # OPERACIÓN
     # =====================================================

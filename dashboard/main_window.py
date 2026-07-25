@@ -34,6 +34,7 @@ from dashboard.pages.operations_page import OperationsPage
 from dashboard.pages.statistics_page import StatisticsPage
 from dashboard.pages.profiles_page import ProfilesPage
 from dashboard.pages.mt5_accounts_page import MT5AccountsPage
+from dashboard.pages.mt5_terminals_page import MT5TerminalsPage
 from dashboard.pages.telegram_accounts_page import TelegramAccountsPage
 from dashboard.pages.channels_page import ChannelsPage
 from dashboard.pages.symbols_page import SymbolsPage
@@ -382,17 +383,19 @@ class MainWindow(QMainWindow):
 
             "Inspector INTERNAL",
 
+            "Terminales MT5",
+
         ]
 
         icon_map = ["layout-dashboard", "list-checks", "chart-no-axes-combined", "users",
                     "activity", "send", "radio-tower", "tags", "scroll-text", "search-check",
                     "history", "chart-spline", "circle-check", "briefcase-business", "calendar-days",
-                    "chart-no-axes-combined", "play", "settings", "radio-tower"]
+                    "chart-no-axes-combined", "play", "settings", "radio-tower", "activity"]
         groups = (("OPERATION", range(0, 4)), ("TRADING", (12, 13, 16, 14, 15)),
                   ("MARKET", range(4, 8)), ("ANALYSIS", (9, 10, 11, 8)),
                   ("CONFIGURATION", (3, 18, 17)))
         # Perfiles belongs to Operación; keep Configuración free of the duplicate.
-        groups = groups[:-1] + ((groups[-1][0], (18, 17)),)
+        groups = groups[:-1] + ((groups[-1][0], (18, 19, 17)),)
         self.page_items = {}
         self.navigation_groups = {}
         for group, indices in groups:
@@ -469,6 +472,8 @@ class MainWindow(QMainWindow):
 
         self.internalSourceSettingsPage = InternalSourceSettingsPage()
 
+        self.mt5TerminalsPage = MT5TerminalsPage()
+
         self.stack.addWidget(self.dashboardPage)
 
         self.stack.addWidget(self.operationsPage)
@@ -507,6 +512,8 @@ class MainWindow(QMainWindow):
 
         self.stack.addWidget(self.internalSourceSettingsPage)
 
+        self.stack.addWidget(self.mt5TerminalsPage)
+
         page_details = (
             (self.operationsPage, "Operaciones", "Consulte las operaciones generadas por simulación y paper trading."),
             (self.statisticsPage, "Estadísticas", "Revise el rendimiento consolidado de las operaciones registradas."),
@@ -529,6 +536,11 @@ class MainWindow(QMainWindow):
                 self.internalSourceSettingsPage,
                 "Inspector INTERNAL",
                 "Configure una sola cuenta y destino para publicar cada señal INTERNAL.",
+            ),
+            (
+                self.mt5TerminalsPage,
+                "Terminales MT5",
+                "Administre instalaciones independientes y el terminal Scanner.",
             ),
         )
         page_heading_icons = {

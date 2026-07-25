@@ -1,5 +1,17 @@
+from dataclasses import fields
+
 from models.mt5_account import MT5Account
 from database.database_manager import database_manager
+
+
+_ACCOUNT_FIELDS = {item.name for item in fields(MT5Account)}
+
+
+def _account_from_row(row):
+    return MT5Account(**{
+        key: value for key, value in dict(row).items()
+        if key in _ACCOUNT_FIELDS
+    })
 
 
 class MT5AccountRepository:
@@ -19,7 +31,7 @@ class MT5AccountRepository:
         )
 
         return [
-            MT5Account(**dict(row))
+            _account_from_row(row)
             for row in cursor.fetchall()
         ]
 
@@ -43,7 +55,7 @@ class MT5AccountRepository:
         if row is None:
             return None
 
-        return MT5Account(**dict(row))
+        return _account_from_row(row)
 
     # ---------------------------------------------------------
 
@@ -61,7 +73,7 @@ class MT5AccountRepository:
         )
 
         return [
-            MT5Account(**dict(row))
+            _account_from_row(row)
             for row in cursor.fetchall()
         ]
 
@@ -136,6 +148,8 @@ class MT5AccountRepository:
 
         account.id = cursor.lastrowid
 
+        self._save_terminal_link(account)
+
         return account
 
     # ---------------------------------------------------------
@@ -208,7 +222,23 @@ class MT5AccountRepository:
 
         database_manager.commit()
 
+        self._save_terminal_link(account)
+
         return cursor.rowcount > 0
+
+    def _save_terminal_link(self, account):
+        columns = {
+            row[1] for row in database_manager.execute(
+                "PRAGMA table_info(mt5_accounts)"
+            ).fetchall()
+        }
+        if "mt5_terminal_id" not in columns or account.id is None:
+            return
+        database_manager.execute(
+            "UPDATE mt5_accounts SET mt5_terminal_id=? WHERE id=?",
+            (account.mt5_terminal_id, account.id),
+        )
+        database_manager.commit()
 
     # ---------------------------------------------------------
 

@@ -52,6 +52,10 @@ class Profile:
 
     default_mt5_account: Optional[int] = None
 
+    mt5_terminal_id: Optional[int] = None
+
+    catalog_id: str = "BRIDGE_SYNTHETICS"
+
     magic_number: int = 10001
 
     comment: str = ""

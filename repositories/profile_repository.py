@@ -154,6 +154,8 @@ class ProfileRepository:
 
         profile.id = cursor.lastrowid
 
+        self._save_terminal_context(profile)
+
         return profile
 
     # ---------------------------------------------------------
@@ -299,7 +301,32 @@ class ProfileRepository:
 
         database_manager.commit()
 
+        self._save_terminal_context(profile)
+
         return cursor.rowcount > 0
+
+    def _save_terminal_context(self, profile):
+        columns = {
+            row[1] for row in database_manager.execute(
+                "PRAGMA table_info(profiles)"
+            ).fetchall()
+        }
+        assignments = []
+        values = []
+        if "mt5_terminal_id" in columns:
+            assignments.append("mt5_terminal_id=?")
+            values.append(profile.mt5_terminal_id)
+        if "catalog_id" in columns:
+            assignments.append("catalog_id=?")
+            values.append(profile.catalog_id)
+        if not assignments or profile.id is None:
+            return
+        values.append(profile.id)
+        database_manager.execute(
+            f"UPDATE profiles SET {', '.join(assignments)} WHERE id=?",
+            tuple(values),
+        )
+        database_manager.commit()
 
     # ---------------------------------------------------------
 
