@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
+    QFileDialog,
+    QLineEdit,
 )
 
 from dashboard.widgets.section_widget import SectionWidget
@@ -28,6 +30,8 @@ from telegram.account_manager import telegram_account_manager
 from telegram.async_runner import telegram_async_runner
 from services.telegram_channel_sync_service import TelegramChannelSyncService
 from dashboard.ui_theme import refresh_widget_style
+from repositories.mt5_terminal_repository import mt5_terminal_repository
+from repositories.settings_repository import settings_repository
 
 
 class _AsyncCallWorker(QObject):
@@ -67,6 +71,28 @@ class _AsyncCallOutcome:
     failure: _AsyncCallFailure | None = None
 
 
+class _TransientScannerSettings:
+    """Prevents injected UI tests from ever writing global production state."""
+
+    def __init__(self):
+        self.values = {}
+
+    def get(self, key, default=None):
+        return self.values.get(key, default)
+
+    def get_bool(self, key, default=False):
+        return str(self.get(key, int(default))).lower() in {"1", "true", "yes"}
+
+    def get_int(self, key, default=0):
+        try:
+            return int(self.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    def set(self, key, value):
+        self.values[key] = str(value)
+
+
 class InternalSourceSettingsPage(QWidget):
     """Single global configuration point for Inspector INTERNAL publication."""
 
@@ -78,6 +104,7 @@ class InternalSourceSettingsPage(QWidget):
         test_sender=None,
         async_runner=None,
         event_log=None,
+        scanner_settings_repository=None,
         test_timeout=10.0,
         parent=None,
     ):
@@ -99,6 +126,14 @@ class InternalSourceSettingsPage(QWidget):
         self._uses_default_test_sender = test_sender is None
         self._async_runner = async_runner or telegram_async_runner
         self._event_log = event_log or log_repository
+        self._scanner_settings = (
+            scanner_settings_repository
+            or (
+                settings_repository
+                if config_repository is None
+                else _TransientScannerSettings()
+            )
+        )
         self._test_timeout = test_timeout
         self._test_context = None
         self._workers = []
@@ -170,6 +205,27 @@ class InternalSourceSettingsPage(QWidget):
         section.addLayout(form)
         layout.addWidget(section)
 
+        scanner_section = SectionWidget("TERMINAL SCANNER")
+        scanner_form = QGridLayout()
+        self.scanner_enabled_checkbox = QCheckBox("Habilitado")
+        self.scanner_terminal_combo = QComboBox()
+        self.scanner_output_path = QLineEdit()
+        self.scanner_output_button = QPushButton("Seleccionar carpeta")
+        self.scanner_autostart_checkbox = QCheckBox(
+            "Iniciar terminal Scanner con Kraken"
+        )
+        scanner_form.addWidget(self.scanner_enabled_checkbox, 0, 0, 1, 2)
+        scanner_form.addWidget(QLabel("Instalación MT5"), 1, 0)
+        scanner_form.addWidget(self.scanner_terminal_combo, 1, 1)
+        scanner_form.addWidget(QLabel("Carpeta CSV"), 2, 0)
+        output_row = QHBoxLayout()
+        output_row.addWidget(self.scanner_output_path)
+        output_row.addWidget(self.scanner_output_button)
+        scanner_form.addLayout(output_row, 2, 1)
+        scanner_form.addWidget(self.scanner_autostart_checkbox, 3, 0, 1, 2)
+        scanner_section.addLayout(scanner_form)
+        layout.addWidget(scanner_section)
+
         buttons = QHBoxLayout()
         buttons.addWidget(self.refresh_destinations_button)
         buttons.addWidget(self.test_button)
@@ -192,6 +248,57 @@ class InternalSourceSettingsPage(QWidget):
         )
         self.save_button.clicked.connect(self.save)
         self.test_button.clicked.connect(self.test_send)
+        self.scanner_output_button.clicked.connect(self._choose_scanner_output)
+
+    def _choose_scanner_output(self):
+        path = QFileDialog.getExistingDirectory(
+            self, "Seleccionar carpeta de salida CSV",
+            self.scanner_output_path.text(),
+        )
+        if path:
+            self.scanner_output_path.setText(path)
+
+    def _load_scanner_settings(self):
+        selected = self._scanner_settings.get_int(
+            "internal.scanner.mt5_terminal_id", 0
+        )
+        self.scanner_terminal_combo.clear()
+        self.scanner_terminal_combo.addItem("(No configurada)", None)
+        for terminal in mt5_terminal_repository.get_all():
+            if terminal.role == "SCANNER" or terminal.active:
+                self.scanner_terminal_combo.addItem(
+                    f"{terminal.name} · {terminal.role}", terminal.id
+                )
+        self.scanner_terminal_combo.setCurrentIndex(max(
+            0, self.scanner_terminal_combo.findData(selected)
+        ))
+        self.scanner_enabled_checkbox.setChecked(self._scanner_settings.get_bool(
+            "internal.scanner.enabled", False
+        ))
+        self.scanner_output_path.setText(self._scanner_settings.get(
+            "internal.scanner.output_directory", ""
+        ))
+        self.scanner_autostart_checkbox.setChecked(self._scanner_settings.get_bool(
+            "internal.scanner.auto_start_terminal", False
+        ))
+
+    def _save_scanner_settings(self):
+        self._scanner_settings.set(
+            "internal.scanner.enabled",
+            int(self.scanner_enabled_checkbox.isChecked()),
+        )
+        self._scanner_settings.set(
+            "internal.scanner.mt5_terminal_id",
+            self.scanner_terminal_combo.currentData() or "",
+        )
+        self._scanner_settings.set(
+            "internal.scanner.output_directory",
+            self.scanner_output_path.text().strip(),
+        )
+        self._scanner_settings.set(
+            "internal.scanner.auto_start_terminal",
+            int(self.scanner_autostart_checkbox.isChecked()),
+        )
 
     @staticmethod
     def _destination_type(item):
@@ -476,6 +583,7 @@ class InternalSourceSettingsPage(QWidget):
         self._update_actions()
 
     def load(self):
+        self._load_scanner_settings()
         config = self._service.get()
         self._load_accounts(config.telegram_account_id)
         self._load_destinations(config.telegram_output_chat_id)
@@ -580,6 +688,7 @@ class InternalSourceSettingsPage(QWidget):
                 identifiers,
             )
             return False
+        self._save_scanner_settings()
         self._test_send_ok(None, identifiers)
         return True
 

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from dashboard.widgets.section_widget import SectionWidget
 from dashboard.widgets.connection_indicator import ConnectionIndicator
 from dashboard.dialogs.dialog_layout import fit_dialog_to_screen
+from repositories.mt5_terminal_repository import mt5_terminal_repository
 
 
 class MT5AccountDialog(QDialog):
@@ -164,6 +165,13 @@ class MT5AccountDialog(QDialog):
 
         self.txtTerminal = QLineEdit()
 
+        self.cboTerminalInstallation = QComboBox()
+        self.cboTerminalInstallation.addItem("(Sin instalación vinculada)", None)
+        for terminal in mt5_terminal_repository.get_all():
+            self.cboTerminalInstallation.addItem(
+                f"{terminal.name} · {terminal.role}", terminal.id
+            )
+
         form.addRow(
             "Login",
             self.txtLogin
@@ -183,6 +191,8 @@ class MT5AccountDialog(QDialog):
             "Terminal",
             self.txtTerminal
         )
+
+        form.addRow("Instalación administrada", self.cboTerminalInstallation)
 
         section.addLayout(form)
 
@@ -372,6 +382,11 @@ class MT5AccountDialog(QDialog):
             getattr(account, "terminal_path", "")
         )
 
+        terminal_index = self.cboTerminalInstallation.findData(
+            getattr(account, "mt5_terminal_id", None)
+        )
+        self.cboTerminalInstallation.setCurrentIndex(max(0, terminal_index))
+
         self.chkEnabled.setChecked(
             getattr(account, "active", True)
         )
@@ -438,6 +453,9 @@ class MT5AccountDialog(QDialog):
 
             "terminal_path":
                 self.txtTerminal.text().strip(),
+
+            "mt5_terminal_id":
+                self.cboTerminalInstallation.currentData(),
 
             "enabled":
                 self.chkEnabled.isChecked(),

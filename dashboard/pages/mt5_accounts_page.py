@@ -197,6 +197,7 @@ class MT5AccountsPage(QWidget):
         account.password = data["password"]
         account.server = data["server"]
         account.terminal_path = data["terminal_path"]
+        account.mt5_terminal_id = data.get("mt5_terminal_id")
         account.active = data["enabled"]
         account.auto_connect = data["auto_reconnect"]
         account.execution_mode = data["environment"]

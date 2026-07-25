@@ -33,6 +33,7 @@ from repositories.symbol_repository import symbol_repository
 from repositories.telegram_account_repository import telegram_account_repository
 from repositories.profile_telegram_repository import profile_telegram_channel_repository
 from repositories.telegram_channel_repository import telegram_channel_repository
+from repositories.mt5_terminal_repository import mt5_terminal_repository
 
 
 class ProfileDialog(QDialog):
@@ -184,6 +185,15 @@ class ProfileDialog(QDialog):
         page = QWidget()
         layout = QVBoxLayout(page)
         section = SectionWidget("Cuentas MT5")
+        self.mt5TerminalCombo = QComboBox()
+        self.mt5CatalogCombo = QComboBox()
+        self.mt5CatalogCombo.addItems(
+            ["BRIDGE_SYNTHETICS", "WELTRADE_SYNTHETICS"]
+        )
+        section.addWidget(QLabel("Instalación MT5"))
+        section.addWidget(self.mt5TerminalCombo)
+        section.addWidget(QLabel("Catálogo de símbolos"))
+        section.addWidget(self.mt5CatalogCombo)
         self.mt5Selector = AccountSelector()
         section.addWidget(self.mt5Selector)
         self.lblMt5Capital = QLabel(
@@ -196,6 +206,12 @@ class ProfileDialog(QDialog):
         )
         section.addWidget(self.lblMt5Capital)
         self.mt5Selector.selectionChanged.connect(self._update_mt5_capital)
+        self.mt5TerminalCombo.currentIndexChanged.connect(
+            self._filter_mt5_accounts
+        )
+        self.mt5CatalogCombo.currentTextChanged.connect(
+            lambda catalog: self.set_symbols(get_symbol_catalog(catalog))
+        )
         layout.addWidget(section)
         layout.addStretch()
         self.tabs.addTab(page, "MT5")
@@ -267,7 +283,14 @@ class ProfileDialog(QDialog):
 
     def load_repository_data(self):
         """Populate selectors from their repository-backed sources."""
-        self.set_mt5_accounts(mt5_account_repository.get_all())
+        self._all_mt5_accounts = mt5_account_repository.get_all()
+        self.mt5TerminalCombo.clear()
+        self.mt5TerminalCombo.addItem("(Sin instalación vinculada)", None)
+        for terminal in mt5_terminal_repository.get_all():
+            self.mt5TerminalCombo.addItem(
+                f"{terminal.name} · {terminal.role}", terminal.id
+            )
+        self._filter_mt5_accounts()
         self.set_telegram_accounts(telegram_account_repository.get_all())
         self.set_symbols(get_symbol_catalog())
 
@@ -312,6 +335,13 @@ class ProfileDialog(QDialog):
         self.riskWidget.drawdown.setChecked(profile.max_drawdown > 0)
         self.riskWidget.drawdownLimit.setValue(profile.max_drawdown)
 
+        terminal_index = self.mt5TerminalCombo.findData(
+            getattr(profile, "mt5_terminal_id", None)
+        )
+        self.mt5TerminalCombo.setCurrentIndex(max(0, terminal_index))
+        self.mt5CatalogCombo.setCurrentText(
+            getattr(profile, "catalog_id", "BRIDGE_SYNTHETICS")
+        )
         self.mt5Selector.setSelected(self._as_id_list(profile.default_mt5_account))
         self.telegramSelector.setSelected(
             self._as_id_list(profile.telegram_account_id)
@@ -393,6 +423,8 @@ class ProfileDialog(QDialog):
             "tp_level": self.spnTP.value(),
             "tp1_management": self.riskWidget.tp1Management.currentData(),
             "default_mt5_account": self._selected_account_id(self.mt5Selector),
+            "mt5_terminal_id": self.mt5TerminalCombo.currentData(),
+            "catalog_id": self.mt5CatalogCombo.currentText(),
             "telegram_account_id": self._selected_account_id(
                 self.telegramSelector
             ),
@@ -402,6 +434,16 @@ class ProfileDialog(QDialog):
     def set_mt5_accounts(self, accounts):
         self.mt5Selector.loadAccounts(accounts)
         self._update_mt5_capital()
+
+    def _filter_mt5_accounts(self, *_):
+        terminal_id = self.mt5TerminalCombo.currentData()
+        accounts = getattr(self, "_all_mt5_accounts", [])
+        if terminal_id is not None:
+            accounts = [
+                account for account in accounts
+                if getattr(account, "mt5_terminal_id", None) == terminal_id
+            ]
+        self.set_mt5_accounts(accounts)
 
     def _update_mt5_capital(self):
         accounts = self.mt5Selector.selectedAccounts()
