@@ -15,10 +15,13 @@ class InternalPublicationResult:
     telegram_account_id: int | None
     chat_id: int | None
     status: str
+    telegram_channel_id: int | None = None
     sent: bool = False
     already_sent: bool = False
     skipped: bool = False
     error: str | None = None
+    message_id: int | None = None
+    traceback: str | None = None
 
 
 class InternalSignalPublicationService:
@@ -90,10 +93,22 @@ class InternalSignalPublicationService:
                 error="La cuenta Telegram global no existe o está deshabilitada.",
             )
         destinations = self._destinations_provider(account_id)
-        if chat_id is None or not any(
-            self._integer(item.get("chat_id"), positive=False) == chat_id
-            for item in destinations
-        ):
+        channel = next(
+            (
+                item
+                for item in destinations
+                if self._integer(
+                    getattr(item, "chat_id", None),
+                    positive=False,
+                ) == chat_id
+                and self._integer(
+                    getattr(item, "telegram_account_id", None),
+                    positive=True,
+                ) == account_id
+            ),
+            None,
+        )
+        if chat_id is None or channel is None:
             return None, InternalPublicationResult(
                 account_id,
                 chat_id,
@@ -101,7 +116,47 @@ class InternalSignalPublicationService:
                 skipped=True,
                 error="El chat o canal global no existe para esta cuenta.",
             )
-        return (account_id, chat_id), None
+        channel_id = self._integer(
+            getattr(channel, "id", None),
+            positive=True,
+        )
+        if not bool(getattr(channel, "is_available", False)):
+            return None, InternalPublicationResult(
+                account_id,
+                chat_id,
+                "SKIPPED",
+                telegram_channel_id=channel_id,
+                skipped=True,
+                error="El chat o canal global no está disponible.",
+            )
+        if not bool(getattr(channel, "can_send", False)):
+            return None, InternalPublicationResult(
+                account_id,
+                chat_id,
+                "SKIPPED",
+                telegram_channel_id=channel_id,
+                skipped=True,
+                error="La cuenta no tiene permiso para enviar al destino.",
+            )
+        return (account_id, chat_id, channel_id), None
+
+    def destination_details(self):
+        """Resuelve el destino sin reservar ni enviar."""
+        destination, skipped = self._destination()
+        if skipped is not None:
+            return {
+                "telegram_account_id": skipped.telegram_account_id,
+                "telegram_channel_id": skipped.telegram_channel_id,
+                "chat_id": skipped.chat_id,
+                "error": skipped.error,
+            }
+        account_id, chat_id, channel_id = destination
+        return {
+            "telegram_account_id": account_id,
+            "telegram_channel_id": channel_id,
+            "chat_id": chat_id,
+            "error": None,
+        }
 
     def publish(self, signal, retry_failed=False):
         if str(getattr(signal, "source", "")).strip().upper() != "INTERNAL":
@@ -120,7 +175,7 @@ class InternalSignalPublicationService:
         destination, skipped = self._destination()
         if skipped is not None:
             return [skipped]
-        account_id, chat_id = destination
+        account_id, chat_id, channel_id = destination
         reservation = self._repository.get_or_create(
             signal.id,
             signal.idempotency_key,
@@ -134,6 +189,7 @@ class InternalSignalPublicationService:
                     account_id,
                     chat_id,
                     SENT,
+                    telegram_channel_id=channel_id,
                     already_sent=True,
                 )
             ]
@@ -146,6 +202,7 @@ class InternalSignalPublicationService:
                     account_id,
                     chat_id,
                     publication.status,
+                    telegram_channel_id=channel_id,
                     skipped=True,
                     error=publication.last_error,
                 )
@@ -159,7 +216,9 @@ class InternalSignalPublicationService:
                     account_id,
                     chat_id,
                     SENT,
+                    telegram_channel_id=channel_id,
                     sent=True,
+                    message_id=outcome.message_id,
                 )
             ]
 
@@ -169,6 +228,8 @@ class InternalSignalPublicationService:
                 account_id,
                 chat_id,
                 FAILED,
+                telegram_channel_id=channel_id,
                 error=outcome.error,
+                traceback=outcome.traceback,
             )
         ]

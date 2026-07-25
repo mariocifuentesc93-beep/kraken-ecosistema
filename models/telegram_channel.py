@@ -27,3 +27,8 @@ class TelegramChannel:
     @property
     def title(self):
         return self.name
+
+    @property
+    def is_available(self):
+        """Disponibilidad explícita para consumidores del catálogo global."""
+        return self.available

@@ -213,6 +213,28 @@ def test_disconnected_account_blocks_test_send(monkeypatch):
     page.close()
 
 
+def test_account_selector_refreshes_from_live_runtime_state():
+    app = QApplication.instance() or QApplication([])
+    manager = FakeAccountManager(connected=False)
+    page = InternalSourceSettingsPage(
+        config_repository=MemoryConfigRepository(),
+        account_manager=manager,
+        destinations_provider=destinations,
+        test_sender=lambda *_: None,
+    )
+    page.account_combo.setCurrentIndex(page.account_combo.findData(7))
+
+    assert "Desconectada" in page.account_combo.currentText()
+
+    manager.connected = True
+    page._show_account_status()
+    app.processEvents()
+
+    assert page.account_status_label.text() == "Conectado"
+    assert "Conectada" in page.account_combo.currentText()
+    page.close()
+
+
 class ChatWriteForbiddenError(Exception):
     pass
 

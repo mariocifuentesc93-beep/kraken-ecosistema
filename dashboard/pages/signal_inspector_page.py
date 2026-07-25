@@ -9,6 +9,12 @@ from repositories.signal_repository import signal_repository
 
 
 class SignalInspectorPage(QWidget):
+    @staticmethod
+    def score_text(signal):
+        if str(signal.source).strip().upper() == "INTERNAL":
+            return "N/A"
+        return f"{signal.score:.0f}"
+
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
@@ -61,7 +67,8 @@ class SignalInspectorPage(QWidget):
                 for item in routed_profiles
             ) or signal.profile_name or signal.profile_id or ""
             values = [signal.id, signal.source, profile, signal.symbol,
-                      signal.status, f"{signal.score:.0f}", signal.execution_decision]
+                      signal.status, self.score_text(signal),
+                      signal.execution_decision]
             for column, value in enumerate(values):
                 self.table.setItem(row, column, QTableWidgetItem(str(value)))
 
@@ -74,6 +81,17 @@ class SignalInspectorPage(QWidget):
             "raw_message": signal.raw_message,
             "parsed_fields": signal.metadata.get("parsed_fields", {}),
             "validation_status": signal.status,
+            "signal_status": signal.metadata.get("signal_status", ""),
+            "routing_status": signal.metadata.get("routing_status", ""),
+            "execution_status": signal.metadata.get("execution_status", ""),
+            "publication_status": signal.metadata.get(
+                "publication_status", ""
+            ),
+            "score": (
+                "N/A (no aplica a señales INTERNAL)"
+                if str(signal.source).strip().upper() == "INTERNAL"
+                else signal.score
+            ),
             "profile": signal.profile_name or signal.profile_id,
             "routed_profiles": signal.metadata.get("routed_profiles", []),
             "routing_attempts": signal.metadata.get("routing_attempts", []),
@@ -82,5 +100,14 @@ class SignalInspectorPage(QWidget):
             "traceback": signal.metadata.get("traceback", ""),
             "trade_request": signal.metadata.get("trade_request", {}),
             "final_execution_decision": signal.execution_decision,
+            "publication_results": signal.metadata.get(
+                "publication_results", []
+            ),
+            "publication_error": signal.metadata.get(
+                "publication_error", ""
+            ),
+            "publication_traceback": signal.metadata.get(
+                "publication_traceback", ""
+            ),
         }
         self.details.setPlainText(json.dumps(payload, ensure_ascii=False, indent=2))

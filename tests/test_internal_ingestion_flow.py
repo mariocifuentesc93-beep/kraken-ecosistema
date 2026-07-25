@@ -321,9 +321,19 @@ def test_default_mt5_account_fallback_recovers_real_internal_simulation(
     )
     signal_engine.start()
     event_log = MemoryEventLog()
-    publication = SimpleNamespace(
-        calls=[],
-        publish=lambda signal: publication.calls.append(signal) or [],
+    publication = SimpleNamespace(calls=[])
+    publication.publish = lambda signal: (
+        publication.calls.append(signal)
+        or [
+            InternalPublicationResult(
+                telegram_account_id=7,
+                telegram_channel_id=3,
+                chat_id=-100123,
+                status="SENT",
+                sent=True,
+                message_id=77,
+            )
+        ]
     )
     internal = source(
         InternalCheckpointStore(tmp_path / "checkpoint.json"),
@@ -348,6 +358,11 @@ def test_default_mt5_account_fallback_recovers_real_internal_simulation(
     assert stored.status == "ROUTED"
     assert stored.profile_id == profile.id
     assert stored.execution_decision == "SIMULATED"
+    assert stored.metadata["signal_status"] == "VALIDATED"
+    assert stored.metadata["routing_status"] == "ROUTED"
+    assert stored.metadata["execution_status"] == "SIMULATED"
+    assert stored.metadata["publication_status"] == "SUCCESS"
+    assert stored.metadata["publication_results"][0]["message_id"] == 77
     assert stored.metadata["routed_profiles"][0]["name"] == profile.name
     assert any("ROUTED" in row[2] for row in event_log.rows)
 
@@ -391,7 +406,7 @@ def test_missing_default_account_persists_exact_failure_reason(
     assert "cuenta predeterminada válida" in stored.rejection_reason
 
 
-def test_simulation_exception_persists_traceback_and_does_not_publish(
+def test_simulation_exception_persists_traceback_and_still_publishes(
     tmp_path,
     temporary_signal_repository,
     profile_factory,
@@ -438,7 +453,9 @@ def test_simulation_exception_persists_traceback_and_does_not_publish(
     assert "Traceback" in stored.metadata["routing_attempts"][0].get(
         "traceback", stored.metadata.get("traceback", "Traceback")
     )
-    assert publication.calls == []
+    assert publication.calls == [result.signal]
+    assert stored.metadata["routing_status"] == "FAILED"
+    assert stored.metadata["execution_status"] == "FAILED"
 
 
 def test_both_profile_receives_internal_but_telegram_profile_does_not(
@@ -573,9 +590,41 @@ def test_telegram_failure_does_not_lose_successful_simulation(
     assert result.accepted is True
     assert stored.status == "ROUTED"
     assert stored.execution_decision == "SIMULATED"
+    assert stored.metadata["signal_status"] == "VALIDATED"
+    assert stored.metadata["routing_status"] == "ROUTED"
+    assert stored.metadata["execution_status"] == "SIMULATED"
+    assert stored.metadata["publication_status"] == "FAILED"
     assert len(manager.calls) == 1
     assert any(
         row[0] == "ERROR"
         and "ChatWriteForbidden" in row[2]
         for row in event_log.rows
     )
+
+
+def test_zero_profiles_still_publishes_once(
+    tmp_path,
+    temporary_signal_repository,
+):
+    signal_engine = SignalEngine(
+        internal_profiles_provider=lambda: [],
+    )
+    signal_engine.start()
+    publication = SimpleNamespace(
+        calls=[],
+        publish=lambda signal: publication.calls.append(signal) or [],
+    )
+    internal = source(
+        InternalCheckpointStore(tmp_path / "checkpoint.json"),
+        SignalIngestionService(
+            repository=temporary_signal_repository,
+            signal_engine_instance=signal_engine,
+        ),
+        publication,
+    )
+
+    result = internal.scan_once()[0]
+
+    assert result.created is True
+    assert result.routed is False
+    assert publication.calls == [result.signal]

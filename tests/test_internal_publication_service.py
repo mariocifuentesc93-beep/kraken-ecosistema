@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from models.internal_publication_config import InternalPublicationConfig
+from models.telegram_channel import TelegramChannel
 from services.internal_signal_publication_service import (
     InternalSignalPublicationService,
 )
@@ -31,7 +32,16 @@ def service(
 ):
     publication_config = publication_config or config()
     destinations = (
-        [{"chat_id": publication_config.telegram_output_chat_id}]
+        [
+            TelegramChannel(
+                id=3,
+                telegram_account_id=publication_config.telegram_account_id,
+                chat_id=publication_config.telegram_output_chat_id,
+                name="Señales",
+                can_send=True,
+                available=True,
+            )
+        ]
         if destinations is None
         else destinations
     )
@@ -81,11 +91,66 @@ def test_nonexistent_chat_is_controlled(publication_repository):
     assert client.calls == []
 
 
-def test_global_destination_sends_once(publication_repository):
+def test_real_telegram_channel_model_is_used_by_attributes(
+    publication_repository,
+):
     client = FakeClient()
     results = service(publication_repository, client).publish(make_signal())
+    assert results[0].sent is True
+    assert results[0].telegram_channel_id == 3
+    assert results[0].message_id == 1
+    assert client.calls[0][0] == -100123
+
+
+def test_unavailable_channel_is_rejected(publication_repository):
+    client = FakeClient()
+    channel = TelegramChannel(
+        id=3,
+        telegram_account_id=7,
+        chat_id=-100123,
+        can_send=True,
+        available=False,
+    )
+    result = service(
+        publication_repository,
+        client,
+        destinations=[channel],
+    ).publish(make_signal())[0]
+    assert result.skipped is True
+    assert "disponible" in result.error.lower()
+    assert client.calls == []
+
+
+def test_channel_without_send_permission_is_rejected(
+    publication_repository,
+):
+    client = FakeClient()
+    channel = TelegramChannel(
+        id=3,
+        telegram_account_id=7,
+        chat_id=-100123,
+        can_send=False,
+        available=True,
+    )
+    result = service(
+        publication_repository,
+        client,
+        destinations=[channel],
+    ).publish(make_signal())[0]
+    assert result.skipped is True
+    assert "permiso" in result.error.lower()
+    assert client.calls == []
+
+
+def test_global_destination_sends_once(publication_repository):
+    client = FakeClient()
+    publication_service = service(publication_repository, client)
+    signal = make_signal()
+    results = publication_service.publish(signal)
+    repeated = publication_service.publish(signal)
     assert len(client.calls) == 1
     assert results[0].sent is True
+    assert repeated[0].already_sent is True
 
 
 def test_telegram_source_is_not_published(publication_repository):

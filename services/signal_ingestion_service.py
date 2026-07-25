@@ -97,6 +97,12 @@ class SignalIngestionService:
             )
             return str(error)
 
+    def update_outcome(self, signal):
+        """Persiste metadata posterior sin alterar el estado global."""
+        repository = self._get_repository()
+        if hasattr(repository, "update_outcome"):
+            repository.update_outcome(signal)
+
     def ingest(
         self,
         signal,
@@ -143,6 +149,10 @@ class SignalIngestionService:
             )
 
         signal.status = STATUS_RECEIVED
+        signal.metadata["signal_status"] = "VALIDATED"
+        signal.metadata["routing_status"] = "PENDING"
+        signal.metadata["execution_status"] = "PENDING"
+        signal.metadata.setdefault("publication_status", "PENDING")
         self.record_event(
             signal,
             "DETECTED",
@@ -203,6 +213,8 @@ class SignalIngestionService:
             persisted_signal.rejection_reason = reason
             persisted_signal.execution_decision = "FAILED"
             persisted_signal.metadata["failure_stage"] = "ROUTING_EXCEPTION"
+            persisted_signal.metadata["routing_status"] = "FAILED"
+            persisted_signal.metadata["execution_status"] = "FAILED"
             persisted_signal.metadata["rejection_reason"] = reason
             persisted_signal.metadata["execution_decision"] = "FAILED"
             persisted_signal.metadata["traceback"] = traceback.format_exc()
@@ -236,6 +248,12 @@ class SignalIngestionService:
             persisted_signal.metadata.setdefault(
                 "failure_stage", "ROUTING"
             )
+            persisted_signal.metadata["routing_status"] = "FAILED"
+            persisted_signal.metadata["execution_status"] = (
+                "FAILED"
+                if persisted_signal.metadata["failure_stage"] == "EXECUTION"
+                else persisted_signal.execution_decision or "REJECTED"
+            )
             persisted_signal.metadata["rejection_reason"] = reason
             persisted_signal.metadata["execution_decision"] = (
                 persisted_signal.execution_decision
@@ -260,6 +278,10 @@ class SignalIngestionService:
         persisted_signal.rejection_reason = ""
         persisted_signal.metadata.pop("failure_stage", None)
         persisted_signal.metadata["rejection_reason"] = ""
+        persisted_signal.metadata["routing_status"] = "ROUTED"
+        persisted_signal.metadata["execution_status"] = (
+            persisted_signal.execution_decision or "ROUTED"
+        )
         status_error = self._set_status(persisted_signal, STATUS_ROUTED)
         reason = "Señal persistida y enrutada correctamente."
         self.record_event(

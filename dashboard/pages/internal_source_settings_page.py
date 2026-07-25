@@ -271,6 +271,14 @@ class InternalSourceSettingsPage(QWidget):
         self.account_status_label.setText(label)
         self.account_status_label.setProperty("connectionState", state)
         refresh_widget_style(self.account_status_label)
+        if account_id is not None:
+            account = self._account_manager.get_account(account_id)
+            index = self.account_combo.findData(account_id)
+            if account is not None and index >= 0:
+                self.account_combo.setItemText(
+                    index,
+                    self._account_text(account),
+                )
 
     def _load_destinations(self, selected=None):
         account_id = self.account_combo.currentData()

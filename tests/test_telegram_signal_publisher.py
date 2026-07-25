@@ -19,6 +19,7 @@ def test_publisher_uses_injected_client_and_plain_text():
     publisher = TelegramSignalPublisher(lambda account_id: client)
     result = publisher.publish(make_signal(), 7, -100123)
     assert result.success is True
+    assert result.message_id == 1
     assert len(client.calls) == 1
     assert client.calls[0][0] == -100123
     assert "Signal ID: 12305" in client.calls[0][1]
@@ -31,3 +32,4 @@ def test_publisher_returns_controlled_failure():
     result = publisher.publish(make_signal(), 7, -100123)
     assert result.success is False
     assert result.error == "offline"
+    assert "RuntimeError: offline" in result.traceback

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import inspect
 import logging
+import traceback
 
 
 def format_signal_price(value):
@@ -50,6 +51,8 @@ class TelegramPublishResult:
     telegram_account_id: int
     chat_id: int
     error: str | None = None
+    message_id: int | None = None
+    traceback: str | None = None
 
 
 class TelegramSignalPublisher:
@@ -70,6 +73,13 @@ class TelegramSignalPublisher:
                 raise RuntimeError(
                     "El cliente asíncrono requiere un adaptador inyectado."
                 )
+            message_id = getattr(
+                result,
+                "id",
+                getattr(result, "message_id", None),
+            )
+            if isinstance(result, dict):
+                message_id = result.get("id", result.get("message_id"))
             self._logger.info(
                 "Señal %s publicada en Telegram %s:%s.",
                 signal.idempotency_key,
@@ -80,17 +90,20 @@ class TelegramSignalPublisher:
                 True,
                 telegram_account_id,
                 chat_id,
+                message_id=message_id,
             )
         except Exception as error:
+            error_traceback = traceback.format_exc()
             self._logger.error(
                 "Falló la publicación Telegram %s:%s: %s",
                 telegram_account_id,
                 chat_id,
-                error,
+                f"{error}\n{error_traceback}",
             )
             return TelegramPublishResult(
                 False,
                 telegram_account_id,
                 chat_id,
                 str(error),
+                traceback=error_traceback,
             )

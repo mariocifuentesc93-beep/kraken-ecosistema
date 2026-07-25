@@ -3,6 +3,7 @@
 import argparse
 import logging
 import os
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -150,42 +151,108 @@ class InternalSignalSource:
 
             detected.append(result)
             if (
-                getattr(result, "accepted", False)
+                getattr(result, "created", False)
+                and getattr(result, "signal", None) is not None
                 and self._publication_service is not None
             ):
                 try:
+                    destination = (
+                        self._publication_service.destination_details()
+                        if hasattr(
+                            self._publication_service,
+                            "destination_details",
+                        )
+                        else {}
+                    )
+                    if hasattr(ingestion, "record_event"):
+                        ingestion.record_event(
+                            result.signal,
+                            "TELEGRAM_PUBLICATION_START",
+                            (
+                                "Inicio de publicación global | "
+                                f"telegram_account_id={destination.get('telegram_account_id')} | "
+                                f"telegram_channel_id={destination.get('telegram_channel_id')} | "
+                                f"chat_id={destination.get('chat_id')} | "
+                                f"destination_error={destination.get('error') or '-'}"
+                            ),
+                        )
                     publication_results = self._publication_service.publish(
                         result.signal
                     )
-                    if hasattr(ingestion, "record_event"):
-                        for publication in publication_results:
+                    publication_status = "SKIPPED"
+                    for publication in publication_results:
+                        if (
+                            getattr(publication, "sent", False)
+                            or getattr(
+                                publication, "already_sent", False
+                            )
+                        ):
+                            publication_status = "SUCCESS"
+                        elif (
+                            getattr(publication, "status", "")
+                            == "FAILED"
+                        ):
+                            publication_status = "FAILED"
+                        if hasattr(ingestion, "record_event"):
                             level = (
                                 "error"
-                                if getattr(publication, "status", "") == "FAILED"
+                                if publication_status == "FAILED"
                                 else "info"
                             )
                             ingestion.record_event(
                                 result.signal,
                                 "TELEGRAM_PUBLICATION",
                                 (
-                                    f"status={getattr(publication, 'status', '')} | "
-                                    f"account={getattr(publication, 'telegram_account_id', None)} | "
-                                    f"chat={getattr(publication, 'chat_id', None)} | "
-                                    f"error={getattr(publication, 'error', None) or '-'}"
+                                    f"status={publication_status} | "
+                                    f"telegram_account_id={getattr(publication, 'telegram_account_id', None)} | "
+                                    f"telegram_channel_id={getattr(publication, 'telegram_channel_id', None)} | "
+                                    f"chat_id={getattr(publication, 'chat_id', None)} | "
+                                    f"message_id={getattr(publication, 'message_id', None)} | "
+                                    f"error={getattr(publication, 'error', None) or '-'} | "
+                                    f"traceback={getattr(publication, 'traceback', None) or '-'}"
                                 ),
                                 level=level,
                             )
+                    result.signal.metadata["publication_status"] = (
+                        publication_status
+                    )
+                    result.signal.metadata["publication_results"] = [
+                        {
+                            "status": getattr(item, "status", ""),
+                            "telegram_account_id": getattr(
+                                item, "telegram_account_id", None
+                            ),
+                            "telegram_channel_id": getattr(
+                                item, "telegram_channel_id", None
+                            ),
+                            "chat_id": getattr(item, "chat_id", None),
+                            "message_id": getattr(item, "message_id", None),
+                            "error": getattr(item, "error", None),
+                            "traceback": getattr(item, "traceback", None),
+                        }
+                        for item in publication_results
+                    ]
+                    if hasattr(ingestion, "update_outcome"):
+                        ingestion.update_outcome(result.signal)
                 except Exception as error:
+                    error_traceback = traceback.format_exc()
                     self._logger.exception(
                         "La publicación opcional falló para %s: %s",
                         signal.idempotency_key,
                         error,
                     )
+                    result.signal.metadata["publication_status"] = "FAILED"
+                    result.signal.metadata["publication_error"] = str(error)
+                    result.signal.metadata["publication_traceback"] = (
+                        error_traceback
+                    )
+                    if hasattr(ingestion, "update_outcome"):
+                        ingestion.update_outcome(result.signal)
                     if hasattr(ingestion, "record_event"):
                         ingestion.record_event(
                             result.signal,
                             "TELEGRAM_PUBLICATION",
-                            f"Excepción: {error}",
+                            f"{error}\n{error_traceback}",
                             level="error",
                         )
             conclusive = bool(
