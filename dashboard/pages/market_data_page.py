@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from config.symbols import get_symbols
+from config.symbols import BRIDGE_CATALOG, get_symbols
 from services.market_data_service import market_data_service
 
 
@@ -25,7 +25,7 @@ class MarketDataPage(QWidget):
         self.refresh()
 
     def refresh(self):
-        symbols = get_symbols()
+        symbols = get_symbols(BRIDGE_CATALOG)
         self.table.setRowCount(len(symbols))
         for row, symbol in enumerate(symbols):
             quote = market_data_service.quote(symbol)

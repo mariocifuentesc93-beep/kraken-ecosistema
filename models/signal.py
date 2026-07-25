@@ -64,7 +64,11 @@ def normalize_internal_symbol(value) -> str:
         raise SignalIdentityError(
             "symbol contiene caracteres no permitidos para INTERNAL"
         )
-    return normalized
+    # Known catalog names use the same canonical identity in every source.
+    # Unknown operational symbols retain the legacy uppercase representation.
+    from config.symbols import normalize_symbol
+
+    return normalize_symbol(normalized) or normalized
 
 
 def build_internal_idempotency_key(symbol, external_signal_id) -> str:

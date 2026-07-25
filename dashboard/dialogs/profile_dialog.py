@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config.symbols import get_symbols
+from config.symbols import get_symbol, get_symbol_catalog, get_symbols
 from dashboard.widgets.account_selector import AccountSelector
 from dashboard.widgets.risk_widget import RiskWidget
 from dashboard.widgets.section_widget import SectionWidget
@@ -269,7 +269,7 @@ class ProfileDialog(QDialog):
         """Populate selectors from their repository-backed sources."""
         self.set_mt5_accounts(mt5_account_repository.get_all())
         self.set_telegram_accounts(telegram_account_repository.get_all())
-        self.set_symbols(get_symbols())
+        self.set_symbols(get_symbol_catalog())
 
     def load_profile(self, profile=None):
         if profile is not None:
@@ -331,11 +331,19 @@ class ProfileDialog(QDialog):
             symbol.symbol: symbol
             for symbol in symbol_repository.get_all(profile.id)
         }
-        available_symbols = list(dict.fromkeys([
-            *get_symbols(),
-            *self._profile_symbols.keys(),
-        ]))
-        self.set_symbols(available_symbols)
+        definitions = get_symbol_catalog()
+        known = {item["canonical_name"] for item in definitions}
+        definitions.extend(
+            {
+                "canonical_name": name,
+                "display_name": name,
+                "catalog": "LEGACY",
+                "category": "LEGACY",
+            }
+            for name in self._profile_symbols
+            if name not in known
+        )
+        self.set_symbols(definitions)
         self.symbolSelector.setSelected([
             symbol.symbol
             for symbol in self._profile_symbols.values()
@@ -452,10 +460,10 @@ class ProfileDialog(QDialog):
             self.lstTelegramChannels.addItem(item)
 
     def set_symbols(self, symbols):
-        self.symbolSelector.loadSymbols([
-            getattr(symbol, "symbol", symbol)
-            for symbol in symbols
-        ])
+        if symbols and isinstance(symbols[0], dict):
+            self.symbolSelector.loadCatalog(symbols)
+        else:
+            self.symbolSelector.loadSymbols(symbols)
 
     def set_statistics(self, stats):
         if not stats:
@@ -524,12 +532,13 @@ class ProfileDialog(QDialog):
             )
 
         for name in selected - self._profile_symbols.keys():
+            definition = get_symbol(name) or {}
             symbol_repository.create(
                 profile_id,
                 True,
                 name,
-                name,
-                "",
+                definition.get("mt5_symbol", name),
+                definition.get("display_name", ""),
                 "",
                 1.0,
                 0.01,

@@ -1,6 +1,6 @@
 import re
 
-from config.symbols import get_symbols
+from config.symbols import get_symbol_catalog, normalize_symbol
 from models.signal import Signal
 
 
@@ -32,24 +32,27 @@ def parse_signal(text):
     # SÍMBOLO
     # =====================================================
 
-    for symbol in get_symbols():
-
-        if re.search(
-
-            rf"\b{re.escape(symbol.upper())}\b",
-
-            normalized,
-
+    for definition in get_symbol_catalog():
+        canonical = definition["canonical_name"]
+        display_pattern = r"\s+".join(
+            re.escape(part)
+            for part in definition["display_name"].upper().split()
+        )
+        if (
+            re.search(rf"\b{re.escape(canonical)}\b", normalized)
+            or re.search(rf"\b{display_pattern}\b", normalized)
         ):
-
-            signal.symbol = symbol
-
+            signal.symbol = canonical
             break
 
     if not signal.symbol:
-        candidate = re.search(r"\b([A-Z][A-Z0-9]{2,})\s+(?:BUY|SELL)\b", normalized)
+        candidate = re.search(
+            r"\b([A-Z][A-Z0-9 ]{2,}?)\s+(?:BUY|SELL)\b", normalized
+        )
         if candidate:
-            signal.symbol = candidate.group(1)
+            signal.symbol = (
+                normalize_symbol(candidate.group(1)) or candidate.group(1).strip()
+            )
 
     # =====================================================
     # DIRECCIÓN

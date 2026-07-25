@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QComboBox,
     QListWidget,
     QListWidgetItem,
     QPushButton,
@@ -20,6 +21,12 @@ class SymbolSelector(QWidget):
         super().__init__(parent)
 
         layout = QVBoxLayout(self)
+
+        self.catalog = QComboBox()
+        self.catalog.addItem("Todos", None)
+        self.catalog.addItem("Bridge Markets", "BRIDGE_SYNTHETICS")
+        self.catalog.addItem("Weltrade", "WELTRADE_SYNTHETICS")
+        layout.addWidget(self.catalog)
 
         self.search = SearchWidget()
 
@@ -48,6 +55,7 @@ class SymbolSelector(QWidget):
         self.search.searchChanged.connect(
             self.filter
         )
+        self.catalog.currentIndexChanged.connect(self._apply_filters)
 
         self.btnAll.clicked.connect(
             self.selectAll
@@ -68,23 +76,47 @@ class SymbolSelector(QWidget):
     # ------------------------------------------------
 
     def loadSymbols(self, symbols):
+        definitions = [
+            {
+                "canonical_name": getattr(symbol, "symbol", symbol),
+                "display_name": getattr(symbol, "symbol", symbol),
+                "catalog": None,
+                "category": "",
+            }
+            for symbol in symbols
+        ]
+        self.loadCatalog(definitions)
+
+    def loadCatalog(self, definitions):
         previous = self.list.blockSignals(True)
         try:
             self.list.clear()
 
-            for symbol in symbols:
-                item = QListWidgetItem(symbol)
+            for definition in definitions:
+                canonical = definition["canonical_name"]
+                display = definition.get("display_name", canonical)
+                category = definition.get("category", "")
+                label = f"{category} · {display}" if category else display
+                item = QListWidgetItem(label)
+                item.setData(Qt.UserRole, canonical)
+                item.setData(Qt.UserRole + 1, definition.get("catalog"))
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                 item.setCheckState(Qt.Unchecked)
                 self.list.addItem(item)
         finally:
             self.list.blockSignals(previous)
+        self._apply_filters()
 
     # ------------------------------------------------
 
     def filter(self, text):
+        self._apply_filters(text)
 
-        text = text.lower()
+    def _apply_filters(self, text=None):
+        if text is None:
+            text = self.search.edit.text()
+        text = str(text).lower()
+        catalog = self.catalog.currentData()
 
         for i in range(self.list.count()):
 
@@ -92,6 +124,7 @@ class SymbolSelector(QWidget):
 
             item.setHidden(
                 text not in item.text().lower()
+                or (catalog is not None and item.data(Qt.UserRole + 1) != catalog)
             )
 
     # ------------------------------------------------
@@ -127,7 +160,7 @@ class SymbolSelector(QWidget):
             if item.checkState() == Qt.Checked:
 
                 symbols.append(
-                    item.text()
+                    item.data(Qt.UserRole) or item.text()
                 )
 
         return symbols
@@ -141,7 +174,9 @@ class SymbolSelector(QWidget):
             for i in range(self.list.count()):
                 item = self.list.item(i)
                 item.setCheckState(
-                    Qt.Checked if item.text() in symbols else Qt.Unchecked
+                    Qt.Checked
+                    if (item.data(Qt.UserRole) or item.text()) in symbols
+                    else Qt.Unchecked
                 )
         finally:
             self.list.blockSignals(previous)

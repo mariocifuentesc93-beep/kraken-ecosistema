@@ -10,7 +10,7 @@ try:
 except ImportError:  # Allows a clear diagnostic if the optional package is absent.
     mt5 = None
 
-from config.symbols import get_mt5_symbol, get_symbols
+from config.symbols import BRIDGE_CATALOG, get_mt5_symbol, get_symbols
 from repositories.mt5_diagnostics_repository import mt5_diagnostics_repository
 
 
@@ -82,7 +82,7 @@ class MT5ConnectionDiagnostics:
         if not self._package_available():
             return []
         results = []
-        for symbol in get_symbols():
+        for symbol in get_symbols(BRIDGE_CATALOG):
             mt5_symbol = get_mt5_symbol(symbol)
             info = self.mt5.symbol_info(mt5_symbol)
             available = info is not None
