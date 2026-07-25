@@ -1,83 +1,130 @@
-SYNTHETIC_SYMBOLS = {
-    "EMASVOL10": {"mt5_symbol": "EmasVol10"},
-    "EMASVOL20": {"mt5_symbol": "EmasVol20"},
-    "EMASVOL30": {"mt5_symbol": "EmasVol30"},
-    "EMASVOL40": {"mt5_symbol": "EmasVol40"},
-    "EMASVOL50": {"mt5_symbol": "EmasVol50"},
-    "EMASVOL60": {"mt5_symbol": "EmasVol60"},
-    "EMASVOL70": {"mt5_symbol": "EmasVol70"},
-    "EMASVOL80": {"mt5_symbol": "EmasVol80"},
-    "EMASVOL90": {"mt5_symbol": "EmasVol90"},
-    "EMASVOL100": {"mt5_symbol": "EmasVol100"},
-    "LIONX25": {"mt5_symbol": "LionX25"},
-    "LIONX40": {"mt5_symbol": "LionX40"},
-    "LIONX50": {"mt5_symbol": "LionX50"},
-    "LIONX60": {"mt5_symbol": "LionX60"},
-    "LIONX75": {"mt5_symbol": "LionX75"},
-    "LIONX90": {"mt5_symbol": "LionX90"},
-    "LIONX100": {"mt5_symbol": "LionX100"},
-    "LIONX120": {"mt5_symbol": "LionX120"},
-    "LIONX150": {"mt5_symbol": "LionX150"},
-    "LIONX200": {"mt5_symbol": "LionX200"},
+"""Fixed symbol catalogs supported by Kraken.
+
+The catalogs are code-defined so the UI can show them before a broker terminal
+is connected. Database migrations are explicit and are never triggered here.
+"""
+
+BRIDGE_CATALOG = "BRIDGE_SYNTHETICS"
+WELTRADE_CATALOG = "WELTRADE_SYNTHETICS"
+
+
+def _definition(
+    canonical_name,
+    display_name,
+    mt5_symbol,
+    catalog,
+    broker,
+    category,
+    sort_order,
+):
+    return {
+        "canonical_name": canonical_name,
+        "display_name": display_name,
+        "mt5_symbol": mt5_symbol,
+        "catalog": catalog,
+        "broker": broker,
+        "category": category,
+        "enabled": True,
+        "sort_order": sort_order,
+    }
+
+
+BRIDGE_SYMBOLS = {
+    **{
+        f"EMASVOL{value}": _definition(
+            f"EMASVOL{value}", f"EmasVol{value}", f"EmasVol{value}",
+            BRIDGE_CATALOG, "BRIDGE MARKETS", "EMAS", index,
+        )
+        for index, value in enumerate(
+            (10, 20, 30, 40, 50, 60, 70, 80, 90, 100), start=1
+        )
+    },
+    **{
+        f"LIONX{value}": _definition(
+            f"LIONX{value}", f"LionX{value}", f"LionX{value}",
+            BRIDGE_CATALOG, "BRIDGE MARKETS", "LION", index,
+        )
+        for index, value in enumerate(
+            (25, 40, 50, 60, 75, 90, 100, 120, 150, 200), start=11
+        )
+    },
 }
 
 
-# ==========================================================
-# SYMBOLS
-# ==========================================================
+def _weltrade_group(prefix, display_prefix, values, category, start):
+    return {
+        f"{prefix}{value}": _definition(
+            f"{prefix}{value}",
+            f"{display_prefix} {value}",
+            f"{display_prefix} {value}",
+            WELTRADE_CATALOG,
+            "WELTRADE",
+            category,
+            start + index,
+        )
+        for index, value in enumerate(values)
+    }
 
-def get_symbols():
 
-    return list(SYNTHETIC_SYMBOLS.keys())
+WELTRADE_SYMBOLS = {
+    **_weltrade_group("FXVOL", "FX Vol", (20, 40, 60, 80, 99), "FX_VOL", 1),
+    **_weltrade_group("SFXVOL", "SFX Vol", (20, 40, 60, 80, 99), "SFX_VOL", 6),
+    **_weltrade_group(
+        "GAINX", "GainX", (400, 600, 800, 999, 1200), "GAINX", 11
+    ),
+    **_weltrade_group(
+        "PAINX", "PainX", (400, 600, 800, 999, 1200), "PAINX", 16
+    ),
+    **_weltrade_group("FLIPX", "FlipX", (1, 2, 3, 4, 5), "FLIPX", 21),
+}
+
+SYNTHETIC_SYMBOLS = {**BRIDGE_SYMBOLS, **WELTRADE_SYMBOLS}
+
+
+def get_symbols(catalog=None):
+    return [
+        name
+        for name, config in SYNTHETIC_SYMBOLS.items()
+        if catalog is None or config["catalog"] == catalog
+    ]
 
 
 def get_symbol(symbol):
+    canonical = normalize_symbol(symbol)
+    return SYNTHETIC_SYMBOLS.get(canonical) if canonical else None
 
-    if not symbol:
 
-        return None
-
-    return SYNTHETIC_SYMBOLS.get(symbol.upper())
+def get_symbol_catalog(catalog=None):
+    values = [
+        dict(config)
+        for config in SYNTHETIC_SYMBOLS.values()
+        if catalog is None or config["catalog"] == catalog
+    ]
+    return sorted(
+        values,
+        key=lambda item: (item["catalog"], item["category"], item["sort_order"]),
+    )
 
 
 def symbol_exists(symbol):
-
     return get_symbol(symbol) is not None
 
 
 def get_mt5_symbol(symbol):
-
-    cfg = get_symbol(symbol)
-
-    if cfg is None:
-
-        return None
-
-    return cfg["mt5_symbol"]
+    config = get_symbol(symbol)
+    return config["mt5_symbol"] if config else None
 
 
-def get_all_mt5_symbols():
-
-    return [
-
-        cfg["mt5_symbol"]
-
-        for cfg in SYNTHETIC_SYMBOLS.values()
-
-    ]
+def get_all_mt5_symbols(catalog=None):
+    return [item["mt5_symbol"] for item in get_symbol_catalog(catalog)]
 
 
 def normalize_symbol(symbol):
-
-    if not symbol:
-
+    if not isinstance(symbol, str):
         return None
-
-    symbol = symbol.upper().replace(" ", "")
-
-    return symbol if symbol in SYNTHETIC_SYMBOLS else None
+    compact = "".join(symbol.strip().upper().split())
+    return compact if compact in SYNTHETIC_SYMBOLS else None
 
 
-def get_symbol_count():
-
-    return len(SYNTHETIC_SYMBOLS)
+def get_symbol_count(catalog=None):
+    return len(get_symbols(catalog))

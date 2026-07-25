@@ -9,7 +9,12 @@ from datetime import datetime, timezone
 
 import MetaTrader5 as mt5
 
-from config.symbols import get_mt5_symbol, get_symbols, symbol_exists
+from config.symbols import (
+    BRIDGE_CATALOG,
+    get_mt5_symbol,
+    get_symbols,
+    symbol_exists,
+)
 from mt5.connector import mt5_connector
 
 
@@ -82,7 +87,7 @@ class MarketDataService:
         """Validate all configured symbols against MT5; never enables trading."""
         connected = mt5_connector.is_connected()
         results = []
-        for symbol in get_symbols():
+        for symbol in get_symbols(BRIDGE_CATALOG):
             mt5_symbol = get_mt5_symbol(symbol)
             info = mt5.symbol_info(mt5_symbol) if connected else None
             exists = info is not None
