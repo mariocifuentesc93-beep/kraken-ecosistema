@@ -95,12 +95,25 @@ def test_parser_resolves_weltrade_and_preserves_bridge(text, expected):
 def _migration_connection():
     connection = sqlite3.connect(":memory:")
     connection.execute(
-        "CREATE TABLE symbols(id INTEGER PRIMARY KEY, symbol TEXT NOT NULL)"
+        "CREATE TABLE profiles(id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+    )
+    connection.execute(
+        """
+        CREATE TABLE symbols(
+            id INTEGER PRIMARY KEY,
+            profile_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL
+        )
+        """
+    )
+    connection.executemany(
+        "INSERT INTO profiles(id, name) VALUES (?, ?)",
+        ((1, "Bridge 1"), (2, "Bridge 2")),
     )
     bridge = get_symbols(BRIDGE_CATALOG)
     connection.executemany(
-        "INSERT INTO symbols(symbol) VALUES (?)",
-        [(symbol,) for symbol in bridge for _profile in (1, 2)],
+        "INSERT INTO symbols(profile_id, symbol) VALUES (?, ?)",
+        [(profile, symbol) for symbol in bridge for profile in (1, 2)],
     )
     connection.commit()
     return connection
@@ -122,6 +135,9 @@ def test_migration_is_idempotent_and_rollback_only_removes_weltrade():
         )
     )
     assert logical_total == 65
+    assert connection.execute(
+        "SELECT COUNT(*) FROM profile_symbol_catalog_context"
+    ).fetchone()[0] == 40
 
     connection.execute(
         """
@@ -137,6 +153,33 @@ def test_migration_is_idempotent_and_rollback_only_removes_weltrade():
     downgrade(connection)
     assert connection.execute("SELECT COUNT(*) FROM symbols").fetchone()[0] == 40
     assert connection.execute("SELECT COUNT(*) FROM symbol_catalog").fetchone()[0] == 1
+    assert connection.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name='profile_symbol_catalog_context'"
+    ).fetchone() is None
+
+
+def test_catalog_identity_allows_same_canonical_name_in_different_catalogs():
+    connection = _migration_connection()
+    upgrade(connection)
+    connection.execute(
+        """
+        INSERT INTO symbol_catalog(
+            canonical_name, display_name, mt5_symbol, catalog, broker,
+            category, enabled, sort_order, availability
+        ) VALUES ('FXVOL20', 'Otro FX Vol 20', 'Other FX Vol 20',
+                  'OTHER_SYNTHETICS', 'OTHER', 'FX_VOL', 1, 1,
+                  'NOT_VERIFIED')
+        """
+    )
+    connection.commit()
+    rows = connection.execute(
+        "SELECT catalog FROM symbol_catalog WHERE canonical_name='FXVOL20'"
+    ).fetchall()
+    assert {row[0] for row in rows} == {
+        WELTRADE_CATALOG,
+        "OTHER_SYNTHETICS",
+    }
 
 
 def test_internal_identity_uses_catalog_normalization():
@@ -161,16 +204,47 @@ class Terminal:
         return object() if self.available else None
 
 
-def test_availability_is_unverified_without_terminal_and_checks_exact_mt5_name():
+class Registry:
+    def __init__(self, terminal=None):
+        self.terminal = terminal
+        self.requested = []
+
+    def get(self, account_id):
+        self.requested.append(account_id)
+        return self.terminal
+
+
+def test_resolution_is_account_scoped_and_checks_exact_mt5_name():
     service = SymbolCatalogService()
-    assert service.availability("FXVOL20") == NOT_VERIFIED
+    unresolved = service.resolve_symbol(
+        "FXVOL20", 7, WELTRADE_CATALOG, profile_id=3
+    )
+    assert unresolved.availability == NOT_VERIFIED
+    assert unresolved.mt5_account_id == 7
+    assert unresolved.profile_id == 3
+    assert unresolved.catalog_id == WELTRADE_CATALOG
     available = Terminal(True)
     missing = Terminal(False)
-    assert service.availability("FXVOL20", available) == AVAILABLE
+    registry = Registry(available)
+    resolved = service.resolve_symbol(
+        "FXVOL20",
+        7,
+        WELTRADE_CATALOG,
+        profile_id=3,
+        connection_registry=registry,
+    )
+    assert resolved.availability == AVAILABLE
+    assert registry.requested == [7]
     assert available.requested == ["FX Vol 20"]
-    assert service.availability("FXVOL20", missing) == UNAVAILABLE
+    missing_registry = Registry(missing)
     with pytest.raises(ValueError, match="no está disponible"):
-        service.require_available("FXVOL20", missing)
+        service.require_available(
+            "FXVOL20",
+            7,
+            WELTRADE_CATALOG,
+            profile_id=3,
+            connection_registry=missing_registry,
+        )
 
 
 def test_importing_migration_does_not_execute_it():
@@ -209,6 +283,7 @@ def test_profile_selection_persists_bridge_and_weltrade():
     database_manager.database = directory / "profile-catalog.db"
     try:
         database_manager.initialize()
+        upgrade(database_manager.connect())
         profile = profile_repository.create(Profile(name="Mixto"))
         for canonical in ("EMASVOL20", "FXVOL20"):
             definition = next(
@@ -227,6 +302,7 @@ def test_profile_selection_persists_bridge_and_weltrade():
                 0.01,
                 100.0,
                 "trade",
+                definition["catalog"],
             )
 
         dialog = ProfileDialog(profile)
@@ -242,6 +318,12 @@ def test_profile_selection_persists_bridge_and_weltrade():
         }
         assert {"EMASVOL20", "FXVOL20"} <= enabled
         assert len(enabled) == len(set(enabled))
+        contexts = {
+            symbol.symbol: symbol_repository.get_catalog_context(symbol.id)
+            for symbol in symbol_repository.get_enabled(profile.id)
+        }
+        assert contexts["EMASVOL20"]["catalog_id"] == BRIDGE_CATALOG
+        assert contexts["FXVOL20"]["catalog_id"] == WELTRADE_CATALOG
         dialog.close()
     finally:
         database_manager.close()

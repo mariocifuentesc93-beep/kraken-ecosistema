@@ -205,6 +205,7 @@ class SymbolsPage(QWidget):
                 0.01,
                 100.0,
                 "trade",
+                definition["catalog"],
             )
             return
         symbol_repository.update(

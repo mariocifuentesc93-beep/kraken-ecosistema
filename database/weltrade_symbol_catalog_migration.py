@@ -15,7 +15,7 @@ def upgrade(connection):
             """
             CREATE TABLE IF NOT EXISTS symbol_catalog(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                canonical_name TEXT NOT NULL UNIQUE,
+                canonical_name TEXT NOT NULL,
                 display_name TEXT NOT NULL,
                 mt5_symbol TEXT NOT NULL,
                 catalog TEXT NOT NULL,
@@ -25,7 +25,8 @@ def upgrade(connection):
                 sort_order INTEGER NOT NULL DEFAULT 0,
                 availability TEXT NOT NULL DEFAULT 'NOT_VERIFIED',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(catalog, canonical_name)
             )
             """
         )
@@ -42,7 +43,7 @@ def upgrade(connection):
                     canonical_name, display_name, mt5_symbol, catalog, broker,
                     category, enabled, sort_order, availability
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'NOT_VERIFIED')
-                ON CONFLICT(canonical_name) DO UPDATE SET
+                ON CONFLICT(catalog, canonical_name) DO UPDATE SET
                     display_name=excluded.display_name,
                     mt5_symbol=excluded.mt5_symbol,
                     catalog=excluded.catalog,
@@ -61,6 +62,30 @@ def upgrade(connection):
                     item["sort_order"],
                 ),
             )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profile_symbol_catalog_context(
+                symbol_id INTEGER PRIMARY KEY,
+                profile_id INTEGER NOT NULL,
+                catalog_id TEXT NOT NULL,
+                canonical_name TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(symbol_id) REFERENCES symbols(id) ON DELETE CASCADE,
+                FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE,
+                UNIQUE(profile_id, catalog_id, canonical_name)
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO profile_symbol_catalog_context(
+                symbol_id, profile_id, catalog_id, canonical_name
+            )
+            SELECT id, profile_id, 'BRIDGE_SYNTHETICS', UPPER(symbol)
+            FROM symbols
+            """
+        )
         connection.commit()
     except Exception:
         connection.rollback()
@@ -78,6 +103,9 @@ def downgrade(connection):
                 "DELETE FROM symbol_catalog WHERE catalog=?",
                 (WELTRADE_CATALOG,),
             )
+        connection.execute(
+            "DROP TABLE IF EXISTS profile_symbol_catalog_context"
+        )
         connection.commit()
     except Exception:
         connection.rollback()

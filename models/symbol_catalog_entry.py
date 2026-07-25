@@ -12,3 +12,7 @@ class SymbolCatalogEntry:
     enabled: bool = True
     sort_order: int = 0
     availability: str = "NOT_VERIFIED"
+
+    @property
+    def catalog_id(self):
+        return self.catalog

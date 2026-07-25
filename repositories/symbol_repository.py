@@ -133,6 +133,7 @@ class SymbolRepository:
         min_lot,
         max_lot,
         action,
+        catalog_id=None,
     ):
 
         cursor = database_manager.cursor()
@@ -172,7 +173,79 @@ class SymbolRepository:
 
         database_manager.commit()
 
-        return cursor.lastrowid
+        symbol_id = cursor.lastrowid
+        self.set_catalog_context(
+            symbol_id,
+            profile_id,
+            catalog_id,
+            symbol,
+        )
+        return symbol_id
+
+    # ---------------------------------------------------------
+
+    def set_catalog_context(
+        self,
+        symbol_id,
+        profile_id,
+        catalog_id,
+        canonical_name,
+    ):
+        if not catalog_id or not self._context_table_exists():
+            return False
+        cursor = database_manager.cursor()
+        cursor.execute(
+            """
+            INSERT INTO profile_symbol_catalog_context(
+                symbol_id, profile_id, catalog_id, canonical_name
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(symbol_id) DO UPDATE SET
+                profile_id=excluded.profile_id,
+                catalog_id=excluded.catalog_id,
+                canonical_name=excluded.canonical_name,
+                updated_at=CURRENT_TIMESTAMP
+            """,
+            (symbol_id, profile_id, catalog_id, canonical_name),
+        )
+        database_manager.commit()
+        return True
+
+    def get_catalog_context(self, symbol_id):
+        if not self._context_table_exists():
+            return None
+        row = database_manager.execute(
+            """
+            SELECT profile_id, catalog_id, canonical_name
+            FROM profile_symbol_catalog_context
+            WHERE symbol_id=?
+            """,
+            (symbol_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_by_catalog_symbol(self, profile_id, catalog_id, canonical_name):
+        if not self._context_table_exists():
+            return self.get_by_symbol(profile_id, canonical_name)
+        row = database_manager.execute(
+            """
+            SELECT symbols.*
+            FROM symbols
+            JOIN profile_symbol_catalog_context context
+              ON context.symbol_id=symbols.id
+            WHERE context.profile_id=?
+              AND context.catalog_id=?
+              AND context.canonical_name=?
+            LIMIT 1
+            """,
+            (profile_id, catalog_id, canonical_name),
+        ).fetchone()
+        return Symbol(**dict(row)) if row else None
+
+    @staticmethod
+    def _context_table_exists():
+        return database_manager.table_exists(
+            "profile_symbol_catalog_context"
+        )
 
     # ---------------------------------------------------------
 

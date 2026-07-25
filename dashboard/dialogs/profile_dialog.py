@@ -544,6 +544,7 @@ class ProfileDialog(QDialog):
                 0.01,
                 100.0,
                 "trade",
+                definition.get("catalog"),
             )
 
     def _save_telegram_channel(self, profile):
