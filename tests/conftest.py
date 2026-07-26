@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import sqlite3
+import shutil
 
 import sys
 
@@ -8,6 +9,33 @@ import pytest
 from database.signal_contract_migration import upgrade
 from models.signal import Signal
 from repositories.signal_repository import SignalRepository
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolate_test_session_from_production_database(tmp_path_factory):
+    """Redirect every non-injected repository to a disposable DB copy."""
+    from database.database_manager import database_manager
+
+    production_database = database_manager.database
+    isolated_directory = tmp_path_factory.mktemp("kraken-session-db")
+    isolated_database = isolated_directory / "kraken-test.db"
+    database_manager.close()
+    if production_database.is_file():
+        shutil.copy2(production_database, isolated_database)
+    else:
+        connection = sqlite3.connect(isolated_database)
+        try:
+            from database.schema import create_tables
+
+            create_tables(connection)
+        finally:
+            connection.close()
+    database_manager.database = isolated_database
+    try:
+        yield isolated_database
+    finally:
+        database_manager.close()
+        database_manager.database = production_database
 
 
 @pytest.fixture(autouse=True)

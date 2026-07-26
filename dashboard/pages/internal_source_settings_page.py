@@ -344,9 +344,13 @@ class InternalSourceSettingsPage(QWidget):
         terminal_id = self.scanner_terminal_combo.currentData()
         if self.scanner_enabled_checkbox.isChecked():
             terminal = self._terminal_repository.get_by_id(terminal_id)
-            if terminal is None or not terminal.can_scan:
+            if (
+                terminal is None
+                or not terminal.can_scan
+                or not terminal.active
+            ):
                 raise ValueError(
-                    "Seleccione una terminal con capacidad Scanner."
+                    "Seleccione una terminal activa con capacidad Scanner."
                 )
         self._scanner_settings.set(
             "internal.scanner.enabled",

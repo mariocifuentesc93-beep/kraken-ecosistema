@@ -286,7 +286,12 @@ class ProfileDialog(QDialog):
         self._all_mt5_accounts = mt5_account_repository.get_all()
         self.mt5TerminalCombo.clear()
         self.mt5TerminalCombo.addItem("(Sin instalación vinculada)", None)
+        current_terminal_id = getattr(
+            self.profile, "mt5_terminal_id", None
+        )
         for terminal in mt5_terminal_repository.get_all():
+            if not terminal.active and terminal.id != current_terminal_id:
+                continue
             self.mt5TerminalCombo.addItem(
                 f"{terminal.name} · {terminal.role}", terminal.id
             )

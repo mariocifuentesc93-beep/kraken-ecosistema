@@ -38,6 +38,23 @@ class MT5TerminalRepository:
             for row in rows
         ]
 
+    def get_active(self):
+        if not self._available():
+            return []
+        rows = database_manager.execute(
+            "SELECT * FROM mt5_terminals WHERE active=1 ORDER BY name"
+        ).fetchall()
+        return [
+            MT5Terminal(
+                **{
+                    key: value
+                    for key, value in dict(row).items()
+                    if key in _FIELDS
+                }
+            )
+            for row in rows
+        ]
+
     def get_by_id(self, terminal_id):
         if not self._available():
             return None
@@ -50,7 +67,7 @@ class MT5TerminalRepository:
             **{key: value for key, value in dict(row).items() if key in _FIELDS}
         )
 
-    def get_scanner_capable(self, active_only=False):
+    def get_scanner_capable(self, active_only=True):
         if not self._available():
             return []
         columns = self._columns()
