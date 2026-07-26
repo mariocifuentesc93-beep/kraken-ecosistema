@@ -51,6 +51,9 @@ from dashboard.pages.paper_trading_page import PaperTradingPage
 from dashboard.pages.trading_calendar_page import TradingCalendarPage
 from dashboard.pages.analytics_page import AnalyticsPage
 from dashboard.pages.replay_page import ReplayPage
+from dashboard.pages.operational_monitoring_page import (
+    OperationalMonitoringPage,
+)
 from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
@@ -384,15 +387,17 @@ class MainWindow(QMainWindow):
             "Inspector INTERNAL",
 
             "Terminales MT5",
+            "Centro de monitoreo",
 
         ]
 
         icon_map = ["layout-dashboard", "list-checks", "chart-no-axes-combined", "users",
                     "activity", "send", "radio-tower", "tags", "scroll-text", "search-check",
                     "history", "chart-spline", "circle-check", "briefcase-business", "calendar-days",
-                    "chart-no-axes-combined", "play", "settings", "radio-tower", "activity"]
+                    "chart-no-axes-combined", "play", "settings", "radio-tower", "activity",
+                    "activity"]
         groups = (("OPERATION", range(0, 4)), ("TRADING", (12, 13, 16, 14, 15)),
-                  ("MARKET", range(4, 8)), ("ANALYSIS", (9, 10, 11, 8)),
+                  ("MARKET", range(4, 8)), ("ANALYSIS", (20, 9, 10, 11, 8)),
                   ("CONFIGURATION", (3, 18, 17)))
         # Perfiles belongs to Operación; keep Configuración free of the duplicate.
         groups = groups[:-1] + ((groups[-1][0], (18, 19, 17)),)
@@ -473,6 +478,10 @@ class MainWindow(QMainWindow):
         self.internalSourceSettingsPage = InternalSourceSettingsPage()
 
         self.mt5TerminalsPage = MT5TerminalsPage()
+        self.operationalMonitoringPage = OperationalMonitoringPage()
+        self.operationalMonitoringPage.openTerminalsRequested.connect(
+            lambda: self.navigate_to_page("Terminales MT5")
+        )
 
         self.stack.addWidget(self.dashboardPage)
 
@@ -513,6 +522,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.internalSourceSettingsPage)
 
         self.stack.addWidget(self.mt5TerminalsPage)
+        self.stack.addWidget(self.operationalMonitoringPage)
 
         page_details = (
             (self.operationsPage, "Operaciones", "Consulte las operaciones generadas por simulación y paper trading."),
@@ -542,6 +552,11 @@ class MainWindow(QMainWindow):
                 "Terminales MT5",
                 "Administre instalaciones independientes y el terminal Scanner.",
             ),
+            (
+                self.operationalMonitoringPage,
+                "Centro de monitoreo",
+                "Observe salud, alertas y trazabilidad sin ejecutar acciones operativas.",
+            ),
         )
         page_heading_icons = {
             "Perfiles": "users",
@@ -555,6 +570,7 @@ class MainWindow(QMainWindow):
             "Inspector de señales": "search-check",
             "Línea de tiempo": "history",
             "Datos de mercado": "chart-spline",
+            "Centro de monitoreo": "activity",
             "Certificación LIVE": "circle-check",
             "Paper Trading": "briefcase-business",
             "Calendario de Trading": "calendar-days",
