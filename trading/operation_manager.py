@@ -170,6 +170,19 @@ class OperationManager:
         print(f"Profit    : {profit}")
         print(f"Motivo    : {reason}")
 
+    def reject(self, operation, code, reason):
+        operation.status = "REJECTED"
+        operation.result = code
+        operation.close_reason = reason
+        operation.closed_at = datetime.now()
+        operation.updated_at = operation.closed_at
+        operation_repository.update(operation)
+        operation_events.operation_closed(operation)
+        event_bus.operationClosed.emit(
+            OperationClosedEvent(operation=operation, profit=0.0)
+        )
+        return operation
+
     # =====================================================
     # UPDATE
     # =====================================================

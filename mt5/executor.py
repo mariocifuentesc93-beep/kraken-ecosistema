@@ -22,7 +22,30 @@ class MT5Executor:
         signal,
         volume,
         account,
+        profile=None,
+        preflight_result=None,
     ):
+
+        if preflight_result is None:
+            from services.execution_preflight_service import (
+                execution_preflight_service,
+            )
+            preflight_result = execution_preflight_service.validate(
+                signal=signal,
+                profile=profile,
+                account=account,
+                volume=volume,
+                risk_result=(getattr(signal, "metadata", None) or {}).get(
+                    "position_sizing"
+                ),
+            )
+
+        if not preflight_result.allowed:
+            print(
+                "[MT5] Ejecución bloqueada por pre-flight: "
+                f"{preflight_result.code} - {preflight_result.reason}"
+            )
+            return None
 
         if volume <= 0:
 

@@ -28,6 +28,28 @@ class TradeManager:
 
     # ---------------------------------------------------------
 
+    def _log_preflight(
+        self, signal, profile, account, state, code, reason
+    ):
+        from repositories.log_repository import log_repository
+
+        sizing = (getattr(signal, "metadata", None) or {}).get(
+            "position_sizing", {}
+        )
+        message = (
+            f"Signal ID={getattr(signal, 'external_signal_id', None) or getattr(signal, 'id', None)} | "
+            f"Perfil={getattr(profile, 'name', None)} | "
+            f"Cuenta={getattr(account, 'name', None)} | "
+            f"Terminal={getattr(account, 'mt5_terminal_id', None)} | "
+            f"Símbolo={getattr(signal, 'symbol', None)} | "
+            f"Lote={getattr(signal, 'volume', None)} | "
+            f"Riesgo={sizing.get('riesgo_estimado', sizing.get('estimated_risk'))} | "
+            f"Decisión={state} | Motivo={code}: {reason}"
+        )
+        log_repository.info("ExecutionPreflight", message)
+
+    # ---------------------------------------------------------
+
     def process_signal(
         self,
         signal,
@@ -86,23 +108,19 @@ class TradeManager:
 
             print(f"❌ Riesgo rechazado: {message}")
 
-            operation_manager.close(
+            operation_manager.reject(
                 operation=operation,
-                reason="RISK_REJECTED",
-                profit=0,
+                code="RISK_REJECTED",
+                reason=message,
+            )
+            self._log_preflight(
+                signal, profile, account, "REJECTED", "RISK_REJECTED", message
             )
 
             event_bus.riskRejected.emit(
                 RiskRejectedEvent(
                     signal=signal,
                     reason=message,
-                )
-            )
-
-            event_bus.operationClosed.emit(
-                OperationClosedEvent(
-                    operation=operation,
-                    profit=0,
                 )
             )
 
@@ -115,6 +133,39 @@ class TradeManager:
         )
 
         signal.volume = volume
+
+        from services.execution_preflight_service import (
+            execution_preflight_service,
+        )
+
+        preflight = execution_preflight_service.validate(
+            signal=signal,
+            profile=profile,
+            account=account,
+            volume=volume,
+            risk_result=(getattr(signal, "metadata", None) or {}).get(
+                "position_sizing"
+            ),
+        )
+        if getattr(signal, "metadata", None) is None:
+            signal.metadata = {}
+        signal.metadata["execution_preflight"] = {
+            "state": preflight.state,
+            "code": preflight.code,
+            "reason": preflight.reason,
+            "details": preflight.details,
+        }
+        self._log_preflight(
+            signal, profile, account, preflight.state,
+            preflight.code, preflight.reason
+        )
+        if not preflight.allowed:
+            operation_manager.reject(
+                operation=operation,
+                code=preflight.code,
+                reason=preflight.reason,
+            )
+            return False
 
         print(f"📊 Lote calculado: {volume}")
 
@@ -181,6 +232,8 @@ class TradeManager:
                 signal,
                 volume,
                 account,
+                profile,
+                preflight,
             )
 
         elif self.execution_mode == ExecutionMode.LIVE:
@@ -189,6 +242,8 @@ class TradeManager:
                 signal,
                 volume,
                 account,
+                profile,
+                preflight,
             )
 
         else:
@@ -275,6 +330,8 @@ class TradeManager:
         signal,
         volume,
         account,
+        profile,
+        preflight,
     ):
         from mt5.executor import mt5_executor
 
@@ -282,6 +339,8 @@ class TradeManager:
             signal=signal,
             volume=volume,
             account=account,
+            profile=profile,
+            preflight_result=preflight,
         )
 
     # ---------------------------------------------------------
@@ -291,6 +350,8 @@ class TradeManager:
         signal,
         volume,
         account,
+        profile,
+        preflight,
     ):
         from mt5.executor import mt5_executor
 
@@ -298,6 +359,8 @@ class TradeManager:
             signal=signal,
             volume=volume,
             account=account,
+            profile=profile,
+            preflight_result=preflight,
         )
 
 
