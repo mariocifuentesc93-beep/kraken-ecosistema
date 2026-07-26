@@ -155,6 +155,7 @@ class ProfileRepository:
         profile.id = cursor.lastrowid
 
         self._save_terminal_context(profile)
+        self._notify_change(profile.id)
 
         return profile
 
@@ -285,6 +286,7 @@ class ProfileRepository:
         )
 
         database_manager.commit()
+        self._notify_change(profile.id)
 
         return profile
 
@@ -301,9 +303,17 @@ class ProfileRepository:
 
         database_manager.commit()
 
-        self._save_terminal_context(profile)
+        changed = cursor.rowcount > 0
+        if changed:
+            self._notify_change(profile_id)
+        return changed
 
-        return cursor.rowcount > 0
+    @staticmethod
+    def _notify_change(profile_id):
+        from services.routing_configuration_service import (
+            routing_configuration_service,
+        )
+        routing_configuration_service.notify_changed(profile_id, "profile")
 
     def _save_terminal_context(self, profile):
         columns = {
@@ -462,8 +472,10 @@ class ProfileRepository:
             SELECT *
             FROM profiles
             WHERE
-                enabled=1
+                active=1
+                AND enabled=1
                 AND signal_source_mode IN ('INTERNAL', 'BOTH')
+                AND execution_mode='SIMULATION'
             ORDER BY name
             """
         )

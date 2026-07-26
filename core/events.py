@@ -119,6 +119,12 @@ class ProfileFinishedEvent(Event):
     success: bool
 
 
+@dataclass(slots=True)
+class ProfileConfigurationChangedEvent(Event):
+    profile_id: Optional[int]
+    area: str
+
+
 # ==========================================================
 # EXECUTION
 # ==========================================================

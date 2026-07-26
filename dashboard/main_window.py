@@ -1076,10 +1076,9 @@ class MainWindow(QMainWindow):
         self.notifications.append(text)
 
     def start_engine(self):
-        if not load_active_config():
-            QMessageBox.warning(self, "Kraken Engine", "No hay un perfil activo. Active un perfil antes de iniciar el motor.")
-            return
-        if get_execution_mode() == "LIVE":
+        load_active_config()
+        mode = get_execution_mode() or "OFF"
+        if mode == "LIVE":
             issues = live_mode_issues()
             if issues:
                 QMessageBox.warning(
@@ -1090,7 +1089,7 @@ class MainWindow(QMainWindow):
                 return
         try:
             kraken_engine.start()
-            self.set_mode(get_execution_mode())
+            self.set_mode(mode)
             self.log("Kraken Engine iniciado.")
         except Exception as error:
             self.log(f"Error al iniciar Kraken Engine: {error}")

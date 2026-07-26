@@ -180,6 +180,7 @@ class SymbolRepository:
             catalog_id,
             symbol,
         )
+        self._notify_change(profile_id)
         return symbol_id
 
     # ---------------------------------------------------------
@@ -263,6 +264,10 @@ class SymbolRepository:
     ):
 
         cursor = database_manager.cursor()
+        row = cursor.execute(
+            "SELECT profile_id FROM symbols WHERE id=?",
+            (symbol_id,),
+        ).fetchone()
 
         cursor.execute(
             """
@@ -296,13 +301,20 @@ class SymbolRepository:
 
         database_manager.commit()
 
-        return cursor.rowcount > 0
+        changed = cursor.rowcount > 0
+        if changed and row is not None:
+            self._notify_change(row["profile_id"])
+        return changed
 
     # ---------------------------------------------------------
 
     def delete(self, symbol_id):
 
         cursor = database_manager.cursor()
+        row = cursor.execute(
+            "SELECT profile_id FROM symbols WHERE id=?",
+            (symbol_id,),
+        ).fetchone()
 
         cursor.execute(
             """
@@ -315,7 +327,17 @@ class SymbolRepository:
 
         database_manager.commit()
 
-        return cursor.rowcount > 0
+        changed = cursor.rowcount > 0
+        if changed and row is not None:
+            self._notify_change(row["profile_id"])
+        return changed
+
+    @staticmethod
+    def _notify_change(profile_id):
+        from services.routing_configuration_service import (
+            routing_configuration_service,
+        )
+        routing_configuration_service.notify_changed(profile_id, "symbols")
 
     # ---------------------------------------------------------
 

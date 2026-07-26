@@ -48,6 +48,7 @@ class EventBus(QObject):
     profileFinished = Signal(object)
     profileActivated = Signal(object)
     profileDeactivated = Signal(object)
+    profileConfigurationChanged = Signal(object)
 
     # ==========================================================
     # EJECUCIÓN

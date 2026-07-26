@@ -1,5 +1,6 @@
 from copy import deepcopy
 from inspect import signature
+from threading import RLock
 
 from core.event_bus import event_bus
 from core.events import (
@@ -25,6 +26,7 @@ class SignalEngine:
         self._profile_engine = profile_engine_instance
         self._validator = validator
         self._source_router = source_router
+        self._routing_lock = RLock()
 
     def _get_profiles(self, signal, account_id, chat_id):
         if signal.source == "INTERNAL":
@@ -32,9 +34,7 @@ class SignalEngine:
                 from repositories.profile_repository import (
                     profile_repository,
                 )
-                self._internal_profiles_provider = (
-                    profile_repository.get_internal_profiles
-                )
+                return profile_repository.get_internal_profiles()
             return self._internal_profiles_provider()
 
         if signal.source != "TELEGRAM":
@@ -44,8 +44,9 @@ class SignalEngine:
             from repositories.profile_telegram_repository import (
                 profile_telegram_channel_repository,
             )
-            self._profiles_provider = (
-                profile_telegram_channel_repository.get_profiles
+            return profile_telegram_channel_repository.get_profiles(
+                account_id,
+                chat_id,
             )
 
         parameters = signature(self._profiles_provider).parameters
@@ -118,10 +119,24 @@ class SignalEngine:
             )
         )
 
-        profiles = self._get_profiles(signal, account_id, chat_id)
-        profiles = self._get_source_router().filter(profiles, signal)
+        with self._routing_lock:
+            profiles = list(
+                self._get_profiles(signal, account_id, chat_id)
+            )
+            profiles = self._get_source_router().filter(profiles, signal)
 
         if not profiles:
+            if signal.source == "INTERNAL":
+                reason = "PROFILE_ROUTING | no eligible profiles"
+                event_bus.log(reason)
+                signal.rejection_reason = ""
+                signal.execution_decision = "SKIPPED"
+                signal.metadata.pop("failure_stage", None)
+                signal.metadata["routing_status"] = "NO_ELIGIBLE_PROFILES"
+                signal.metadata["execution_status"] = "SKIPPED"
+                signal.metadata["rejection_reason"] = ""
+                signal.metadata["execution_decision"] = "SKIPPED"
+                return False
             reason = (
                 f"No existen perfiles habilitados para {signal.source}"
             )
