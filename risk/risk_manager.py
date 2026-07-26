@@ -12,7 +12,7 @@ from repositories.daily_statistics_repository import daily_statistics_repository
 
 class RiskManager:
 
-    def __init__(self):
+    def __init__(self, sizing_service=None, symbol_info_provider=None):
 
         self.money_management = money_management
         self.position_sizing = position_sizing
@@ -23,6 +23,48 @@ class RiskManager:
         self.trailing_stop = trailing_stop
         self.partial_tp = partial_tp
         self.risk_rules = risk_rules
+        self._sizing_service = sizing_service
+        self._symbol_info_provider = symbol_info_provider
+
+    def _get_sizing_service(self):
+        if self._sizing_service is None:
+            from risk.position_sizing_service import position_sizing_service
+            self._sizing_service = position_sizing_service
+        return self._sizing_service
+
+    def _get_symbol_info(self, account, symbol):
+        if self._symbol_info_provider is not None:
+            return self._symbol_info_provider(account, symbol)
+        from mt5.connector import mt5_connector
+        expected = int(getattr(account, "login", 0) or 0)
+        detected = int(getattr(mt5_connector, "current_account", 0) or 0)
+        if not expected or detected != expected:
+            raise ValueError(
+                "La cuenta MT5 conectada no coincide con la cuenta destino del perfil."
+            )
+        info = mt5_connector.get_symbol_info(symbol)
+        if info is None:
+            raise ValueError(f"No existe información MT5 para {symbol}.")
+        return info
+
+    def _calculate_profile_sizing(self, signal, profile, account):
+        result = self._get_sizing_service().calculate(
+            profile=profile,
+            account=account,
+            symbol=signal.symbol,
+            direction=signal.direction,
+            entry=signal.entry,
+            stop_loss=signal.stop_loss,
+            symbol_info=self._get_symbol_info(account, signal.symbol),
+        )
+        details = result.to_dict()
+        details["profile_id"] = getattr(profile, "id", None)
+        details["mt5_account_id"] = getattr(account, "id", None)
+        details["symbol"] = signal.symbol
+        details["stop_loss"] = signal.stop_loss
+        signal.metadata["position_sizing"] = details
+        signal.volume = result.volume
+        return result
 
     # ---------------------------------------------------------
 
@@ -120,6 +162,18 @@ class RiskManager:
                 if not ok:
                     return False, msg
 
+        if profile is not None and account is not None:
+            try:
+                self._calculate_profile_sizing(signal, profile, account)
+            except Exception as error:
+                signal.metadata["position_sizing"] = {
+                    "allowed": False,
+                    "reason": str(error),
+                    "profile_id": getattr(profile, "id", None),
+                    "mt5_account_id": getattr(account, "id", None),
+                }
+                return False, str(error)
+
         return True, "Riesgo aprobado."
 
     # ---------------------------------------------------------
@@ -131,40 +185,11 @@ class RiskManager:
         account=None,
     ):
 
-        if profile is not None:
-            self.money_management.load_profile(profile)
-
-        mode = str(self.money_management.mode).upper()
-
-        if mode == "FIXED":
-
-            lot = self.money_management.fixed_lot
-
-        elif mode == "AMOUNT":
-
-            lot = self.position_sizing.calculate_by_amount(
-                symbol=signal.symbol,
-                risk_amount=self.money_management.risk_amount,
-                entry_price=signal.entry,
-                stop_loss=signal.stop_loss,
-            )
-
-        else:
-
-            lot = self.position_sizing.calculate_by_percent(
-                symbol=signal.symbol,
-                risk_percent=self.money_management.risk_percent,
-                entry_price=signal.entry,
-                stop_loss=signal.stop_loss,
-            )
-
-        lot = self.money_management.validate_lot(lot)
-
-        signal.volume = lot
-
-        print(f"[RiskManager] Lote calculado: {lot}")
-
-        return lot
+        cached = signal.metadata.get("position_sizing", {})
+        if cached.get("allowed"):
+            return float(cached["volume"])
+        result = self._calculate_profile_sizing(signal, profile, account)
+        return result.volume
 
     # ---------------------------------------------------------
 

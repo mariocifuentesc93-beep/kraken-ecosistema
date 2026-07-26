@@ -41,10 +41,9 @@ class SimulationEngine:
         operation.symbol = signal.symbol
         operation.direction = signal.direction
 
-        operation.volume = getattr(
-            account,
-            "fixed_lot",
-            0.10,
+        operation.volume = float(getattr(signal, "volume", 0.0) or 0.0)
+        operation.metadata["position_sizing"] = dict(
+            getattr(signal, "metadata", {}).get("position_sizing", {})
         )
 
         operation.entry = signal.entry
@@ -89,7 +88,9 @@ class SimulationEngine:
                 f"Simulación creada | "
                 f"{operation.symbol} | "
                 f"{operation.direction} | "
-                f"Cuenta {account.name}"
+                f"Cuenta {account.name} | "
+                f"volumen={operation.volume} | "
+                f"riesgo={operation.metadata['position_sizing'].get('estimated_risk_money', 0)}"
             ),
         )
 

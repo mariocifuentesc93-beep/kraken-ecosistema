@@ -72,6 +72,8 @@ class Profile:
 
     risk_percent: float = 2.0
 
+    max_risk_percent: float = 5.0
+
     risk_amount: float = 0.0
 
     fixed_lot: float = 0.10
@@ -160,6 +162,7 @@ class Profile:
         )
 
         self.risk_percent = float(self.risk_percent)
+        self.max_risk_percent = float(self.max_risk_percent)
         self.risk_amount = float(self.risk_amount)
         self.fixed_lot = float(self.fixed_lot)
         self.min_lot = float(self.min_lot)

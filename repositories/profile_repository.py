@@ -59,6 +59,7 @@ class ProfileRepository:
                 risk_enabled,
                 risk_mode,
                 risk_percent,
+                max_risk_percent,
                 risk_amount,
                 fixed_lot,
                 min_lot,
@@ -93,7 +94,7 @@ class ProfileRepository:
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -116,6 +117,7 @@ class ProfileRepository:
                 int(profile.risk_enabled),
                 profile.risk_mode,
                 profile.risk_percent,
+                profile.max_risk_percent,
                 profile.risk_amount,
                 profile.fixed_lot,
                 profile.min_lot,
@@ -196,6 +198,7 @@ class ProfileRepository:
                 risk_enabled=?,
                 risk_mode=?,
                 risk_percent=?,
+                max_risk_percent=?,
                 risk_amount=?,
                 fixed_lot=?,
                 min_lot=?,
@@ -250,6 +253,7 @@ class ProfileRepository:
                 int(profile.risk_enabled),
                 profile.risk_mode,
                 profile.risk_percent,
+                profile.max_risk_percent,
                 profile.risk_amount,
                 profile.fixed_lot,
                 profile.min_lot,
