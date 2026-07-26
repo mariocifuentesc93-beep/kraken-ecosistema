@@ -32,9 +32,13 @@ Profile
 MT5Terminal inventory
   -> executable_path
   -> data_path
-  -> role TRADING | SCANNER
+  -> can_trade
+  -> can_scan
   -> catalog_id
-  -> process/status
+  -> process_status
+  -> trading_connection_status
+  -> scanner_status
+  -> account_match_status
 
 InspectorTerminalRouter
   -> Scanner terminal
@@ -45,6 +49,47 @@ InspectorTerminalRouter
 
 La migración `database/mt5_installation_manager_migration.py` es explícita,
 idempotente y reversible. Importarla o abrir la interfaz no la ejecuta.
+
+La migración adicional
+`database/mt5_terminal_capabilities_migration.py` también es explícita,
+idempotente y reversible. Mantiene temporalmente `role` para compatibilidad,
+pero migra sus valores iniciales así:
+
+- `TRADING` → `can_trade=1`, `can_scan=0`;
+- `SCANNER` → `can_trade=0`, `can_scan=1`.
+
+Después de migrar, una misma identidad `executable_path` puede tener
+`can_trade=1` y `can_scan=1`. No se crea un segundo registro ni se alteran las
+asociaciones de cuentas o perfiles.
+
+## Estados independientes
+
+`connection_status` se conserva temporalmente para consumidores heredados.
+Los diagnósticos nuevos separan:
+
+- `process_status`: proceso `RUNNING`/`STOPPED`;
+- `trading_connection_status`: conexión de trading validada o no;
+- `scanner_status`: actividad del Inspector/CSV;
+- `account_match_status`: `MATCH`, `MISMATCH` o `NOT_VALIDATED`.
+
+Un `ACCOUNT_MISMATCH` es una advertencia de seguridad: impide asumir que la
+cuenta detectada es la cuenta de trading persistida, pero no bloquea la
+lectura de archivos del Scanner. Kraken nunca sobrescribe login, servidor o
+credenciales a partir de un diagnóstico.
+
+## FILE_COMMON
+
+KrakenBMSPInspector escribe archivos `Kraken_BMSP_*.csv`. La configuración
+global `internal.scanner.output_directory` admite explícitamente la carpeta:
+
+```text
+%APPDATA%\MetaQuotes\Terminal\Common\Files
+```
+
+Cuando `internal.scanner.enabled=1`, el runtime usa esa carpeta con prioridad
+sobre la opción heredada `internal.csv_directory`. La fuente y el watcher no
+dependen de perfiles activos. El selector del Inspector muestra únicamente
+terminales con `can_scan=1`, incluso cuando también tienen `can_trade=1`.
 
 ## Flujo de recuperación D0E
 

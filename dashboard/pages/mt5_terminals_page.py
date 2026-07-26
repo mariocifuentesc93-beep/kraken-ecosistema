@@ -5,18 +5,29 @@ from PySide6.QtWidgets import (
 )
 
 from models.mt5_terminal import MT5Terminal
+from repositories.mt5_account_repository import mt5_account_repository
 from repositories.mt5_terminal_repository import mt5_terminal_repository
 from services.mt5_terminal_launcher import MT5TerminalLauncher
 
 
 class MT5TerminalsPage(QWidget):
-    HEADERS = ("ID", "Nombre", "Rol", "Broker", "Catálogo", "Ejecutable",
-               "Carpeta de datos", "Estado")
+    HEADERS = (
+        "ID", "Nombre", "Trading", "Scanner", "Broker", "Catálogo",
+        "Ejecutable", "Carpeta de datos", "Proceso", "Inspector",
+        "Cuenta esperada", "Cuenta detectada", "Coincidencia",
+    )
 
-    def __init__(self, repository=None, launcher=None, parent=None):
+    def __init__(
+        self,
+        repository=None,
+        launcher=None,
+        account_repository=None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.repository = repository or mt5_terminal_repository
         self.launcher = launcher or MT5TerminalLauncher()
+        self.account_repository = account_repository or mt5_account_repository
         layout = QVBoxLayout(self)
         self.notice = QLabel("Inventario multi-terminal; no modifica instalaciones.")
         layout.addWidget(self.notice)
@@ -40,15 +51,53 @@ class MT5TerminalsPage(QWidget):
 
     def refresh(self):
         terminals = self.repository.get_all()
-        self.table.setRowCount(len(terminals))
-        for row, terminal in enumerate(terminals):
-            values = (terminal.id, terminal.name, terminal.role, terminal.broker,
-                      terminal.catalog_id, terminal.executable_path,
-                      terminal.data_path, terminal.connection_status)
-            for column, value in enumerate(values):
-                item = QTableWidgetItem(str(value or ""))
-                item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-                self.table.setItem(row, column, item)
+        expected_accounts = {}
+        try:
+            for account in self.account_repository.get_all():
+                terminal_id = getattr(account, "mt5_terminal_id", None)
+                if terminal_id is not None:
+                    expected_accounts.setdefault(terminal_id, []).append(
+                        f"{account.login} · {account.server}"
+                    )
+        except Exception:
+            expected_accounts = {}
+        sorting_enabled = self.table.isSortingEnabled()
+        self.table.setSortingEnabled(False)
+        try:
+            self.table.setRowCount(len(terminals))
+            for row, terminal in enumerate(terminals):
+                expected = " / ".join(
+                    expected_accounts.get(terminal.id, ())
+                ) or "—"
+                detected = " · ".join(
+                    str(value)
+                    for value in (
+                        terminal.detected_login,
+                        terminal.detected_server,
+                    )
+                    if value not in (None, "")
+                ) or "—"
+                values = (
+                    terminal.id,
+                    terminal.name,
+                    "Sí" if terminal.can_trade else "No",
+                    "Sí" if terminal.can_scan else "No",
+                    terminal.broker,
+                    terminal.catalog_id,
+                    terminal.executable_path,
+                    terminal.data_path,
+                    terminal.process_status,
+                    terminal.scanner_status,
+                    expected,
+                    detected,
+                    terminal.account_match_status,
+                )
+                for column, value in enumerate(values):
+                    item = QTableWidgetItem(str(value or ""))
+                    item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+                    self.table.setItem(row, column, item)
+        finally:
+            self.table.setSortingEnabled(sorting_enabled)
         if not getattr(self.repository, "_available", lambda: True)():
             self.notice.setText(
                 "Migración pendiente: ejecútela explícitamente tras un respaldo."

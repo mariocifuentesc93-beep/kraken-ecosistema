@@ -7,6 +7,29 @@ from pathlib import Path
 from engine.runtime import RuntimeStatus
 
 
+def resolve_internal_directory(settings, fallback_directory):
+    """Resolve FILE_COMMON-compatible Scanner output without profiles."""
+    scanner_enabled = settings.get_bool(
+        "internal.scanner.enabled",
+        False,
+    )
+    scanner_directory = settings.get(
+        "internal.scanner.output_directory",
+        "",
+    )
+    legacy_directory = settings.get("internal.csv_directory", "")
+    configured = (
+        scanner_directory
+        if scanner_enabled and str(scanner_directory or "").strip()
+        else legacy_directory
+    )
+    return (
+        Path(configured)
+        if str(configured or "").strip()
+        else Path(fallback_directory)
+    )
+
+
 @dataclass(frozen=True)
 class RuntimeSnapshot:
     state: RuntimeStatus
@@ -190,14 +213,9 @@ class RuntimeCoordinator:
             from telegram.signal_publisher import TelegramSignalPublisher
             from repositories.settings_repository import settings_repository
 
-            configured_directory = settings_repository.get(
-                "internal.csv_directory",
-                "",
-            )
-            directory = (
-                Path(configured_directory)
-                if str(configured_directory or "").strip()
-                else default_internal_directory()
+            directory = resolve_internal_directory(
+                settings_repository,
+                default_internal_directory(),
             )
             observation_only = settings_repository.get_bool(
                 "internal.observation_only",
