@@ -154,7 +154,7 @@ No existe todavía `TelegramSignalPublisher`.
 
 - no se publica Telegram ni se conecta Telethon real;
 - no se inicializa MetaTrader5;
-- no se permiten DEMO ni LIVE para INTERNAL;
+- DEMO y LIVE se permiten únicamente detrás de riesgo y pre-flight;
 - no se modifica riesgo, lotaje ni dashboard;
 - el watcher y la ingestión no se inician al importar.
 

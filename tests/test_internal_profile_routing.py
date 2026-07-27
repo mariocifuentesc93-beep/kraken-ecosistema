@@ -1,4 +1,5 @@
 from models.signal import Signal
+from models.profile import Profile
 from engine.signal_engine import SignalEngine
 
 
@@ -98,3 +99,41 @@ def test_internal_symbol_filter_runs_for_each_target_profile(
 
     assert engine.process(internal_signal(), chat_id=None) is True
     assert [call[1] for call in profile_engine.calls] == [allowed]
+
+
+def test_repository_selects_internal_simulation_demo_and_live(
+    tmp_path,
+):
+    from database.database_manager import database_manager
+    from repositories.profile_repository import ProfileRepository
+
+    original_database = database_manager.database
+    database_manager.close()
+    database_manager.database = tmp_path / "internal-routing.db"
+    try:
+        database_manager.initialize_new_database()
+        repository = ProfileRepository()
+        repository.create(Profile(
+            name="Simulation",
+            signal_source_mode="INTERNAL",
+            execution_mode="SIMULATION",
+        ))
+        repository.create(Profile(
+            name="Demo",
+            signal_source_mode="INTERNAL",
+            execution_mode="DEMO",
+        ))
+        repository.create(Profile(
+            name="Live",
+            signal_source_mode="INTERNAL",
+            execution_mode="LIVE",
+        ))
+
+        selected = repository.get_internal_profiles()
+
+        assert {profile.name for profile in selected} == {
+            "Simulation", "Demo", "Live",
+        }
+    finally:
+        database_manager.close()
+        database_manager.database = original_database

@@ -61,22 +61,38 @@ def test_internal_simulation_reaches_fake_trade_manager(
     assert "MetaTrader5" not in sys.modules
 
 
-@pytest.mark.parametrize("execution_mode", ["DEMO", "LIVE"])
-def test_internal_demo_and_live_are_blocked_before_trade_manager(
+def test_internal_demo_reaches_trade_manager_and_keeps_profile_mode(
     profile_factory,
     account_factory,
-    execution_mode,
 ):
     profile = profile_factory(
         1,
         signal_source_mode="INTERNAL",
-        execution_mode=execution_mode,
+        execution_mode="DEMO",
     )
     manager, profile_engine = pipeline(
         profile,
         account_factory(1),
     )
 
-    assert profile_engine.process_signal(internal_signal(), profile) is False
-    assert manager.calls == []
+    assert profile_engine.process_signal(internal_signal(), profile) is True
+    assert len(manager.calls) == 1
+    assert manager.calls[0][0].execution_mode == "DEMO"
+    assert "MetaTrader5" not in sys.modules
+
+
+def test_internal_live_reaches_trade_manager_and_keeps_profile_mode(
+    profile_factory,
+    account_factory,
+):
+    profile = profile_factory(
+        1,
+        signal_source_mode="INTERNAL",
+        execution_mode="LIVE",
+    )
+    manager, profile_engine = pipeline(profile, account_factory(1))
+
+    assert profile_engine.process_signal(internal_signal(), profile) is True
+    assert len(manager.calls) == 1
+    assert manager.calls[0][0].execution_mode == "LIVE"
     assert "MetaTrader5" not in sys.modules

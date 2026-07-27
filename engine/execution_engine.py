@@ -1,6 +1,8 @@
 from copy import deepcopy
 
-INTERNAL_SAFE_EXECUTION_MODES = {"OFF", "SIMULATION"}
+# INTERNAL may execute in DEMO or LIVE only after the same risk and pre-flight
+# gates used by every other source.
+INTERNAL_SAFE_EXECUTION_MODES = {"OFF", "SIMULATION", "DEMO", "LIVE"}
 
 
 def execution_mode_value(value):

@@ -479,7 +479,7 @@ class ProfileRepository:
                 active=1
                 AND enabled=1
                 AND signal_source_mode IN ('INTERNAL', 'BOTH')
-                AND execution_mode='SIMULATION'
+                AND execution_mode IN ('SIMULATION', 'DEMO', 'LIVE')
             ORDER BY name
             """
         )
