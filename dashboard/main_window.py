@@ -838,6 +838,8 @@ class MainWindow(QMainWindow):
 
     def _connection_finished(self, service, success, error):
         self.refresh_connectivity_status()
+        if service == "MT5" and success:
+            self.dashboardPage.refresh()
         if not success:
             self.log(f"Error de conexión {service}: {error}")
 

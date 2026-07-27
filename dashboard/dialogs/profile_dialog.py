@@ -325,6 +325,15 @@ class ProfileDialog(QDialog):
             getattr(profile, "tp1_management", "PROTECT_TP1")
         )
         self.riskWidget.tp1Management.setCurrentIndex(max(0, tp1_index))
+        self.riskWidget.breakEven.setChecked(
+            getattr(profile, "break_even_enabled", False)
+        )
+        self.riskWidget.trailing.setChecked(
+            getattr(profile, "trailing_stop_enabled", False)
+        )
+        self.riskWidget.partial.setChecked(
+            getattr(profile, "partial_take_profit_enabled", False)
+        )
 
         self._set_risk_widget_mode(risk_mode)
         self.riskWidget.enabled.setChecked(profile.risk_enabled)
@@ -435,6 +444,9 @@ class ProfileDialog(QDialog):
             ),
             "tp_level": self.spnTP.value(),
             "tp1_management": self.riskWidget.tp1Management.currentData(),
+            "break_even_enabled": self.riskWidget.breakEven.isChecked(),
+            "trailing_stop_enabled": self.riskWidget.trailing.isChecked(),
+            "partial_take_profit_enabled": self.riskWidget.partial.isChecked(),
             "default_mt5_account": self._selected_account_id(self.mt5Selector),
             "mt5_terminal_id": self.mt5TerminalCombo.currentData(),
             "catalog_id": self.mt5CatalogCombo.currentText(),

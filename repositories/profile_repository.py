@@ -74,6 +74,9 @@ class ProfileRepository:
                 execution_mode,
                 tp_level,
                 tp1_management,
+                break_even_enabled,
+                trailing_stop_enabled,
+                partial_take_profit_enabled,
                 execute_market,
 
                 magic_number,
@@ -94,7 +97,7 @@ class ProfileRepository:
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -132,6 +135,9 @@ class ProfileRepository:
                 profile.execution_mode,
                 profile.tp_level,
                 profile.tp1_management,
+                int(profile.break_even_enabled),
+                int(profile.trailing_stop_enabled),
+                int(profile.partial_take_profit_enabled),
                 int(profile.execute_market),
 
                 profile.magic_number,
@@ -213,6 +219,9 @@ class ProfileRepository:
                 execution_mode=?,
                 tp_level=?,
                 tp1_management=?,
+                break_even_enabled=?,
+                trailing_stop_enabled=?,
+                partial_take_profit_enabled=?,
                 execute_market=?,
 
                 magic_number=?,
@@ -268,6 +277,9 @@ class ProfileRepository:
                 profile.execution_mode,
                 profile.tp_level,
                 profile.tp1_management,
+                int(profile.break_even_enabled),
+                int(profile.trailing_stop_enabled),
+                int(profile.partial_take_profit_enabled),
                 int(profile.execute_market),
 
                 profile.magic_number,
@@ -290,6 +302,7 @@ class ProfileRepository:
         )
 
         database_manager.commit()
+        self._save_terminal_context(profile)
         self._notify_change(profile.id)
 
         return profile

@@ -90,6 +90,12 @@ def create_tables(connection: sqlite3.Connection):
 
         tp1_management TEXT DEFAULT 'PROTECT_TP1',
 
+        break_even_enabled INTEGER DEFAULT 0,
+
+        trailing_stop_enabled INTEGER DEFAULT 0,
+
+        partial_take_profit_enabled INTEGER DEFAULT 0,
+
         execute_market INTEGER DEFAULT 1,
 
         magic_number INTEGER DEFAULT 10001,
