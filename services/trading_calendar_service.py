@@ -14,21 +14,141 @@ from repositories.profile_repository import profile_repository
 
 class TradingCalendarService:
     """Read-only calendar projections over SQLite operation and paper-trade records."""
+    def filter_options(self):
+        """Return global reporting dimensions without depending on active profiles."""
+        profiles = [
+            (str(row["id"]), row["name"])
+            for row in database_manager.execute(
+                "SELECT id,name FROM profiles ORDER BY name"
+            ).fetchall()
+        ]
+        accounts = [
+            (str(row["id"]), row["name"])
+            for row in database_manager.execute(
+                "SELECT id,name FROM mt5_accounts ORDER BY name"
+            ).fetchall()
+        ]
+        symbols = [
+            row[0] for row in database_manager.execute(
+                """
+                SELECT DISTINCT symbol FROM (
+                    SELECT symbol FROM operations
+                    UNION ALL
+                    SELECT symbol FROM paper_trades
+                )
+                WHERE COALESCE(symbol,'')<>''
+                ORDER BY symbol
+                """
+            ).fetchall()
+        ]
+        return {
+            "profiles": profiles,
+            "accounts": accounts,
+            "symbols": symbols,
+            "modes": ["SIMULATION", "PAPER", "DEMO", "LIVE"],
+            "sources": ["TELEGRAM", "INTERNAL", "MANUAL", "UNKNOWN"],
+            "statuses": [
+                "OPEN", "CLOSED", "REJECTED", "SIMULATION",
+                "PENDING", "QUEUED",
+            ],
+            "directions": ["BUY", "SELL"],
+            "results": [
+                "WIN", "LOSS", "BREAKEVEN", "TP1", "TP2", "TP3",
+                "SL", "REJECTED",
+            ],
+        }
+
     def records(self, year, month, filters=None):
         filters = filters or {}; first=f"{year:04d}-{month:02d}-01"; last=f"{year + (month==12):04d}-{(month%12)+1:02d}-01"
-        operations=database_manager.execute("""SELECT o.*, COALESCE(s.source,'Telegram') source,
-            COALESCE((SELECT execution_mode FROM operation_events e WHERE e.operation_id=o.id ORDER BY e.id DESC LIMIT 1),'Simulation') mode
-            FROM operations o LEFT JOIN signals s ON s.id=o.signal_id WHERE COALESCE(o.closed_at,o.opened_at)>=? AND COALESCE(o.closed_at,o.opened_at)<?""",(first,last)).fetchall()
+        operations=database_manager.execute("""
+            SELECT
+                o.*,
+                p.name AS profile_name,
+                a.name AS account_name,
+                COALESCE(
+                    NULLIF(UPPER(s.source), ''),
+                    CASE
+                        WHEN UPPER(COALESCE(p.signal_source_mode, '')) IN
+                             ('TELEGRAM', 'INTERNAL')
+                        THEN UPPER(p.signal_source_mode)
+                        ELSE 'UNKNOWN'
+                    END
+                ) AS source,
+                COALESCE(
+                    (
+                        SELECT NULLIF(UPPER(e.execution_mode), '')
+                        FROM operation_events e
+                        WHERE e.operation_id=o.id
+                        ORDER BY e.id DESC
+                        LIMIT 1
+                    ),
+                    CASE
+                        WHEN UPPER(COALESCE(o.status, ''))='SIMULATION'
+                             OR COALESCE(o.ticket, -1)=0
+                        THEN 'SIMULATION'
+                        WHEN o.ticket IS NOT NULL AND o.ticket>0
+                             AND UPPER(COALESCE(p.execution_mode, ''))
+                                 IN ('DEMO', 'LIVE')
+                        THEN UPPER(p.execution_mode)
+                        ELSE UPPER(COALESCE(p.execution_mode, 'UNKNOWN'))
+                    END
+                ) AS mode
+            FROM operations o
+            LEFT JOIN signals s ON s.id=o.signal_id
+            LEFT JOIN profiles p ON p.id=o.profile_id
+            LEFT JOIN mt5_accounts a ON a.id=o.mt5_account_id
+            WHERE COALESCE(o.closed_at,o.opened_at,o.updated_at)>=?
+              AND COALESCE(o.closed_at,o.opened_at,o.updated_at)<?
+        """,(first,last)).fetchall()
         papers=database_manager.execute("SELECT * FROM paper_trades WHERE COALESCE(closed_at,opened_at)>=? AND COALESCE(closed_at,opened_at)<?",(first,last)).fetchall()
         rows=[]
         for row in operations:
-            r=dict(row); rows.append({"id":f"O{r['id']}","date":r.get("closed_at") or r.get("opened_at"),"profile_id":r.get("profile_id"),"account_id":r.get("mt5_account_id"),"symbol":r.get("symbol"),"direction":r.get("direction"),"entry":r.get("entry_price"),"exit":r.get("exit_price"),"volume":r.get("volume"),"risk":0,"gross":r.get("profit",0) or 0,"costs":0,"net":r.get("profit",0) or 0,"result":r.get("result") or r.get("status"),"status":r.get("status"),"mode":str(r.get("mode") or "Simulation").title(),"source":r.get("source") or "Telegram","opened_at":r.get("opened_at"),"closed_at":r.get("closed_at")})
+            r=dict(row)
+            profit=float(r.get("profit",0) or 0)
+            result=r.get("result")
+            if not result and str(r.get("status") or "").upper()=="CLOSED":
+                result="WIN" if profit>0 else "LOSS" if profit<0 else "BREAKEVEN"
+            rows.append({
+                "id":f"O{r['id']}",
+                "date":r.get("closed_at") or r.get("opened_at") or r.get("updated_at"),
+                "profile_id":r.get("profile_id"),
+                "profile_name":r.get("profile_name") or f"Perfil {r.get('profile_id')}",
+                "account_id":r.get("mt5_account_id"),
+                "account_name":r.get("account_name") or f"Cuenta {r.get('mt5_account_id')}",
+                "symbol":r.get("symbol"),
+                "direction":str(r.get("direction") or "").upper(),
+                "entry":r.get("entry_price"),
+                "exit":r.get("exit_price"),
+                "volume":r.get("volume"),
+                "risk":0,
+                "gross":profit,
+                "costs":0,
+                "net":profit,
+                "result":result or r.get("status"),
+                "status":str(r.get("status") or "").upper(),
+                "mode":str(r.get("mode") or "UNKNOWN").upper(),
+                "source":str(r.get("source") or "UNKNOWN").upper(),
+                "opened_at":r.get("opened_at"),
+                "closed_at":r.get("closed_at"),
+                "ticket":r.get("ticket"),
+            })
         for row in papers:
-            r=dict(row); metadata=json.loads(r.get("metadata") or "{}"); rows.append({"id":f"P{r['id']}","date":r.get("closed_at") or r.get("opened_at"),"profile_id":r.get("profile_id"),"account_id":None,"symbol":r.get("symbol"),"direction":r.get("direction"),"entry":r.get("entry_price"),"exit":None,"volume":r.get("volume"),"risk":r.get("initial_risk",0),"gross":r.get("gross_pl",0),"costs":sum(r.get(k,0) or 0 for k in ("spread_cost","slippage_cost","commission_cost")),"net":r.get("net_pl",0),"result":metadata.get("result",r.get("status")),"status":r.get("status"),"mode":"Paper","source":metadata.get("source","Telegram"),"opened_at":r.get("opened_at"),"closed_at":r.get("closed_at")})
+            r=dict(row); metadata=json.loads(r.get("metadata") or "{}"); rows.append({"id":f"P{r['id']}","date":r.get("closed_at") or r.get("opened_at"),"profile_id":r.get("profile_id"),"profile_name":f"Perfil {r.get('profile_id')}","account_id":None,"account_name":"Paper","symbol":r.get("symbol"),"direction":str(r.get("direction") or "").upper(),"entry":r.get("entry_price"),"exit":None,"volume":r.get("volume"),"risk":r.get("initial_risk",0),"gross":r.get("gross_pl",0),"costs":sum(r.get(k,0) or 0 for k in ("spread_cost","slippage_cost","commission_cost")),"net":r.get("net_pl",0),"result":metadata.get("result",r.get("status")),"status":str(r.get("status") or "").upper(),"mode":"PAPER","source":str(metadata.get("source","TELEGRAM")).upper(),"opened_at":r.get("opened_at"),"closed_at":r.get("closed_at"),"ticket":None})
         return [r for r in rows if self._matches(r,filters)]
     @staticmethod
     def _matches(row,f):
-        return (not f.get("profile") or str(row["profile_id"])==str(f["profile"])) and (not f.get("symbol") or row["symbol"]==f["symbol"]) and (not f.get("account") or str(row["account_id"])==str(f["account"])) and (not f.get("mode") or f["mode"]=="All" or row["mode"].lower()==f["mode"].lower()) and (not f.get("source") or f["source"]=="All" or row["source"].lower()==f["source"].lower())
+        def same(key, value):
+            return not value or str(value).upper() in ("ALL", "TODOS") or str(row.get(key, "")).upper()==str(value).upper()
+        return (
+            same("profile_id",f.get("profile"))
+            and same("symbol",f.get("symbol"))
+            and same("account_id",f.get("account"))
+            and same("mode",f.get("mode"))
+            and same("source",f.get("source"))
+            and same("status",f.get("status"))
+            and same("direction",f.get("direction"))
+            and same("result",f.get("result"))
+        )
     def daily(self,year,month,filters=None):
         data={day:{"net":0.0,"closed":0,"open":0,"pending":0,"trades":[]} for day in range(1,calendar.monthrange(year,month)[1]+1)}
         for r in self.records(year,month,filters):

@@ -12,7 +12,12 @@ from repositories.daily_statistics_repository import daily_statistics_repository
 
 class RiskManager:
 
-    def __init__(self, sizing_service=None, symbol_info_provider=None):
+    def __init__(
+        self,
+        sizing_service=None,
+        symbol_info_provider=None,
+        connection_registry=None,
+    ):
 
         self.money_management = money_management
         self.position_sizing = position_sizing
@@ -25,6 +30,7 @@ class RiskManager:
         self.risk_rules = risk_rules
         self._sizing_service = sizing_service
         self._symbol_info_provider = symbol_info_provider
+        self._connection_registry = connection_registry
 
     def _get_sizing_service(self):
         if self._sizing_service is None:
@@ -32,22 +38,92 @@ class RiskManager:
             self._sizing_service = position_sizing_service
         return self._sizing_service
 
-    def _get_symbol_info(self, account, symbol):
+    def _connection_for(self, account):
+        if self._connection_registry is None:
+            from services.mt5_connection_registry import (
+                mt5_connection_registry,
+            )
+
+            self._connection_registry = mt5_connection_registry
+        return self._connection_registry.connection_for(
+            account.id,
+            getattr(account, "mt5_terminal_id", None),
+        )
+
+    def _get_symbol_info(self, account, symbol, profile=None):
         if self._symbol_info_provider is not None:
             return self._symbol_info_provider(account, symbol)
-        from mt5.connector import mt5_connector
+        from config.symbols import get_mt5_symbol
+        if getattr(account, "mt5_terminal_id", None) is None:
+            # Compatibility for legacy databases/tests. New operational
+            # accounts are required to use the isolated terminal registry.
+            from mt5.connector import mt5_connector
+
+            expected = int(getattr(account, "login", 0) or 0)
+            detected = int(
+                getattr(mt5_connector, "current_account", 0) or 0
+            )
+            if not expected or detected != expected:
+                raise ValueError(
+                    "La cuenta MT5 conectada no coincide con la cuenta "
+                    "destino del perfil."
+                )
+            operational_symbol = get_mt5_symbol(symbol) or symbol
+            info = mt5_connector.get_symbol_info(operational_symbol)
+            if info is None:
+                raise ValueError(
+                    f"No existe información MT5 para {symbol}."
+                )
+            return info
+        connection = self._connection_for(account)
+        info = connection.account_info()
         expected = int(getattr(account, "login", 0) or 0)
-        detected = int(getattr(mt5_connector, "current_account", 0) or 0)
+        detected = int(getattr(info, "login", 0) or 0)
         if not expected or detected != expected:
             raise ValueError(
                 "La cuenta MT5 conectada no coincide con la cuenta destino del perfil."
             )
-        info = mt5_connector.get_symbol_info(symbol)
-        if info is None:
+        from services.symbol_catalog_service import symbol_catalog_service
+
+        operational_symbol = symbol_catalog_service.resolve_symbol(
+            canonical_symbol=symbol,
+            mt5_account_id=account.id,
+            catalog_id=(
+                getattr(profile, "catalog_id", None)
+                or "BRIDGE_SYNTHETICS"
+            ),
+            profile_id=getattr(profile, "id", None),
+        ).mt5_symbol
+        symbol_info = connection.symbol_info(operational_symbol)
+        if symbol_info is None:
             raise ValueError(f"No existe información MT5 para {symbol}.")
-        return info
+        if not bool(getattr(symbol_info, "visible", False)):
+            connection.symbol_select(operational_symbol, True)
+            symbol_info = connection.symbol_info(operational_symbol)
+        return symbol_info
+
+    def _refresh_destination_metrics(self, account):
+        if self._symbol_info_provider is not None:
+            return
+        if getattr(account, "mt5_terminal_id", None) is None:
+            from mt5.connector import mt5_connector
+
+            info = mt5_connector.get_account_info()
+        else:
+            info = self._connection_for(account).account_info()
+        expected = int(getattr(account, "login", 0) or 0)
+        detected = int(getattr(info, "login", 0) or 0)
+        if info is None or not expected or detected != expected:
+            return
+        account.balance = float(getattr(info, "balance", 0.0) or 0.0)
+        account.equity = float(getattr(info, "equity", 0.0) or 0.0)
+        account.free_margin = float(
+            getattr(info, "margin_free", 0.0) or 0.0
+        )
+        account.connected = True
 
     def _calculate_profile_sizing(self, signal, profile, account):
+        self._refresh_destination_metrics(account)
         result = self._get_sizing_service().calculate(
             profile=profile,
             account=account,
@@ -55,7 +131,9 @@ class RiskManager:
             direction=signal.direction,
             entry=signal.entry,
             stop_loss=signal.stop_loss,
-            symbol_info=self._get_symbol_info(account, signal.symbol),
+            symbol_info=self._get_symbol_info(
+                account, signal.symbol, profile
+            ),
         )
         details = result.to_dict()
         details["profile_id"] = getattr(profile, "id", None)

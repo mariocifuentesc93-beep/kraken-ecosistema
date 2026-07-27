@@ -6,6 +6,8 @@ from pathlib import Path
 
 from database.database_manager import database_manager
 from models.profile import Profile
+from models.operation import Operation
+from repositories.operation_repository import operation_repository
 from repositories.paper_trading_repository import paper_trading_repository
 from repositories.profile_repository import profile_repository
 from services.trading_calendar_service import trading_calendar_service
@@ -43,6 +45,46 @@ class TradingCalendarTests(unittest.TestCase):
         manual=self.trade(20, 7, "MANUAL")
         self.assertEqual(trading_calendar_service.delete_demo(),16)
         self.assertEqual(len(trading_calendar_service.records(2024,2,{"symbol":"MANUAL"})),1)
+
+    def test_real_demo_operations_do_not_fall_back_to_simulation(self):
+        self.profile.execution_mode = "DEMO"
+        self.profile.signal_source_mode = "INTERNAL"
+        profile_repository.update(self.profile)
+        operation_repository.create(Operation(
+            profile_id=self.profile.id,
+            mt5_account_id=None,
+            ticket=416153924,
+            symbol="LIONX40",
+            direction="SELL",
+            volume=2.0,
+            entry_price=140231.2,
+            stop_loss=140290.33,
+            take_profit=140183.9,
+            profit=75.62,
+            status="CLOSED",
+            opened_at="2024-02-20 10:00:00",
+            closed_at="2024-02-20 11:00:00",
+        ))
+
+        rows = trading_calendar_service.records(2024, 2)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["mode"], "DEMO")
+        self.assertEqual(rows[0]["source"], "INTERNAL")
+        self.assertEqual(rows[0]["result"], "WIN")
+        self.assertEqual(rows[0]["profile_name"], "Calendar")
+        self.assertEqual(
+            len(trading_calendar_service.records(
+                2024, 2, {"mode": "DEMO", "source": "INTERNAL"}
+            )),
+            1,
+        )
+        self.assertEqual(
+            trading_calendar_service.records(
+                2024, 2, {"mode": "SIMULATION"}
+            ),
+            [],
+        )
 
 
 if __name__=="__main__": unittest.main()

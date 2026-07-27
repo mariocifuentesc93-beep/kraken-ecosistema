@@ -12,8 +12,13 @@ class _RefreshSpy:
 class _FakeWindow:
     def __init__(self):
         self.dashboardPage = _RefreshSpy()
+        self.profilesPage = _RefreshSpy()
         self.connectivity_refreshes = 0
         self.logged = []
+
+    def refresh_account_metrics_views(self):
+        self.dashboardPage.refresh()
+        self.profilesPage.refresh()
 
     def refresh_connectivity_status(self):
         self.connectivity_refreshes += 1
@@ -29,6 +34,7 @@ def test_successful_mt5_connection_refreshes_dashboard_metrics():
 
     assert window.connectivity_refreshes == 1
     assert window.dashboardPage.calls == 1
+    assert window.profilesPage.calls == 1
     assert window.logged == []
 
 
@@ -39,3 +45,4 @@ def test_telegram_connection_does_not_refresh_mt5_dashboard_metrics():
 
     assert window.connectivity_refreshes == 1
     assert window.dashboardPage.calls == 0
+    assert window.profilesPage.calls == 0

@@ -1,17 +1,58 @@
 import MetaTrader5 as mt5
 
-from mt5.connector import mt5_connector
-from mt5.symbols import (
-    select_symbol,
-    get_ask,
-    get_bid,
-    get_symbol_info,
-)
-
-
 class MT5Executor:
 
     DEFAULT_DEVIATION = 20
+
+    def __init__(self, connection_registry=None):
+        self._connection_registry = connection_registry
+        self.last_error = ""
+
+    def _connection(self, account):
+        if account is None:
+            self.last_error = "La operación no especifica una cuenta MT5."
+            return None
+        if self._connection_registry is None:
+            from services.mt5_connection_registry import (
+                mt5_connection_registry,
+            )
+
+            self._connection_registry = mt5_connection_registry
+        try:
+            return self._connection_registry.connection_for(
+                account.id,
+                getattr(account, "mt5_terminal_id", None),
+            )
+        except Exception as error:
+            self.last_error = str(error)
+            return None
+
+    @staticmethod
+    def _account(account=None, mt5_account_id=None):
+        if account is not None:
+            return account
+        if mt5_account_id is None:
+            return None
+        from repositories.mt5_account_repository import (
+            mt5_account_repository,
+        )
+
+        return mt5_account_repository.get_by_id(mt5_account_id)
+
+    def _operational_symbol(self, signal, profile, account):
+        from services.symbol_catalog_service import symbol_catalog_service
+
+        catalog_id = str(
+            getattr(profile, "catalog_id", "")
+            or "BRIDGE_SYNTHETICS"
+        )
+        resolved = symbol_catalog_service.resolve_symbol(
+            canonical_symbol=signal.symbol,
+            mt5_account_id=account.id,
+            catalog_id=catalog_id,
+            profile_id=getattr(profile, "id", None),
+        )
+        return resolved.mt5_symbol
 
     # =========================================================
     # OPEN MARKET
@@ -52,27 +93,40 @@ class MT5Executor:
             print("[MT5] Volumen inválido.")
             return None
 
-        if not mt5_connector.login(account):
+        api = self._connection(account)
+        if api is None:
 
-            print(f"[MT5] No fue posible conectar la cuenta {account.name}")
+            print(
+                f"[MT5] No fue posible abrir la conexión aislada "
+                f"de {account.name}: {self.last_error}"
+            )
             return None
 
-        symbol_info = get_symbol_info(signal.symbol)
+        try:
+            mt5_symbol = self._operational_symbol(
+                signal, profile, account
+            )
+        except Exception as error:
+            self.last_error = str(error)
+            print(f"[MT5] {self.last_error}")
+            return None
+        symbol_info = api.symbol_info(mt5_symbol)
 
         if symbol_info is None:
 
             print(f"[MT5] Símbolo no encontrado: {signal.symbol}")
             return None
 
-        mt5_symbol = symbol_info.name
+        mt5_symbol = getattr(symbol_info, "name", mt5_symbol)
 
-        if not select_symbol(signal.symbol):
-
-            print(f"[MT5] No se pudo seleccionar {mt5_symbol}")
-            return None
+        if not bool(getattr(symbol_info, "visible", False)):
+            if not api.symbol_select(mt5_symbol, True):
+                print(f"[MT5] No se pudo seleccionar {mt5_symbol}")
+                return None
 
         price, order_type = self._market_price(
-            signal.symbol,
+            api,
+            mt5_symbol,
             signal.direction,
         )
 
@@ -94,17 +148,11 @@ class MT5Executor:
             self.DEFAULT_DEVIATION,
         )
 
-        tp = None
-
-        if hasattr(signal, "take_profits"):
-
-            if signal.take_profits:
-
-                tp = signal.take_profits[0]
+        tp = self._target_take_profit(signal, profile)
 
         request = {
 
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": api.TRADE_ACTION_DEAL,
 
             "symbol": mt5_symbol,
 
@@ -124,9 +172,9 @@ class MT5Executor:
 
             "comment": comment,
 
-            "type_time": mt5.ORDER_TIME_GTC,
+            "type_time": api.ORDER_TIME_GTC,
 
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": api.ORDER_FILLING_IOC,
 
         }
 
@@ -143,7 +191,23 @@ class MT5Executor:
         print(f"TP        : {tp}")
         print(f"Magic     : {magic}")
 
-        return self._send(request)
+        return self._send(api, request)
+
+    @staticmethod
+    def _target_take_profit(signal, profile=None):
+        """Return the profile-selected final target (TP1, TP2 or TP3)."""
+        take_profits = list(getattr(signal, "take_profits", None) or [])
+        if not take_profits:
+            return None
+
+        level = getattr(profile, "tp_level", 1) if profile is not None else 1
+        try:
+            level = int(level)
+        except (TypeError, ValueError):
+            level = 1
+
+        index = min(max(level, 1), len(take_profits)) - 1
+        return take_profits[index]
 
     # =========================================================
 
@@ -152,11 +216,17 @@ class MT5Executor:
         ticket,
         sl=None,
         tp=None,
+        account=None,
+        mt5_account_id=None,
     ):
+        account = self._account(account, mt5_account_id)
+        api = self._connection(account)
+        if api is None:
+            return None
 
         request = {
 
-            "action": mt5.TRADE_ACTION_SLTP,
+            "action": api.TRADE_ACTION_SLTP,
 
             "position": ticket,
 
@@ -166,16 +236,22 @@ class MT5Executor:
 
         }
 
-        return self._send(request)
+        return self._send(api, request)
 
     # =========================================================
 
     def close_position(
         self,
         ticket,
+        account=None,
+        mt5_account_id=None,
     ):
+        account = self._account(account, mt5_account_id)
+        api = self._connection(account)
+        if api is None:
+            return None
 
-        positions = mt5.positions_get(ticket=ticket)
+        positions = api.positions_get(ticket=ticket)
 
         if not positions:
 
@@ -190,13 +266,14 @@ class MT5Executor:
         )
 
         price, order_type = self._market_price(
+            api,
             position.symbol,
             direction,
         )
 
         request = {
 
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": api.TRADE_ACTION_DEAL,
 
             "position": ticket,
 
@@ -214,13 +291,13 @@ class MT5Executor:
 
             "comment": "KRAKEN CLOSE",
 
-            "type_time": mt5.ORDER_TIME_GTC,
+            "type_time": api.ORDER_TIME_GTC,
 
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": api.ORDER_FILLING_IOC,
 
         }
 
-        return self._send(request)
+        return self._send(api, request)
 
     # =========================================================
 
@@ -228,9 +305,15 @@ class MT5Executor:
         self,
         ticket,
         volume,
+        account=None,
+        mt5_account_id=None,
     ):
+        account = self._account(account, mt5_account_id)
+        api = self._connection(account)
+        if api is None:
+            return None
 
-        positions = mt5.positions_get(ticket=ticket)
+        positions = api.positions_get(ticket=ticket)
 
         if not positions:
 
@@ -245,13 +328,14 @@ class MT5Executor:
         )
 
         price, order_type = self._market_price(
+            api,
             position.symbol,
             direction,
         )
 
         request = {
 
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": api.TRADE_ACTION_DEAL,
 
             "position": ticket,
 
@@ -269,46 +353,52 @@ class MT5Executor:
 
             "comment": "KRAKEN PARTIAL",
 
-            "type_time": mt5.ORDER_TIME_GTC,
+            "type_time": api.ORDER_TIME_GTC,
 
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": api.ORDER_FILLING_IOC,
 
         }
 
-        return self._send(request)
+        return self._send(api, request)
 
     # =========================================================
 
     def _market_price(
         self,
+        api,
         symbol,
         direction,
     ):
 
         direction = str(direction).upper()
+        tick = api.symbol_info_tick(symbol)
+        if tick is None:
+            return None, None
 
         if direction == "BUY":
 
-            return get_ask(symbol), mt5.ORDER_TYPE_BUY
+            return tick.ask, api.ORDER_TYPE_BUY
 
-        return get_bid(symbol), mt5.ORDER_TYPE_SELL
+        return tick.bid, api.ORDER_TYPE_SELL
 
     # =========================================================
 
     def _send(
         self,
+        api,
         request,
     ):
 
-        result = mt5.order_send(request)
+        result = api.order_send(request)
 
         if result is None:
 
-            print("[MT5]", mt5.last_error())
+            self.last_error = str(api.last_error())
+            print("[MT5]", self.last_error)
 
             return None
 
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
+        if result.retcode != api.TRADE_RETCODE_DONE:
 
             print()
             print("=" * 60)
@@ -316,6 +406,9 @@ class MT5Executor:
             print("=" * 60)
             print(f"RetCode : {result.retcode}")
             print(f"Comment : {result.comment}")
+            self.last_error = (
+                f"retcode={result.retcode}; comment={result.comment}"
+            )
 
             return None
 
@@ -327,6 +420,7 @@ class MT5Executor:
         print(f"Deal   : {result.deal}")
         print(f"Precio : {result.price}")
 
+        self.last_error = ""
         return result
 
 

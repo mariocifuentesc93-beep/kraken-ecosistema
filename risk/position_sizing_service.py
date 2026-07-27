@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_FLOOR
 
 
 ABSOLUTE_MAX_RISK_PERCENT = 10.0
+MAX_ORDERS_PER_SIGNAL = 10
 
 
 class PositionSizingError(ValueError):
@@ -25,6 +26,9 @@ class PositionSizingResult:
     normalized_volume: float = 0.0
     balance: float = 0.0
     equity: float = 0.0
+    order_volumes: tuple = ()
+    order_count: int = 1
+    max_order_volume: float = 0.0
     reason: str = ""
 
     def to_dict(self):
@@ -47,6 +51,54 @@ class PositionSizingService:
         step_d = Decimal(str(step))
         steps = (value_d / step_d).to_integral_value(rounding=ROUND_FLOOR)
         return float(steps * step_d)
+
+    @staticmethod
+    def _split_volume(total, minimum, maximum, step):
+        step_d = Decimal(str(step))
+        total_units = int(
+            (Decimal(str(total)) / step_d).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
+        )
+        minimum_units = int(
+            (Decimal(str(minimum)) / step_d).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
+        )
+        if Decimal(minimum_units) * step_d < Decimal(str(minimum)):
+            minimum_units += 1
+        maximum_units = int(
+            (Decimal(str(maximum)) / step_d).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
+        )
+        if minimum_units <= 0 or maximum_units < minimum_units:
+            raise PositionSizingError(
+                "Los límites por orden no permiten un volumen válido."
+            )
+        order_count = (
+            total_units + maximum_units - 1
+        ) // maximum_units
+        if order_count > MAX_ORDERS_PER_SIGNAL:
+            raise PositionSizingError(
+                "El volumen requiere más de 10 órdenes para una sola señal."
+            )
+        if total_units < order_count * minimum_units:
+            raise PositionSizingError(
+                "El volumen residual queda por debajo del mínimo permitido."
+            )
+
+        remaining = total_units
+        volumes = []
+        for index in range(order_count):
+            remaining_orders = order_count - index - 1
+            units = min(
+                maximum_units,
+                remaining - (remaining_orders * minimum_units),
+            )
+            volumes.append(float(Decimal(units) * step_d))
+            remaining -= units
+        return tuple(volumes)
 
     def calculate(self, profile, account, symbol, direction, entry, stop_loss,
                   symbol_info):
@@ -134,9 +186,24 @@ class PositionSizingService:
             raise PositionSizingError(
                 "El volumen calculado está por debajo del mínimo; no se elevará porque aumentaría el riesgo."
             )
-        normalized = min(self._floor_to_step(raw, volume_step), effective_max)
+        broker_capacity = volume_max * MAX_ORDERS_PER_SIGNAL
+        if raw > broker_capacity + 1e-9:
+            raise PositionSizingError(
+                "El volumen requiere más de 10 órdenes para una sola señal."
+            )
+        total_maximum = min(profile_max, broker_capacity)
+        normalized = min(
+            self._floor_to_step(raw, volume_step),
+            total_maximum,
+        )
         if normalized < effective_min:
             raise PositionSizingError("No existe un volumen válido dentro de los límites.")
+        order_volumes = self._split_volume(
+            normalized,
+            effective_min,
+            volume_max,
+            volume_step,
+        )
         estimated = normalized * loss_per_lot
         estimated_percent = estimated / capital * 100.0
         if estimated > maximum_money + 1e-9:
@@ -149,6 +216,9 @@ class PositionSizingService:
             stop_distance=distance, money_per_price_unit=money_per_unit,
             raw_volume=raw, normalized_volume=normalized,
             balance=balance, equity=equity,
+            order_volumes=order_volumes,
+            order_count=len(order_volumes),
+            max_order_volume=volume_max,
         )
 
 

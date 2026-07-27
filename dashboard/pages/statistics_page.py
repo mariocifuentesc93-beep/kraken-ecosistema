@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget,
@@ -9,6 +11,9 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QGridLayout,
     QHeaderView,
+    QComboBox,
+    QDateEdit,
+    QPushButton,
 )
 
 from repositories.profile_repository import profile_repository
@@ -20,6 +25,8 @@ from repositories.symbol_statistics_repository import (
 )
 
 from core.event_bus import event_bus
+from services.trading_analytics_service import trading_analytics_service
+from services.trading_calendar_service import trading_calendar_service
 
 
 class StatisticsPage(QWidget):
@@ -67,6 +74,35 @@ class StatisticsPage(QWidget):
     def build_ui(self):
 
         layout = QVBoxLayout(self)
+
+        filters = QHBoxLayout()
+        self.start = QDateEdit()
+        self.end = QDateEdit()
+        self.start.setCalendarPopup(True)
+        self.end.setCalendarPopup(True)
+        self.start.setDate(date(date.today().year, 1, 1))
+        self.end.setDate(date.today())
+        self.profile = QComboBox()
+        self.symbol = QComboBox()
+        self.account = QComboBox()
+        self.mode = QComboBox()
+        self.source = QComboBox()
+        self.status = QComboBox()
+        self.direction = QComboBox()
+        self.result = QComboBox()
+        for label, field in (
+            ("Desde", self.start), ("Hasta", self.end),
+            ("Perfil", self.profile), ("Símbolo", self.symbol),
+            ("Cuenta", self.account), ("Modo", self.mode),
+            ("Fuente", self.source), ("Estado", self.status),
+            ("Dirección", self.direction), ("Resultado", self.result),
+        ):
+            filters.addWidget(QLabel(label))
+            filters.addWidget(field)
+        refresh = QPushButton("Actualizar")
+        refresh.clicked.connect(self.refresh)
+        filters.addWidget(refresh)
+        layout.addLayout(filters)
 
         summary = QGroupBox("Resumen General")
 
@@ -171,66 +207,108 @@ class StatisticsPage(QWidget):
     # =========================================================
 
     def refresh(self, *args):
+        options = trading_calendar_service.filter_options()
+        self._fill(
+            self.profile,
+            [(name, identifier) for identifier, name in options["profiles"]],
+        )
+        self._fill(
+            self.account,
+            [(name, identifier) for identifier, name in options["accounts"]],
+        )
+        for combo, key in (
+            (self.symbol, "symbols"), (self.mode, "modes"),
+            (self.source, "sources"), (self.status, "statuses"),
+            (self.direction, "directions"), (self.result, "results"),
+        ):
+            self._fill(combo, [(value, value) for value in options[key]])
 
-        profiles = profile_repository.get_all()
-
-        active = None
-
-        for profile in profiles:
-
-            if getattr(profile, "is_active", False):
-
-                active = profile
-
-                break
-
-        if active is None:
-
-            return
+        filters = {
+            "start": self.start.date().toPython(),
+            "end": self.end.date().toPython(),
+            "profile": self.profile.currentData(),
+            "symbol": self.symbol.currentData(),
+            "account": self.account.currentData(),
+            "mode": self.mode.currentData(),
+            "source": self.source.currentData(),
+            "status": self.status.currentData(),
+            "direction": self.direction.currentData(),
+            "result": self.result.currentData(),
+        }
+        metrics = trading_analytics_service.metrics(filters)
+        self._current_rows = metrics["closed"]
 
         self.lbl_operations.setText(
-            str(active.total_operations)
+            str(metrics["total"])
         )
 
         self.lbl_wins.setText(
-            str(active.winning_operations)
+            str(sum(float(row["net"]) > 0 for row in self._current_rows))
         )
 
         self.lbl_losses.setText(
-            str(active.losing_operations)
+            str(sum(float(row["net"]) < 0 for row in self._current_rows))
         )
 
         self.lbl_be.setText(
-            str(active.breakeven_operations)
+            str(sum(float(row["net"]) == 0 for row in self._current_rows))
         )
 
         self.lbl_profit.setText(
-            f"${active.total_profit:,.2f}"
+            f"${metrics['gross_profit']:,.2f}"
         )
 
         self.lbl_loss.setText(
-            f"${active.total_loss:,.2f}"
+            f"${metrics['gross_loss']:,.2f}"
         )
 
         self.lbl_net.setText(
-            f"${active.net_profit:,.2f}"
+            f"${metrics['net']:,.2f}"
         )
 
         self.lbl_wr.setText(
-            f"{active.win_rate:.2f}%"
+            f"{metrics['win_rate']:.2f}%"
         )
 
-        self.load_daily(active.id)
+        self.load_daily()
 
-        self.load_symbols(active.id)
+        self.load_symbols()
+
+    @staticmethod
+    def _fill(combo, items):
+        selected = combo.currentData()
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("Todos", None)
+        for label, value in items:
+            combo.addItem(str(label), value)
+        index = combo.findData(selected)
+        combo.setCurrentIndex(index if index >= 0 else 0)
+        combo.blockSignals(False)
 
     # =========================================================
 
-    def load_daily(self, profile_id):
-
-        data = daily_statistics_repository.get_all(
-            profile_id
-        )
+    def load_daily(self):
+        grouped = {}
+        for row in getattr(self, "_current_rows", []):
+            day = str(row["date"])[:10]
+            item = grouped.setdefault(
+                day, {"operations": 0, "wins": 0, "losses": 0,
+                      "breakeven": 0, "gross_profit": 0.0,
+                      "net_profit": 0.0}
+            )
+            value = float(row["net"] or 0)
+            item["operations"] += 1
+            item["wins"] += value > 0
+            item["losses"] += value < 0
+            item["breakeven"] += value == 0
+            item["gross_profit"] += max(value, 0)
+            item["net_profit"] += value
+        data = [
+            {"statistic_date": day, **values,
+             "win_rate": round(values["wins"] / values["operations"] * 100, 2)}
+            for day, values in sorted(grouped.items(), reverse=True)
+        ]
 
         self.daily_table.setRowCount(len(data))
 
@@ -263,11 +341,24 @@ class StatisticsPage(QWidget):
 
     # =========================================================
 
-    def load_symbols(self, profile_id):
-
-        data = symbol_statistics_repository.get_all(
-            profile_id
-        )
+    def load_symbols(self):
+        grouped = {}
+        for row in getattr(self, "_current_rows", []):
+            item = grouped.setdefault(
+                row["symbol"], {"operations": 0, "wins": 0, "losses": 0,
+                                "profit": 0.0, "loss": 0.0}
+            )
+            value = float(row["net"] or 0)
+            item["operations"] += 1
+            item["wins"] += value > 0
+            item["losses"] += value < 0
+            item["profit"] += max(value, 0)
+            item["loss"] += min(value, 0)
+        data = [
+            {"symbol": symbol, **values,
+             "win_rate": round(values["wins"] / values["operations"] * 100, 2)}
+            for symbol, values in sorted(grouped.items())
+        ]
 
         self.symbol_table.setRowCount(len(data))
 

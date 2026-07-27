@@ -31,16 +31,32 @@ class PreflightResult:
 class ExecutionPreflightService:
     ALLOWED_MODES = {"SIMULATION", "PAPER", "DEMO", "LIVE"}
 
-    def __init__(self, mt5_adapter=None, terminal_provider=None):
+    def __init__(
+        self,
+        mt5_adapter=None,
+        terminal_provider=None,
+        connection_registry=None,
+    ):
         self._adapter_was_injected = mt5_adapter is not None
         self._adapter = mt5_adapter
         self._terminal_provider = terminal_provider
+        self._connection_registry = connection_registry
 
-    def _mt5(self):
-        if self._adapter is None:
-            import MetaTrader5 as mt5
-            self._adapter = mt5
-        return self._adapter
+    def _mt5(self, account=None):
+        if self._adapter is not None:
+            return self._adapter
+        if account is None:
+            raise RuntimeError("La validación MT5 requiere una cuenta destino.")
+        if self._connection_registry is None:
+            from services.mt5_connection_registry import (
+                mt5_connection_registry,
+            )
+
+            self._connection_registry = mt5_connection_registry
+        return self._connection_registry.connection_for(
+            account.id,
+            getattr(account, "mt5_terminal_id", None),
+        )
 
     def _terminal(self, account):
         if self._terminal_provider is not None:
@@ -65,13 +81,21 @@ class ExecutionPreflightService:
             return source.get(name, default)
         return getattr(source, name, default)
 
-    def _operational_symbol(self, symbol):
+    def _operational_symbol(self, symbol, profile=None, account=None):
         if self._adapter_was_injected:
             return symbol
-        from core.config_service import get_symbol
+        from services.symbol_catalog_service import symbol_catalog_service
 
-        configured = get_symbol(symbol)
-        return getattr(configured, "mt5_symbol", None) or symbol
+        resolved = symbol_catalog_service.resolve_symbol(
+            canonical_symbol=symbol,
+            mt5_account_id=getattr(account, "id", None),
+            catalog_id=(
+                getattr(profile, "catalog_id", None)
+                or "BRIDGE_SYNTHETICS"
+            ),
+            profile_id=getattr(profile, "id", None),
+        )
+        return resolved.mt5_symbol
 
     def validate(self, signal, profile, account, volume, risk_result=None):
         mode = str(getattr(profile, "execution_mode", "OFF") or "OFF").upper()
@@ -118,7 +142,14 @@ class ExecutionPreflightService:
             return PreflightResult(True, "READY", details=details)
 
         terminal = self._terminal(account)
-        mt5 = self._mt5()
+        try:
+            mt5 = self._mt5(account)
+        except Exception as error:
+            return self._reject(
+                ACCOUNT_DISCONNECTED,
+                f"No se pudo abrir la conexión aislada MT5: {error}",
+                details,
+            )
         terminal_info = mt5.terminal_info()
         if terminal is None or terminal_info is None:
             return self._reject(ACCOUNT_DISCONNECTED, "Terminal MT5 no disponible.", details)
@@ -130,14 +161,46 @@ class ExecutionPreflightService:
         details.update(expected_login=expected_login, detected_login=detected_login)
         if expected_login != detected_login:
             return self._reject(ACCOUNT_MISMATCH, "El login conectado no coincide con la cuenta destino.", details)
-        expected_broker = self._normalized(getattr(terminal, "broker", ""))
-        detected_broker = self._normalized(
-            getattr(account_info, "company", "") or getattr(account_info, "server", "")
+        expected_server = self._normalized(
+            getattr(account, "server", "")
         )
-        if expected_broker and expected_broker not in detected_broker and detected_broker not in expected_broker:
-            return self._reject(BROKER_MISMATCH, "El broker conectado no coincide con la terminal configurada.", details)
+        detected_server = self._normalized(
+            getattr(account_info, "server", "")
+        )
+        expected_broker = self._normalized(
+            getattr(terminal, "broker", "")
+        )
+        detected_broker = self._normalized(
+            getattr(account_info, "company", "")
+            or getattr(account_info, "server", "")
+        )
+        details.update(
+            expected_server=expected_server,
+            detected_server=detected_server,
+            expected_broker=expected_broker,
+            detected_broker=detected_broker,
+        )
+        if expected_server and detected_server:
+            if expected_server != detected_server:
+                return self._reject(
+                    BROKER_MISMATCH,
+                    "El servidor conectado no coincide con la cuenta configurada.",
+                    details,
+                )
+        elif (
+            expected_broker
+            and expected_broker not in detected_broker
+            and detected_broker not in expected_broker
+        ):
+            return self._reject(
+                BROKER_MISMATCH,
+                "El broker conectado no coincide con la terminal configurada.",
+                details,
+            )
         symbol = self._operational_symbol(
-            str(getattr(signal, "symbol", ""))
+            str(getattr(signal, "symbol", "")),
+            profile,
+            account,
         )
         details["operational_symbol"] = symbol
         info = mt5.symbol_info(symbol)
@@ -164,12 +227,38 @@ class ExecutionPreflightService:
         minimum = float(getattr(info, "volume_min", 0) or 0)
         maximum = float(getattr(info, "volume_max", 0) or 0)
         step = float(getattr(info, "volume_step", 0) or 0)
+        order_volumes = list(
+            (risk_result or {}).get("order_volumes") or [float(volume)]
+        )
+        details["order_volumes"] = order_volumes
+        details["order_count"] = len(order_volumes)
+        if (
+            not order_volumes
+            or len(order_volumes) > 10
+            or abs(sum(order_volumes) - float(volume)) > 1e-9
+        ):
+            return self._reject(
+                INVALID_VOLUME,
+                "El plan de volúmenes no es válido.",
+                details,
+            )
         if minimum <= 0 or maximum < minimum or step <= 0 or not (
-            minimum <= float(volume) <= maximum
+            all(
+                minimum <= float(order_volume) <= maximum
+                for order_volume in order_volumes
+            )
         ):
             return self._reject(INVALID_VOLUME, "Volumen fuera de límites MT5.", details)
-        units = round(float(volume) / step)
-        if abs(units * step - float(volume)) > 1e-9:
+        invalid_steps = [
+            order_volume
+            for order_volume in order_volumes
+            if abs(
+                round(float(order_volume) / step) * step
+                - float(order_volume)
+            )
+            > 1e-9
+        ]
+        if invalid_steps:
             return self._reject(INVALID_VOLUME, "Volumen incompatible con volume_step.", details)
         point = float(getattr(info, "point", 0) or 0)
         stops = float(getattr(info, "trade_stops_level", 0) or 0) * point
@@ -184,7 +273,20 @@ class ExecutionPreflightService:
             return self._reject(MARKET_CLOSED, "No existe precio negociable.", details)
         price = float(tick.ask if side == "BUY" else tick.bid)
         order_type = getattr(mt5, "ORDER_TYPE_BUY", 0) if side == "BUY" else getattr(mt5, "ORDER_TYPE_SELL", 1)
-        margin = mt5.order_calc_margin(order_type, symbol, float(volume), price)
+        margins = [
+            mt5.order_calc_margin(
+                order_type,
+                symbol,
+                float(order_volume),
+                price,
+            )
+            for order_volume in order_volumes
+        ]
+        margin = (
+            None
+            if any(value is None for value in margins)
+            else sum(float(value) for value in margins)
+        )
         free_margin = float(getattr(account_info, "margin_free", 0) or 0)
         balance = float(getattr(account_info, "balance", 0) or 0)
         equity = float(getattr(account_info, "equity", 0) or 0)

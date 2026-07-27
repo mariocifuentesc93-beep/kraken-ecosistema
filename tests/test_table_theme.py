@@ -57,8 +57,8 @@ class TableThemeTests(unittest.TestCase):
         pages = (window.profilesPage, window.operationsPage, window.statisticsPage,
                  window.mt5Page, window.telegramPage, window.channelsPage, window.symbolsPage,
                  window.signalInspectorPage, window.tradeTimelinePage, window.marketDataPage,
-                 window.paperTradingPage, window.tradingCalendarPage, window.analyticsPage,
-                 window.replayPage)
+                 window.tradingCalendarPage, window.analyticsPage,
+                 window.symbolRankingPage)
         for page in pages:
             tables = page.findChildren(QTableWidget)
             self.assertTrue(tables, page.__class__.__name__)
@@ -72,8 +72,7 @@ class TableThemeTests(unittest.TestCase):
         required = {
             "Operations": window.operationsPage.findChildren(QTableWidget),
             "Profiles": window.profilesPage.findChildren(QTableWidget),
-            "Paper Trading": window.paperTradingPage.findChildren(QTableWidget),
-            "Replay": window.replayPage.findChildren(QTableWidget),
+            "Symbol Ranking": window.symbolRankingPage.findChildren(QTableWidget),
             "Analytics": window.analyticsPage.findChildren(QTableWidget),
             "MT5": window.mt5Page.findChildren(QTableWidget),
             "Telegram": window.telegramPage.findChildren(QTableWidget),

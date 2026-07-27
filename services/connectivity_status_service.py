@@ -75,9 +75,21 @@ class ConnectivityStatusService:
         self,
         mt5_connector_instance=None,
         telegram_manager_instance=None,
+        mt5_registry_instance=None,
     ):
         self._mt5_connector = mt5_connector_instance
         self._telegram_manager = telegram_manager_instance
+        self._mt5_registry = mt5_registry_instance
+        self._prefer_registry = mt5_connector_instance is None
+
+    def _registry(self):
+        if self._mt5_registry is None:
+            from services.mt5_connection_registry import (
+                mt5_connection_registry,
+            )
+
+            self._mt5_registry = mt5_connection_registry
+        return self._mt5_registry
 
     def _mt5(self):
         if self._mt5_connector is None:
@@ -94,6 +106,24 @@ class ConnectivityStatusService:
         return self._telegram_manager
 
     def get_mt5_status(self):
+        if self._prefer_registry:
+            workers = self._registry().status()
+            connected_workers = [
+                item for item in workers.values() if item["alive"]
+            ]
+            if connected_workers:
+                identities = ", ".join(
+                    _mask(item["login"]) for item in connected_workers
+                )
+                return ConnectivityStatus(
+                    service="MT5",
+                    state=CONNECTED,
+                    account_name=(
+                        f"{len(connected_workers)} cuenta(s) aislada(s)"
+                    ),
+                    identity=f"Cuentas: {identities}",
+                    account_type="MULTI-TERMINAL",
+                )
         connector = self._mt5()
         account = getattr(connector, "account", None)
         account_info = None

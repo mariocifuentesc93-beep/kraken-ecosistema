@@ -193,10 +193,91 @@ def test_preflight_rejects_insufficient_margin(context):
     assert result.code == INSUFFICIENT_MARGIN
 
 
+def test_preflight_validates_each_child_order_and_aggregates_margin(context):
+    service, adapter, profile, account, signal = context
+    adapter.symbol.volume_max = 2.0
+    adapter.margin = 100.0
+
+    result = service.validate(
+        signal,
+        profile,
+        account,
+        4.5,
+        {
+            "allowed": True,
+            "volume": 4.5,
+            "order_volumes": (2.0, 2.0, 0.5),
+        },
+    )
+
+    assert result.allowed is True
+    assert result.details["order_count"] == 3
+    assert result.details["required_margin"] == 300.0
+    assert adapter.calls.count("order_calc_margin") == 3
+
+
+def test_preflight_rejects_more_than_ten_child_orders(context):
+    service, adapter, profile, account, signal = context
+    adapter.symbol.volume_max = 2.0
+
+    result = service.validate(
+        signal,
+        profile,
+        account,
+        11.0,
+        {
+            "allowed": True,
+            "volume": 11.0,
+            "order_volumes": (1.0,) * 11,
+        },
+    )
+
+    assert result.code == INVALID_VOLUME
+
+
 def test_preflight_ready(context):
     result = validate(context)
     assert result.allowed is True
     assert result.state == "READY"
+
+
+def test_preflight_prefers_exact_account_server_over_legacy_broker_label(
+    context,
+):
+    service, adapter, profile, account, signal = context
+    account.server = "BridgeMarkets-MT5"
+    adapter.account.server = "BridgeMarkets-MT5"
+    adapter.account.company = "BridgeMarkets Ltd"
+    service._terminal_provider = lambda _terminal_id: SimpleNamespace(
+        id=7,
+        broker="BRIDGE MARKES",
+    )
+
+    result = service.validate(
+        signal,
+        profile,
+        account,
+        0.10,
+        {"allowed": True, "estimated_risk_money": 5},
+    )
+
+    assert result.allowed is True
+
+
+def test_preflight_rejects_different_account_server(context):
+    service, adapter, profile, account, signal = context
+    account.server = "BridgeMarkets-MT5"
+    adapter.account.server = "OtherBroker-Demo"
+
+    result = service.validate(
+        signal,
+        profile,
+        account,
+        0.10,
+        {"allowed": True, "estimated_risk_money": 5},
+    )
+
+    assert result.code == BROKER_MISMATCH
 
 
 def test_simulation_never_queries_mt5(context):

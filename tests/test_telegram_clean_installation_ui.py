@@ -1,4 +1,5 @@
 import os
+import asyncio
 from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -80,3 +81,32 @@ def test_dashboard_connect_opens_authorization_for_pending_account(
 
     assert refreshed == [True]
     assert destinations == ["Cuentas Telegram"]
+
+
+def test_dashboard_telegram_connection_uses_persistent_runner():
+    calls = []
+
+    class Manager:
+        def connection_state(self, account_id):
+            return "DISCONNECTED"
+
+        async def connect(self, account_id):
+            calls.append(("connect", account_id))
+            return "connected"
+
+        async def disconnect(self, account_id):
+            calls.append(("disconnect", account_id))
+
+    class Runner:
+        def run(self, coroutine):
+            calls.append(("runner", None))
+            return asyncio.run(coroutine)
+
+    result = main_window.run_telegram_connection_action(
+        SimpleNamespace(id=7),
+        manager=Manager(),
+        runner=Runner(),
+    )
+
+    assert result == "connected"
+    assert calls == [("runner", None), ("connect", 7)]

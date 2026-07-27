@@ -162,6 +162,7 @@ class RuntimeCoordinator:
         signal_engine=None,
         execution_engine=None,
         operation_monitor=None,
+        mt5_connection_registry=None,
         enable_sources=True,
     ):
         self._telegram_runtime = telegram_runtime
@@ -170,6 +171,7 @@ class RuntimeCoordinator:
         self._signal_engine = signal_engine
         self._execution_engine = execution_engine
         self._operation_monitor = operation_monitor
+        self._mt5_connection_registry = mt5_connection_registry
         self._enable_sources = bool(enable_sources)
         self.state = RuntimeStatus.STOPPED
         self.internal_state = RuntimeStatus.STOPPED
@@ -177,6 +179,12 @@ class RuntimeCoordinator:
         self._lock = threading.RLock()
 
     def _build_defaults(self):
+        if self._mt5_connection_registry is None:
+            from services.mt5_connection_registry import (
+                mt5_connection_registry,
+            )
+
+            self._mt5_connection_registry = mt5_connection_registry
         if self._signal_engine is None:
             from engine.signal_engine import signal_engine
             self._signal_engine = signal_engine
@@ -298,6 +306,8 @@ class RuntimeCoordinator:
                 self._telegram_runtime.stop()
             if self._operation_monitor is not None:
                 self._operation_monitor.stop()
+            if self._mt5_connection_registry is not None:
+                self._mt5_connection_registry.stop_all()
             if self._execution_engine is not None:
                 self._execution_engine.stop()
             if self._signal_engine is not None:

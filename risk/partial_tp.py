@@ -86,6 +86,8 @@ class PartialTP:
 
                 volume,
 
+                mt5_account_id=operation.mt5_account_id,
+
             )
 
             if not result:

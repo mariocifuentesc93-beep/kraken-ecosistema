@@ -89,14 +89,14 @@ class EnterpriseNavigationTests(unittest.TestCase):
         analytics = window.page_items["Analíticas"]
         window.menu.setCurrentItem(analytics)
         self.app.processEvents()
-        self.assertEqual(window.stack.currentIndex(), 15)
+        self.assertEqual(window.stack.currentIndex(), 14)
         self.assertEqual(window.page_transition.duration(), 175)
         persisted = QSettings("KrakenBot", "EnterpriseUI")
         self.assertEqual(persisted.value("navigation/last_page", "", type=str), "Analíticas")
         window.close()
 
         restored = self.create_window()
-        self.assertEqual(restored.stack.currentIndex(), 15)
+        self.assertEqual(restored.stack.currentIndex(), 14)
         self.assertEqual(restored.menu.currentItem().data(FULL_TEXT_ROLE), "Analíticas")
 
         restored.menu.setFocus()

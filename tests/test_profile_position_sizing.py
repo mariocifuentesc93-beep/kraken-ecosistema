@@ -116,6 +116,39 @@ def test_volume_respects_maximum():
     assert result.volume == 1
 
 
+def test_volume_is_split_across_broker_maximum_without_multiplying_risk():
+    result = calculate(
+        profile("AMOUNT", risk_amount=450, max_risk_percent=5),
+        selected_spec=spec(volume_max=2),
+    )
+
+    assert result.volume == 4.5
+    assert result.order_volumes == (2.0, 2.0, 0.5)
+    assert result.order_count == 3
+    assert result.estimated_risk_money == 450
+
+
+def test_execution_plan_allows_at_most_ten_orders():
+    result = calculate(
+        profile("AMOUNT", risk_amount=200, max_risk_percent=5),
+        selected_spec=spec(
+            trade_tick_value=0.1,
+            volume_max=2,
+        ),
+    )
+    assert result.order_count == 10
+    assert result.order_volumes == (2.0,) * 10
+
+    with pytest.raises(PositionSizingError, match="más de 10 órdenes"):
+        calculate(
+            profile("AMOUNT", risk_amount=201, max_risk_percent=5),
+            selected_spec=spec(
+                trade_tick_value=0.1,
+                volume_max=2,
+            ),
+        )
+
+
 @pytest.mark.parametrize(
     ("entry", "stop", "selected_spec", "message"),
     [
@@ -176,6 +209,81 @@ def test_risk_manager_uses_injected_destination_context_without_mt5():
     assert approved is True
     assert signal.volume == 1.0
     assert signal.metadata["position_sizing"]["balance"] == 10_000
+
+
+def test_risk_manager_resolves_canonical_symbol_to_mt5_name(monkeypatch):
+    from mt5.connector import mt5_connector
+
+    monkeypatch.setattr(mt5_connector, "current_account", 243274)
+    requested = []
+    monkeypatch.setattr(
+        mt5_connector,
+        "get_symbol_info",
+        lambda symbol: requested.append(symbol) or spec(),
+    )
+    manager = RiskManager(sizing_service=PositionSizingService())
+    signal = SimpleNamespace(
+        symbol="EMASVOL50",
+        direction="SELL",
+        entry=138170.59,
+        stop_loss=138192.96,
+        metadata={},
+        volume=0.0,
+    )
+
+    approved, _message = manager.validate(
+        signal,
+        account=account(10_000, 10_000, 243274),
+        profile=profile(risk_percent=1),
+    )
+
+    assert approved is True
+    assert requested == ["EmasVol50"]
+
+
+def test_risk_manager_refreshes_destination_metrics_from_connected_mt5(
+    monkeypatch,
+):
+    from mt5.connector import mt5_connector
+
+    monkeypatch.setattr(mt5_connector, "current_account", 243274)
+    monkeypatch.setattr(
+        mt5_connector,
+        "get_account_info",
+        lambda: SimpleNamespace(
+            login=243274,
+            balance=9995.60,
+            equity=9995.60,
+            margin_free=9500.0,
+        ),
+    )
+    monkeypatch.setattr(
+        mt5_connector,
+        "get_symbol_info",
+        lambda _symbol: spec(),
+    )
+    destination = account(0, 0, 243274)
+    manager = RiskManager(sizing_service=PositionSizingService())
+    signal = SimpleNamespace(
+        symbol="LIONX120",
+        direction="SELL",
+        entry=269699.79,
+        stop_loss=269771.67,
+        metadata={},
+        volume=0.0,
+    )
+
+    approved, _message = manager.validate(
+        signal,
+        account=destination,
+        profile=profile(risk_percent=1),
+    )
+
+    assert approved is True
+    assert destination.balance == 9995.60
+    assert destination.equity == 9995.60
+    assert destination.free_margin == 9500.0
+    assert signal.metadata["position_sizing"]["balance"] == 9995.60
 
 
 def test_risk_rejection_is_controlled_and_does_not_create_default_lot():
