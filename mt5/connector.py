@@ -89,7 +89,22 @@ class MT5Connector:
         self.last_error = ""
 
     def is_connected(self):
-        self.connected = mt5.terminal_info() is not None
+        terminal_info = mt5.terminal_info()
+        account_info = mt5.account_info() if terminal_info is not None else None
+        expected_login = int(
+            getattr(self.account, "login", 0) or 0
+        )
+        detected_login = int(
+            getattr(account_info, "login", 0) or 0
+        )
+        self.connected = bool(
+            terminal_info is not None
+            and account_info is not None
+            and expected_login > 0
+            and detected_login == expected_login
+        )
+        if self.connected:
+            self.current_account = detected_login
         return self.connected
 
     def get_account_info(self):

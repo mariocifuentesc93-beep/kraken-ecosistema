@@ -69,11 +69,24 @@ class ExecutionEngine:
             setattr(account_signal, field, getattr(account, field, default))
         account_signal.magic = getattr(account, "magic_number", 0)
 
-        return self._get_trade_manager().process_signal(
+        result = self._get_trade_manager().process_signal(
             signal=account_signal,
             profile=profile,
             account=account,
         )
+        if not result:
+            signal.rejection_reason = account_signal.rejection_reason
+            signal.execution_decision = account_signal.execution_decision
+            for key in (
+                "failure_stage",
+                "rejection_reason",
+                "execution_decision",
+                "position_sizing",
+                "execution_preflight",
+            ):
+                if key in account_signal.metadata:
+                    signal.metadata[key] = account_signal.metadata[key]
+        return result
 
         if mode == "SIMULATION":
             execution_pipeline.simulate_with_market_data(

@@ -82,6 +82,32 @@ class ConnectivityTests(unittest.TestCase):
         self.assertTrue(connector.connected)
         self.assertEqual(account.balance, 1000.0)
 
+    def test_mt5_connection_state_requires_selected_account_login_match(self):
+        connector = MT5Connector()
+        connector.account = MT5Account(
+            name="DEMO",
+            login=243274,
+            password="ok",
+            server="BridgeMarkets-MT5",
+        )
+        with patch("mt5.connector.mt5") as mt5:
+            mt5.terminal_info.return_value = Mock()
+            mt5.account_info.return_value = Mock(login=243274)
+
+            self.assertTrue(connector.is_connected())
+            self.assertEqual(connector.current_account, 243274)
+
+            mt5.account_info.return_value = Mock(login=7911007)
+            self.assertFalse(connector.is_connected())
+
+    def test_mt5_connection_state_rejects_unselected_scanner_terminal(self):
+        connector = MT5Connector()
+        with patch("mt5.connector.mt5") as mt5:
+            mt5.terminal_info.return_value = Mock()
+            mt5.account_info.return_value = Mock(login=7911007)
+
+            self.assertFalse(connector.is_connected())
+
     def test_missing_and_unauthorized_telegram_account(self):
         missing = telegram_account_repository.create(TelegramAccount(name="Missing"))
         telegram_account_manager.reload()

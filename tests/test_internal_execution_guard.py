@@ -19,6 +19,20 @@ class FakeTradeManager:
         return True
 
 
+class RejectingTradeManager(FakeTradeManager):
+    def process_signal(self, signal, profile, account):
+        self.calls.append((signal, profile, account))
+        signal.rejection_reason = "Cuenta MT5 incorrecta."
+        signal.execution_decision = "REJECTED"
+        signal.metadata["failure_stage"] = "RISK"
+        signal.metadata["rejection_reason"] = signal.rejection_reason
+        signal.metadata["position_sizing"] = {
+            "allowed": False,
+            "reason": signal.rejection_reason,
+        }
+        return False
+
+
 def internal_signal():
     return Signal(
         source="INTERNAL",
@@ -96,3 +110,24 @@ def test_internal_live_reaches_trade_manager_and_keeps_profile_mode(
     assert len(manager.calls) == 1
     assert manager.calls[0][0].execution_mode == "LIVE"
     assert "MetaTrader5" not in sys.modules
+
+
+def test_account_rejection_is_propagated_to_profile_signal(
+    profile_factory,
+    account_factory,
+):
+    profile = profile_factory(
+        1,
+        signal_source_mode="INTERNAL",
+        execution_mode="DEMO",
+    )
+    signal = internal_signal()
+    manager = RejectingTradeManager()
+    execution = ExecutionEngine(manager)
+    execution.start()
+
+    assert execution.execute(signal, profile, account_factory(1)) is False
+    assert signal.rejection_reason == "Cuenta MT5 incorrecta."
+    assert signal.execution_decision == "REJECTED"
+    assert signal.metadata["failure_stage"] == "RISK"
+    assert signal.metadata["position_sizing"]["allowed"] is False
