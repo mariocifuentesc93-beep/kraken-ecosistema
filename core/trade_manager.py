@@ -82,8 +82,22 @@ class TradeManager:
             str(getattr(signal, "source", "")).strip().upper()
             == "INTERNAL"
             and self.execution_mode
-            not in (ExecutionMode.OFF, ExecutionMode.SIMULATION)
+            not in (
+                ExecutionMode.OFF,
+                ExecutionMode.SIMULATION,
+                ExecutionMode.DEMO,
+                ExecutionMode.LIVE,
+            )
         ):
+            reason = (
+                "La fuente INTERNAL no admite el modo de ejecución "
+                f"{self.execution_mode.value}."
+            )
+            signal.rejection_reason = reason
+            signal.execution_decision = "REJECTED"
+            signal.metadata["failure_stage"] = "EXECUTION_MODE"
+            signal.metadata["rejection_reason"] = reason
+            signal.metadata["execution_decision"] = "REJECTED"
             return False
 
         operation = operation_manager.create(
@@ -113,6 +127,11 @@ class TradeManager:
                 code="RISK_REJECTED",
                 reason=message,
             )
+            signal.rejection_reason = message
+            signal.execution_decision = "REJECTED"
+            signal.metadata["failure_stage"] = "RISK"
+            signal.metadata["rejection_reason"] = message
+            signal.metadata["execution_decision"] = "REJECTED"
             self._log_preflight(
                 signal, profile, account, "REJECTED", "RISK_REJECTED", message
             )
@@ -165,6 +184,11 @@ class TradeManager:
                 code=preflight.code,
                 reason=preflight.reason,
             )
+            signal.rejection_reason = preflight.reason
+            signal.execution_decision = "REJECTED"
+            signal.metadata["failure_stage"] = "PREFLIGHT"
+            signal.metadata["rejection_reason"] = preflight.reason
+            signal.metadata["execution_decision"] = "REJECTED"
             return False
 
         print(f"📊 Lote calculado: {volume}")

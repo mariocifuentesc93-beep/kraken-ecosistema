@@ -803,7 +803,7 @@ class MainWindow(QMainWindow):
                         account = get_mt5_account()
                         if account is None:
                             raise RuntimeError("No hay una cuenta MT5 activa.")
-                        mt5_connector.connect(account)
+                        mt5_connector.login(account)
                 else:
                     from telegram.account_manager import (
                         telegram_account_manager,
