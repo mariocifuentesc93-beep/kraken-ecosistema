@@ -212,6 +212,7 @@ def test_risk_manager_uses_injected_destination_context_without_mt5():
 
 
 def test_risk_manager_resolves_canonical_symbol_to_mt5_name(monkeypatch):
+    import MetaTrader5 as mt5
     from mt5.connector import mt5_connector
 
     monkeypatch.setattr(mt5_connector, "current_account", 243274)
@@ -220,6 +221,18 @@ def test_risk_manager_resolves_canonical_symbol_to_mt5_name(monkeypatch):
         mt5_connector,
         "get_symbol_info",
         lambda symbol: requested.append(symbol) or spec(),
+    )
+    monkeypatch.setattr(
+        mt5_connector,
+        "get_tick",
+        lambda _symbol: SimpleNamespace(ask=138170.49, bid=138170.59),
+    )
+    monkeypatch.setattr(
+        mt5,
+        "order_calc_profit",
+        lambda _kind, _symbol, volume, entry, stop: (
+            stop - entry
+        ) * volume,
     )
     manager = RiskManager(sizing_service=PositionSizingService())
     signal = SimpleNamespace(
@@ -237,13 +250,14 @@ def test_risk_manager_resolves_canonical_symbol_to_mt5_name(monkeypatch):
         profile=profile(risk_percent=1),
     )
 
-    assert approved is True
+    assert approved is True, _message
     assert requested == ["EmasVol50"]
 
 
 def test_risk_manager_refreshes_destination_metrics_from_connected_mt5(
     monkeypatch,
 ):
+    import MetaTrader5 as mt5
     from mt5.connector import mt5_connector
 
     monkeypatch.setattr(mt5_connector, "current_account", 243274)
@@ -261,6 +275,18 @@ def test_risk_manager_refreshes_destination_metrics_from_connected_mt5(
         mt5_connector,
         "get_symbol_info",
         lambda _symbol: spec(),
+    )
+    monkeypatch.setattr(
+        mt5_connector,
+        "get_tick",
+        lambda _symbol: SimpleNamespace(ask=269699.69, bid=269699.79),
+    )
+    monkeypatch.setattr(
+        mt5,
+        "order_calc_profit",
+        lambda _kind, _symbol, volume, entry, stop: (
+            stop - entry
+        ) * volume,
     )
     destination = account(0, 0, 243274)
     manager = RiskManager(sizing_service=PositionSizingService())

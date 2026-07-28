@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from models.mt5_account import MT5Account
 from models.mt5_terminal import MT5Terminal
 from mt5.executor import MT5Executor
@@ -87,6 +89,11 @@ class FakeConnection:
             deal=(self.terminal.id * 20_000) + sequence,
             price=request["price"],
         )
+
+    def order_calc_profit(
+        self, _order_type, _symbol, volume, open_price, close_price
+    ):
+        return (close_price - open_price) * 100 * volume
 
     def last_error(self):
         return (1, "Success")
@@ -329,6 +336,49 @@ def test_risk_sizing_uses_metrics_and_symbol_from_destination_worker():
     assert signal.metadata["position_sizing"]["balance"] == 10_000.0
     assert registry.peek(2, 22) is not None
     assert registry.peek(1, 11) is None
+
+
+def test_risk_sizing_uses_current_destination_price_instead_of_signal_entry():
+    registry, accounts, _terminals, _created = _registry()
+    manager = RiskManager(
+        sizing_service=PositionSizingService(),
+        connection_registry=registry,
+    )
+    profile = SimpleNamespace(
+        id=7,
+        catalog_id="BRIDGE_SYNTHETICS",
+        risk_enabled=True,
+        risk_mode="AMOUNT",
+        risk_amount=10.0,
+        risk_percent=0.0,
+        fixed_lot=0.0,
+        max_risk_percent=10.0,
+        min_lot=0.01,
+        max_lot=100.0,
+    )
+    signal = SimpleNamespace(
+        symbol="EMASVOL10",
+        direction="BUY",
+        entry=105.0,
+        stop_loss=99.0,
+        metadata={},
+        volume=0.0,
+    )
+
+    approved, _reason = manager.validate(
+        signal,
+        profile=profile,
+        account=accounts[2],
+    )
+
+    sizing = signal.metadata["position_sizing"]
+    assert approved is True
+    assert sizing["signal_entry_price"] == 105.0
+    assert sizing["execution_price"] == 100.1
+    assert sizing["risk_price_source"] == "CURRENT_MARKET"
+    assert sizing["loss_per_lot"] == pytest.approx(110.0)
+    assert sizing["estimated_risk_money"] <= 10.0
+    assert signal.volume == 0.09
 
 
 class OperationRepo:

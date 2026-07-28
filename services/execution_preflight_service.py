@@ -121,7 +121,16 @@ class ExecutionPreflightService:
             )
         if float(volume or 0) <= 0:
             return self._reject(INVALID_VOLUME, "El volumen debe ser mayor que cero.", details)
-        entry = float(getattr(signal, "entry", 0) or 0)
+        sizing = risk_result or {}
+        entry = float(
+            sizing.get("execution_price")
+            or getattr(signal, "entry", 0)
+            or 0
+        )
+        details["signal_entry_price"] = float(
+            getattr(signal, "entry", 0) or 0
+        )
+        details["execution_price"] = entry
         sl = float(getattr(signal, "stop_loss", 0) or 0)
         targets = list(getattr(signal, "take_profits", []) or [])
         if entry <= 0 or sl <= 0 or entry == sl:

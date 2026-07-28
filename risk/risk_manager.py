@@ -122,24 +122,93 @@ class RiskManager:
         )
         account.connected = True
 
+    def _execution_risk_context(self, signal, profile, account):
+        """Return destination-specific executable price and MT5 loss per lot."""
+        symbol_info = self._get_symbol_info(
+            account, signal.symbol, profile
+        )
+        # Injected providers keep pure/unit tests independent from MT5.
+        if self._symbol_info_provider is not None:
+            return symbol_info, float(signal.entry), None
+
+        side = str(signal.direction).strip().upper()
+
+        if getattr(account, "mt5_terminal_id", None) is None:
+            from config.symbols import get_mt5_symbol
+            from mt5.connector import mt5_connector
+            import MetaTrader5 as mt5
+
+            operational_symbol = get_mt5_symbol(signal.symbol) or signal.symbol
+            tick = mt5_connector.get_tick(operational_symbol)
+            api = mt5
+        else:
+            from services.symbol_catalog_service import symbol_catalog_service
+
+            operational_symbol = symbol_catalog_service.resolve_symbol(
+                canonical_symbol=signal.symbol,
+                mt5_account_id=account.id,
+                catalog_id=(
+                    getattr(profile, "catalog_id", None)
+                    or "BRIDGE_SYNTHETICS"
+                ),
+                profile_id=getattr(profile, "id", None),
+            ).mt5_symbol
+            api = self._connection_for(account)
+            tick = api.symbol_info_tick(operational_symbol)
+
+        if tick is None:
+            raise ValueError(
+                f"No existe precio ejecutable para {signal.symbol}."
+            )
+        if side == "BUY":
+            execution_price = float(getattr(tick, "ask", 0.0) or 0.0)
+            order_type = getattr(api, "ORDER_TYPE_BUY", 0)
+        elif side == "SELL":
+            execution_price = float(getattr(tick, "bid", 0.0) or 0.0)
+            order_type = getattr(api, "ORDER_TYPE_SELL", 1)
+        else:
+            raise ValueError("La dirección debe ser BUY o SELL.")
+        if execution_price <= 0:
+            raise ValueError(
+                f"No existe precio ejecutable válido para {signal.symbol}."
+            )
+
+        calculated_loss = api.order_calc_profit(
+            order_type,
+            operational_symbol,
+            1.0,
+            execution_price,
+            float(signal.stop_loss),
+        )
+        if calculated_loss is None:
+            raise ValueError(
+                "MT5 no pudo calcular la pérdida desde el precio actual "
+                "hasta el Stop Loss."
+            )
+        return symbol_info, execution_price, abs(float(calculated_loss))
+
     def _calculate_profile_sizing(self, signal, profile, account):
         self._refresh_destination_metrics(account)
+        symbol_info, execution_price, loss_per_lot = (
+            self._execution_risk_context(signal, profile, account)
+        )
         result = self._get_sizing_service().calculate(
             profile=profile,
             account=account,
             symbol=signal.symbol,
             direction=signal.direction,
-            entry=signal.entry,
+            entry=execution_price,
             stop_loss=signal.stop_loss,
-            symbol_info=self._get_symbol_info(
-                account, signal.symbol, profile
-            ),
+            symbol_info=symbol_info,
+            loss_per_lot=loss_per_lot,
+            signal_entry_price=signal.entry,
         )
         details = result.to_dict()
         details["profile_id"] = getattr(profile, "id", None)
         details["mt5_account_id"] = getattr(account, "id", None)
         details["symbol"] = signal.symbol
         details["stop_loss"] = signal.stop_loss
+        details["risk_price_source"] = "CURRENT_MARKET"
         signal.metadata["position_sizing"] = details
         signal.volume = result.volume
         return result

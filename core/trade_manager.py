@@ -43,7 +43,7 @@ class TradeManager:
             f"Terminal={getattr(account, 'mt5_terminal_id', None)} | "
             f"Símbolo={getattr(signal, 'symbol', None)} | "
             f"Lote={getattr(signal, 'volume', None)} | "
-            f"Riesgo={sizing.get('riesgo_estimado', sizing.get('estimated_risk'))} | "
+            f"Riesgo={sizing.get('estimated_risk_money')} | "
             f"Decisión={state} | Motivo={code}: {reason}"
         )
         log_repository.info("ExecutionPreflight", message)

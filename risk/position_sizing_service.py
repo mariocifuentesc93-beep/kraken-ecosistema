@@ -29,6 +29,9 @@ class PositionSizingResult:
     order_volumes: tuple = ()
     order_count: int = 1
     max_order_volume: float = 0.0
+    execution_price: float = 0.0
+    signal_entry_price: float = 0.0
+    loss_per_lot: float = 0.0
     reason: str = ""
 
     def to_dict(self):
@@ -100,8 +103,18 @@ class PositionSizingService:
             remaining -= units
         return tuple(volumes)
 
-    def calculate(self, profile, account, symbol, direction, entry, stop_loss,
-                  symbol_info):
+    def calculate(
+        self,
+        profile,
+        account,
+        symbol,
+        direction,
+        entry,
+        stop_loss,
+        symbol_info,
+        loss_per_lot=None,
+        signal_entry_price=None,
+    ):
         mode = str(self._value(profile, "risk_mode", "PERCENT")).upper()
         if mode == "FIXED":
             mode = "LOT"
@@ -155,7 +168,15 @@ class PositionSizingService:
             raise PositionSizingError("El riesgo máximo porcentual del perfil no es válido.")
         maximum_money = capital * max_percent / 100.0
         money_per_unit = tick_value / tick_size
-        loss_per_lot = distance * money_per_unit
+        if loss_per_lot is None:
+            loss_per_lot = distance * money_per_unit
+        else:
+            loss_per_lot = abs(float(loss_per_lot or 0.0))
+            if loss_per_lot <= 0:
+                raise PositionSizingError(
+                    "MT5 no pudo calcular una pérdida válida por lote."
+                )
+            money_per_unit = loss_per_lot / distance
 
         if mode == "PERCENT":
             requested = float(self._value(profile, "risk_percent", 0.0) or 0.0)
@@ -219,6 +240,9 @@ class PositionSizingService:
             order_volumes=order_volumes,
             order_count=len(order_volumes),
             max_order_volume=volume_max,
+            execution_price=entry,
+            signal_entry_price=float(signal_entry_price or entry),
+            loss_per_lot=loss_per_lot,
         )
 
 
