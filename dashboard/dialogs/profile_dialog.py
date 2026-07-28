@@ -469,6 +469,12 @@ class ProfileDialog(QDialog):
                 if getattr(account, "mt5_terminal_id", None) == terminal_id
             ]
         self.set_mt5_accounts(accounts)
+        # A managed terminal represents one trading account in the current
+        # architecture. Select that sole compatible account automatically so
+        # a newly created profile cannot silently retain an empty account link.
+        if terminal_id is not None and len(accounts) == 1:
+            self.mt5Selector.setSelected([accounts[0].id])
+            self._update_mt5_capital()
 
     def _update_mt5_capital(self):
         accounts = self.mt5Selector.selectedAccounts()
@@ -576,6 +582,21 @@ class ProfileDialog(QDialog):
         if data["risk_mode"] == "LOT" and data["fixed_lot"] <= 0:
             QMessageBox.warning(self, "Riesgo", "El lote fijo debe ser mayor que 0.")
             return
+        if data["execution_mode"] in {"DEMO", "LIVE"}:
+            if data["mt5_terminal_id"] is None:
+                QMessageBox.warning(
+                    self,
+                    "MT5",
+                    "Seleccione la instalación MT5 que ejecutará este perfil.",
+                )
+                return
+            if data["default_mt5_account"] is None:
+                QMessageBox.warning(
+                    self,
+                    "MT5",
+                    "Seleccione la cuenta MT5 que ejecutará este perfil.",
+                )
+                return
 
         profile = self.profile or Profile()
         for field, value in data.items():
