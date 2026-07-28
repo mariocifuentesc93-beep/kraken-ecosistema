@@ -21,6 +21,9 @@ class MT5ConnectionRegistry(ABC):
     @abstractmethod
     def connection_for(self, mt5_account_id, mt5_terminal_id): ...
 
+    @abstractmethod
+    def stop_all(self): ...
+
 
 class ProfileTerminalRouter(ABC):
     @abstractmethod

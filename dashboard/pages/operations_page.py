@@ -75,6 +75,12 @@ class OperationsPage(QWidget):
             "CANCELLED",
             "ERROR",
             "SIMULATION",
+            "READY",
+            "BLOCKED",
+            "REJECTED",
+            "SIMULATED",
+            "SENT",
+            "FILLED",
         ])
 
         self.cbo_status.currentIndexChanged.connect(
@@ -109,7 +115,7 @@ class OperationsPage(QWidget):
 
         layout.addWidget(self.table)
 
-        self.table.setColumnCount(15)
+        self.table.setColumnCount(16)
 
         self.table.setHorizontalHeaderLabels([
 
@@ -127,6 +133,7 @@ class OperationsPage(QWidget):
             "Resultado",
             "Profit",
             "Estado",
+            "Motivo",
             "Ticket",
 
         ])
@@ -196,6 +203,7 @@ class OperationsPage(QWidget):
                 getattr(op, "result", ""),
                 f"{getattr(op, 'profit', 0):.2f}",
                 getattr(op, "status", ""),
+                getattr(op, "close_reason", "") or getattr(op, "result", ""),
                 getattr(op, "ticket", ""),
 
             ]

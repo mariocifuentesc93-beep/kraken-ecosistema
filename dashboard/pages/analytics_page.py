@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, Q
 
 from dashboard.styles import CARD_COLOR, ERROR_COLOR, SUCCESS_COLOR
 from dashboard.ui_theme import set_visual_role
-from repositories.profile_repository import profile_repository
 from services.trading_analytics_service import trading_analytics_service
+from services.trading_calendar_service import trading_calendar_service
 
 
 class ChartWidget(QWidget):
@@ -27,9 +27,11 @@ class ChartWidget(QWidget):
 class AnalyticsPage(QWidget):
     def __init__(self): super().__init__(); self.build_ui(); self.refresh()
     def build_ui(self):
-        layout=QVBoxLayout(self); filters=QHBoxLayout(); self.start=QDateEdit(); self.end=QDateEdit(); self.start.setDate(date(date.today().year,1,1)); self.end.setDate(date.today()); self.profile=QComboBox(); self.symbol=QComboBox(); self.account=QComboBox(); self.mode=QComboBox(); self.source=QComboBox()
+        layout=QVBoxLayout(self); filters=QHBoxLayout(); self.start=QDateEdit(); self.end=QDateEdit(); self.start.setCalendarPopup(True); self.end.setCalendarPopup(True); self.start.setDate(date(date.today().year,1,1)); self.end.setDate(date.today()); self.profile=QComboBox(); self.symbol=QComboBox(); self.account=QComboBox(); self.mode=QComboBox(); self.source=QComboBox(); self.status=QComboBox(); self.direction=QComboBox(); self.result=QComboBox()
         for label,field,items in (("Desde",self.start,None),("Hasta",self.end,None),("Perfil",self.profile,["All"]),("Símbolo",self.symbol,["All"]),("Cuenta",self.account,["All"]),("Modo",self.mode,["All","Simulation","Paper","Demo","Live"]),("Fuente",self.source,["All","Telegram","Manual"])):
             if items:field.addItems(items)
+            filters.addWidget(QLabel(label)); filters.addWidget(field)
+        for label,field in (("Estado",self.status),("Dirección",self.direction),("Resultado",self.result)):
             filters.addWidget(QLabel(label)); filters.addWidget(field)
         refresh=QPushButton("Actualizar"); refresh.clicked.connect(self.refresh); filters.addWidget(refresh); filters.addStretch()
         for kind,label in (("csv","CSV"),("xlsx","Excel"),("pdf","PDF")):
@@ -39,9 +41,16 @@ class AnalyticsPage(QWidget):
         chart_titles=("Curva de balance","Curva de equity","Curva de drawdown","P/L diario","P/L mensual","Distribución ganancia/pérdida","Resultados por símbolo","Resultados por día","Resultados por hora","Distribución TP1/TP2/TP3/SL")
         self.chart_widgets={title:ChartWidget(title) for title in chart_titles}
         for index,widget in enumerate(self.chart_widgets.values()):self.charts.addWidget(widget,index//2,index%2)
-    def filters(self): return {"start":self.start.date().toPython(),"end":self.end.date().toPython(),"profile":None if self.profile.currentText()=="All" else self.profile.currentText(),"symbol":None if self.symbol.currentText()=="All" else self.symbol.currentText(),"account":None if self.account.currentText()=="All" else self.account.currentText(),"mode":self.mode.currentText(),"source":self.source.currentText()}
+    @staticmethod
+    def _fill(combo,items):
+        selected=combo.currentData(); combo.blockSignals(True); combo.clear(); combo.addItem("Todos",None)
+        for label,value in items: combo.addItem(str(label),value)
+        index=combo.findData(selected); combo.setCurrentIndex(index if index>=0 else 0); combo.blockSignals(False)
+    def filters(self): return {"start":self.start.date().toPython(),"end":self.end.date().toPython(),"profile":self.profile.currentData(),"symbol":self.symbol.currentData(),"account":self.account.currentData(),"mode":self.mode.currentData(),"source":self.source.currentData(),"status":self.status.currentData(),"direction":self.direction.currentData(),"result":self.result.currentData()}
     def refresh(self):
-        current=self.profile.currentText(); self.profile.clear(); self.profile.addItem("All"); [self.profile.addItem(str(p.id)) for p in profile_repository.get_all()]; self.profile.setCurrentText(current or "All")
+        options=trading_calendar_service.filter_options()
+        self._fill(self.profile,[(name,identifier) for identifier,name in options["profiles"]]); self._fill(self.account,[(name,identifier) for identifier,name in options["accounts"]])
+        for combo,key in ((self.symbol,"symbols"),(self.mode,"modes"),(self.source,"sources"),(self.status,"statuses"),(self.direction,"directions"),(self.result,"results")): self._fill(combo,[(value,value) for value in options[key]])
         metrics=trading_analytics_service.metrics(self.filters()); series=trading_analytics_service.series(self.filters()); labels=(("P/L neto","net"),("Ganancia bruta","gross_profit"),("Pérdida bruta","gross_loss"),("Tasa de aciertos","win_rate"),("Factor de ganancia","profit_factor"),("Expectativa","expectancy"),("Total operaciones","total"),("Operación promedio","average_trade"),("Drawdown máximo","maximum_drawdown"),("Racha actual","current_streak"),("Mejor racha","best_streak"),("Duración promedio","average_duration"))
         while self.cards.count(): item=self.cards.takeAt(0); item.widget().deleteLater() if item.widget() else None
         for index,(label,key) in enumerate(labels): card=QLabel(f"{label}\n{metrics[key]}"); card.setAlignment(Qt.AlignCenter); set_visual_role(card,"metricCard"); self.cards.addWidget(card,index//4,index%4)

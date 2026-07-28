@@ -43,13 +43,12 @@ class ProfessionalFormsTests(unittest.TestCase):
     def pages(window):
         return (
             window.settingsPage,
-            window.paperTradingPage,
-            window.replayPage,
             window.telegramPage,
             window.mt5Page,
             window.profilesPage,
             window.tradingCalendarPage,
             window.analyticsPage,
+            window.symbolRankingPage,
         )
 
     def test_required_pages_use_the_complete_form_contract(self):

@@ -82,6 +82,87 @@ class ConnectivityTests(unittest.TestCase):
         self.assertTrue(connector.connected)
         self.assertEqual(account.balance, 1000.0)
 
+    def test_mt5_connection_detaches_other_terminal_before_initialize(self):
+        connector = MT5Connector()
+        account = MT5Account(
+            name="DEMO",
+            login=243274,
+            password="ok",
+            server="BridgeMarkets-MT5",
+            terminal_path=r"C:\MT5 Demo\terminal64.exe",
+        )
+        with patch("mt5.connector.mt5") as mt5:
+            mt5.terminal_info.side_effect = [
+                Mock(path=r"C:\MT5 Scanner"),
+                Mock(path=r"C:\MT5 Demo"),
+                Mock(path=r"C:\MT5 Demo"),
+            ]
+            mt5.initialize.return_value = True
+            mt5.login.return_value = True
+            mt5.account_info.return_value = Mock(
+                login=243274,
+                balance=1000.0,
+                equity=1000.0,
+                margin_free=900.0,
+            )
+
+            self.assertTrue(connector.login(account, timeout_ms=1, retries=0))
+
+        mt5.shutdown.assert_called_once()
+        mt5.initialize.assert_called_once_with(
+            timeout=1,
+            path=r"C:\MT5 Demo\terminal64.exe",
+        )
+
+    def test_mt5_connection_rejects_unexpected_initialized_terminal(self):
+        connector = MT5Connector()
+        account = MT5Account(
+            name="DEMO",
+            login=243274,
+            password="ok",
+            server="BridgeMarkets-MT5",
+            terminal_path=r"C:\MT5 Demo\terminal64.exe",
+        )
+        with patch("mt5.connector.mt5") as mt5:
+            mt5.terminal_info.side_effect = [
+                None,
+                Mock(path=r"C:\MT5 Scanner"),
+            ]
+            mt5.initialize.return_value = True
+
+            self.assertFalse(
+                connector.login(account, timeout_ms=1, retries=0)
+            )
+
+        self.assertIn("terminal distinta", connector.last_error)
+        mt5.login.assert_not_called()
+
+    def test_mt5_connection_state_requires_selected_account_login_match(self):
+        connector = MT5Connector()
+        connector.account = MT5Account(
+            name="DEMO",
+            login=243274,
+            password="ok",
+            server="BridgeMarkets-MT5",
+        )
+        with patch("mt5.connector.mt5") as mt5:
+            mt5.terminal_info.return_value = Mock()
+            mt5.account_info.return_value = Mock(login=243274)
+
+            self.assertTrue(connector.is_connected())
+            self.assertEqual(connector.current_account, 243274)
+
+            mt5.account_info.return_value = Mock(login=7911007)
+            self.assertFalse(connector.is_connected())
+
+    def test_mt5_connection_state_rejects_unselected_scanner_terminal(self):
+        connector = MT5Connector()
+        with patch("mt5.connector.mt5") as mt5:
+            mt5.terminal_info.return_value = Mock()
+            mt5.account_info.return_value = Mock(login=7911007)
+
+            self.assertFalse(connector.is_connected())
+
     def test_missing_and_unauthorized_telegram_account(self):
         missing = telegram_account_repository.create(TelegramAccount(name="Missing"))
         telegram_account_manager.reload()
@@ -138,6 +219,45 @@ class ConnectivityTests(unittest.TestCase):
         profile = profile_repository.create(Profile(name="Live blocked", execution_mode="LIVE"))
         issues = live_mode_issues(profile)
         self.assertIn("El perfil no tiene una cuenta MT5 predeterminada.", issues)
+
+    def test_live_readiness_uses_profile_scoped_mt5_connection(self):
+        account = Mock(id=22, mt5_terminal_id=8)
+        profile = Profile(
+            name="COPY VIP",
+            execution_mode="LIVE",
+            default_mt5_account=22,
+            mt5_terminal_id=8,
+        )
+        registry = Mock()
+        registry.peek.return_value = Mock(alive=True)
+
+        with patch(
+            "utils.live_readiness.mt5_account_repository.get_by_id",
+            return_value=account,
+        ):
+            issues = live_mode_issues(profile, mt5_registry=registry)
+
+        registry.peek.assert_called_once_with(22, 8)
+        self.assertNotIn("La cuenta MT5 del perfil no está conectada.", issues)
+
+    def test_live_readiness_rejects_disconnected_profile_worker(self):
+        account = Mock(id=22, mt5_terminal_id=8)
+        profile = Profile(
+            name="COPY VIP",
+            execution_mode="LIVE",
+            default_mt5_account=22,
+            mt5_terminal_id=8,
+        )
+        registry = Mock()
+        registry.peek.return_value = None
+
+        with patch(
+            "utils.live_readiness.mt5_account_repository.get_by_id",
+            return_value=account,
+        ):
+            issues = live_mode_issues(profile, mt5_registry=registry)
+
+        self.assertIn("La cuenta MT5 del perfil no está conectada.", issues)
 
 
 if __name__ == "__main__":

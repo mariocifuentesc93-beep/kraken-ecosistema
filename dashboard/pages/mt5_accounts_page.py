@@ -14,7 +14,8 @@ from PySide6.QtWidgets import (
 )
 
 from repositories.mt5_account_repository import mt5_account_repository
-from mt5.connector import mt5_connector
+from repositories.mt5_terminal_repository import mt5_terminal_repository
+from services.mt5_connection_registry import mt5_connection_registry
 from services.mt5_connection_diagnostics import mt5_connection_diagnostics
 from models.mt5_account import MT5Account
 from dashboard.dialogs.mt5_account_dialog import MT5AccountDialog
@@ -130,7 +131,15 @@ class MT5AccountsPage(QWidget):
 
         accounts = mt5_account_repository.get_all()
 
-        connected = sum(1 for account in accounts if mt5_connector.current_account == account.login and mt5_connector.is_connected())
+        worker_status = mt5_connection_registry.status()
+        connected = sum(
+            1
+            for account in accounts
+            if getattr(account, "mt5_terminal_id", None)
+            and worker_status.get(
+                (int(account.mt5_terminal_id), int(account.id)), {}
+            ).get("alive", False)
+        )
         self.summary.setText(
             f"Cuentas configuradas: {len(accounts)} · Conectadas: {connected} · "
             "Seleccione una cuenta y use Probar conexión para ver el diagnóstico."
@@ -148,8 +157,14 @@ class MT5AccountsPage(QWidget):
                 account.login,
                 account.server,
                 "🟢" if (
-                    mt5_connector.current_account == account.login
-                    and mt5_connector.is_connected()
+                    getattr(account, "mt5_terminal_id", None)
+                    and worker_status.get(
+                        (
+                            int(account.mt5_terminal_id),
+                            int(account.id),
+                        ),
+                        {},
+                    ).get("alive", False)
                 ) else "🔴",
                 f"{getattr(account,'balance',0):,.2f}",
                 f"{getattr(account,'equity',0):,.2f}",
@@ -260,7 +275,33 @@ class MT5AccountsPage(QWidget):
 
             return
 
-        self.last_diagnostic = mt5_connection_diagnostics.run(account)
+        try:
+            connection = mt5_connection_registry.connection_for(
+                account.id,
+                account.mt5_terminal_id,
+            )
+            terminal = mt5_terminal_repository.get_by_id(
+                account.mt5_terminal_id
+            )
+            self.last_diagnostic = (
+                mt5_connection_diagnostics.run_connected(
+                    account,
+                    connection,
+                    catalog_id=getattr(
+                        terminal,
+                        "catalog_id",
+                        "BRIDGE_SYNTHETICS",
+                    ),
+                )
+            )
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Diagnóstico MT5",
+                f"No se pudo conectar la cuenta aislada: {error}",
+            )
+            self.refresh()
+            return
         report = self.last_diagnostic
         validated = sum(row["tick_available"] for row in report["symbols"])
         message = (

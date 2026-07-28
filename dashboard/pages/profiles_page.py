@@ -12,13 +12,20 @@ from PySide6.QtWidgets import (
 
 from repositories.profile_repository import profile_repository
 from dashboard.dialogs.profile_dialog import ProfileDialog
+from services.dashboard_account_metrics_service import (
+    dashboard_account_metrics_service,
+)
 
 
 class ProfilesPage(QWidget):
 
-    def __init__(self):
+    def __init__(self, account_metrics_service=None):
 
         super().__init__()
+
+        self.account_metrics_service = (
+            account_metrics_service or dashboard_account_metrics_service
+        )
 
         self.build_ui()
 
@@ -123,6 +130,18 @@ class ProfilesPage(QWidget):
 
         for row, profile in enumerate(profiles):
 
+            account_metrics = self.account_metrics_service.snapshot(profile)
+            capital = (
+                f"{account_metrics.free_margin:,.2f}"
+                if account_metrics.available
+                else "-"
+            )
+            balance = (
+                f"{account_metrics.balance:,.2f}"
+                if account_metrics.available
+                else "-"
+            )
+
             values = [
 
                 profile.id,
@@ -133,9 +152,9 @@ class ProfilesPage(QWidget):
 
                 profile.execution_mode,
 
-                "-",
+                capital,
 
-                "-",
+                balance,
 
                 profile.total_operations,
 

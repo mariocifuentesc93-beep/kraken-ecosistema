@@ -72,6 +72,8 @@ class Profile:
 
     risk_percent: float = 2.0
 
+    max_risk_percent: float = 5.0
+
     risk_amount: float = 0.0
 
     fixed_lot: float = 0.10
@@ -100,8 +102,14 @@ class Profile:
 
     tp_level: int = 1
 
-    # Action applied once TP1 is reached.  LIVE execution remains blocked.
+    # Action applied once TP1 is reached.
     tp1_management: str = "PROTECT_TP1"
+
+    break_even_enabled: bool = False
+
+    trailing_stop_enabled: bool = False
+
+    partial_take_profit_enabled: bool = False
 
     execute_market: bool = True
 
@@ -152,6 +160,11 @@ class Profile:
         self.active = bool(self.active)
         self.enabled = bool(self.enabled)
         self.risk_enabled = bool(self.risk_enabled)
+        self.break_even_enabled = bool(self.break_even_enabled)
+        self.trailing_stop_enabled = bool(self.trailing_stop_enabled)
+        self.partial_take_profit_enabled = bool(
+            self.partial_take_profit_enabled
+        )
         self.execute_market = bool(self.execute_market)
         self.allow_buy = bool(self.allow_buy)
         self.allow_sell = bool(self.allow_sell)
@@ -160,6 +173,7 @@ class Profile:
         )
 
         self.risk_percent = float(self.risk_percent)
+        self.max_risk_percent = float(self.max_risk_percent)
         self.risk_amount = float(self.risk_amount)
         self.fixed_lot = float(self.fixed_lot)
         self.min_lot = float(self.min_lot)

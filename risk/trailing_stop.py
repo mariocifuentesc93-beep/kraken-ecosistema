@@ -51,6 +51,8 @@ class TrailingStop:
 
             tp=operation.signal.take_profits[0],
 
+            mt5_account_id=operation.mt5_account_id,
+
         )
 
         if not result:

@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 import traceback
 
 from PySide6.QtCore import QObject, QThread, Signal, Qt
@@ -105,6 +106,7 @@ class InternalSourceSettingsPage(QWidget):
         async_runner=None,
         event_log=None,
         scanner_settings_repository=None,
+        terminal_repository=None,
         test_timeout=10.0,
         parent=None,
     ):
@@ -133,6 +135,9 @@ class InternalSourceSettingsPage(QWidget):
                 if config_repository is None
                 else _TransientScannerSettings()
             )
+        )
+        self._terminal_repository = (
+            terminal_repository or mt5_terminal_repository
         )
         self._test_timeout = test_timeout
         self._test_context = None
@@ -214,6 +219,10 @@ class InternalSourceSettingsPage(QWidget):
         self.scanner_autostart_checkbox = QCheckBox(
             "Iniciar terminal Scanner con Kraken"
         )
+        self.scanner_process_status = QLabel("—")
+        self.scanner_inspector_status = QLabel("—")
+        self.scanner_account_status = QLabel("—")
+        self.scanner_last_file = QLabel("—")
         scanner_form.addWidget(self.scanner_enabled_checkbox, 0, 0, 1, 2)
         scanner_form.addWidget(QLabel("Instalación MT5"), 1, 0)
         scanner_form.addWidget(self.scanner_terminal_combo, 1, 1)
@@ -223,6 +232,14 @@ class InternalSourceSettingsPage(QWidget):
         output_row.addWidget(self.scanner_output_button)
         scanner_form.addLayout(output_row, 2, 1)
         scanner_form.addWidget(self.scanner_autostart_checkbox, 3, 0, 1, 2)
+        scanner_form.addWidget(QLabel("Proceso"), 4, 0)
+        scanner_form.addWidget(self.scanner_process_status, 4, 1)
+        scanner_form.addWidget(QLabel("Inspector"), 5, 0)
+        scanner_form.addWidget(self.scanner_inspector_status, 5, 1)
+        scanner_form.addWidget(QLabel("Cuenta"), 6, 0)
+        scanner_form.addWidget(self.scanner_account_status, 6, 1)
+        scanner_form.addWidget(QLabel("Último CSV"), 7, 0)
+        scanner_form.addWidget(self.scanner_last_file, 7, 1)
         scanner_section.addLayout(scanner_form)
         layout.addWidget(scanner_section)
 
@@ -249,6 +266,12 @@ class InternalSourceSettingsPage(QWidget):
         self.save_button.clicked.connect(self.save)
         self.test_button.clicked.connect(self.test_send)
         self.scanner_output_button.clicked.connect(self._choose_scanner_output)
+        self.scanner_terminal_combo.currentIndexChanged.connect(
+            self._show_scanner_status
+        )
+        self.scanner_output_path.textChanged.connect(
+            lambda *_: self._show_latest_scanner_file()
+        )
 
     def _choose_scanner_output(self):
         path = QFileDialog.getExistingDirectory(
@@ -264,11 +287,11 @@ class InternalSourceSettingsPage(QWidget):
         )
         self.scanner_terminal_combo.clear()
         self.scanner_terminal_combo.addItem("(No configurada)", None)
-        for terminal in mt5_terminal_repository.get_all():
-            if terminal.role == "SCANNER" or terminal.active:
-                self.scanner_terminal_combo.addItem(
-                    f"{terminal.name} · {terminal.role}", terminal.id
-                )
+        for terminal in self._terminal_repository.get_scanner_capable():
+            self.scanner_terminal_combo.addItem(
+                f"{terminal.name} · {terminal.capabilities_label}",
+                terminal.id,
+            )
         self.scanner_terminal_combo.setCurrentIndex(max(
             0, self.scanner_terminal_combo.findData(selected)
         ))
@@ -281,15 +304,61 @@ class InternalSourceSettingsPage(QWidget):
         self.scanner_autostart_checkbox.setChecked(self._scanner_settings.get_bool(
             "internal.scanner.auto_start_terminal", False
         ))
+        self._show_scanner_status()
+
+    def _show_scanner_status(self, *_args):
+        terminal_id = self.scanner_terminal_combo.currentData()
+        terminal = (
+            self._terminal_repository.get_by_id(terminal_id)
+            if terminal_id is not None
+            else None
+        )
+        if terminal is None:
+            self.scanner_process_status.setText("—")
+            self.scanner_inspector_status.setText("—")
+            self.scanner_account_status.setText("—")
+        else:
+            self.scanner_process_status.setText(terminal.process_status)
+            self.scanner_inspector_status.setText(terminal.scanner_status)
+            account_status = terminal.account_match_status
+            if account_status == "MISMATCH":
+                account_status = (
+                    "ACCOUNT_MISMATCH — la lectura Scanner continúa habilitada"
+                )
+            self.scanner_account_status.setText(account_status)
+        self._show_latest_scanner_file()
+
+    def _show_latest_scanner_file(self):
+        directory = Path(self.scanner_output_path.text().strip())
+        try:
+            latest = max(
+                directory.glob("Kraken_BMSP_*.csv"),
+                key=lambda path: path.stat().st_mtime_ns,
+            )
+        except (ValueError, OSError):
+            self.scanner_last_file.setText("—")
+            return
+        self.scanner_last_file.setText(str(latest))
 
     def _save_scanner_settings(self):
+        terminal_id = self.scanner_terminal_combo.currentData()
+        if self.scanner_enabled_checkbox.isChecked():
+            terminal = self._terminal_repository.get_by_id(terminal_id)
+            if (
+                terminal is None
+                or not terminal.can_scan
+                or not terminal.active
+            ):
+                raise ValueError(
+                    "Seleccione una terminal activa con capacidad Scanner."
+                )
         self._scanner_settings.set(
             "internal.scanner.enabled",
             int(self.scanner_enabled_checkbox.isChecked()),
         )
         self._scanner_settings.set(
             "internal.scanner.mt5_terminal_id",
-            self.scanner_terminal_combo.currentData() or "",
+            terminal_id or "",
         )
         self._scanner_settings.set(
             "internal.scanner.output_directory",
@@ -592,6 +661,7 @@ class InternalSourceSettingsPage(QWidget):
 
     def save(self):
         try:
+            self._save_scanner_settings()
             self._service.save(
                 self.publish_checkbox.isChecked(),
                 self.account_combo.currentData(),

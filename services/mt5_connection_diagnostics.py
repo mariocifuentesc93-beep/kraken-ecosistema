@@ -78,19 +78,102 @@ class MT5ConnectionDiagnostics:
             report["actionable_error"] = "El terminal o la cuenta no permiten trading; LIVE continúa bloqueado."
         return self._persist(report)
 
-    def validate_symbols(self):
+    def run_connected(self, account, api, catalog_id=BRIDGE_CATALOG):
+        """Inspect an already isolated worker without initialize/login."""
+        report = {
+            "success": False,
+            "account_id": getattr(account, "id", None),
+            "terminal_path": getattr(api, "terminal_path", "")
+            or getattr(account, "terminal_path", "")
+            or "Auto detectado",
+            "account": getattr(account, "login", ""),
+            "server": getattr(account, "server", ""),
+            "balance": None,
+            "equity": None,
+            "currency": "",
+            "leverage": None,
+            "trade_allowed": False,
+            "algorithmic_trading_allowed": False,
+            "terminal_connected": False,
+            "connected_timestamp": datetime.now(timezone.utc).isoformat(),
+            "last_error": "",
+            "actionable_error": "",
+            "symbols": [],
+        }
+        try:
+            terminal = api.terminal_info()
+            info = api.account_info()
+            if terminal is None or info is None:
+                return self._finish(
+                    report,
+                    "El worker no devolvió información de terminal o cuenta.",
+                )
+            expected = int(getattr(account, "login", 0) or 0)
+            detected = int(getattr(info, "login", 0) or 0)
+            if expected != detected:
+                return self._finish(
+                    report,
+                    "El login detectado no coincide con la cuenta configurada.",
+                )
+            report.update(
+                {
+                    "success": True,
+                    "terminal_path": getattr(
+                        terminal, "path", report["terminal_path"]
+                    ),
+                    "account": detected,
+                    "server": getattr(
+                        info, "server", getattr(account, "server", "")
+                    ),
+                    "balance": getattr(info, "balance", None),
+                    "equity": getattr(info, "equity", None),
+                    "currency": getattr(info, "currency", ""),
+                    "leverage": getattr(info, "leverage", None),
+                    "trade_allowed": bool(
+                        getattr(info, "trade_allowed", False)
+                        and getattr(terminal, "trade_allowed", False)
+                    ),
+                    "algorithmic_trading_allowed": not bool(
+                        getattr(terminal, "tradeapi_disabled", False)
+                    ),
+                    "terminal_connected": bool(
+                        getattr(terminal, "connected", True)
+                    ),
+                    "last_error": str(api.last_error()),
+                }
+            )
+            report["symbols"] = self.validate_symbols(
+                api=api,
+                catalog_id=catalog_id,
+            )
+            if not report["trade_allowed"]:
+                report["actionable_error"] = (
+                    "El terminal o la cuenta no permiten trading."
+                )
+            return self._persist(report)
+        except Exception as error:
+            report["last_error"] = str(error)
+            report["actionable_error"] = str(error)
+            return self._persist(report)
+
+    def validate_symbols(self, api=None, catalog_id=BRIDGE_CATALOG):
         if not self._package_available():
-            return []
+            if api is None:
+                return []
+        api = api or self.mt5
         results = []
-        for symbol in get_symbols(BRIDGE_CATALOG):
+        for symbol in get_symbols(catalog_id):
             mt5_symbol = get_mt5_symbol(symbol)
-            info = self.mt5.symbol_info(mt5_symbol)
+            info = api.symbol_info(mt5_symbol)
             available = info is not None
             visible = bool(available and getattr(info, "visible", False))
-            selectable = bool(available and (visible or self.mt5.symbol_select(mt5_symbol, True)))
+            selectable = bool(
+                available
+                and (visible or api.symbol_select(mt5_symbol, True))
+            )
             if selectable and not visible:
-                info = self.mt5.symbol_info(mt5_symbol) or info
-            tick = self.mt5.symbol_info_tick(mt5_symbol) if selectable else None
+                info = api.symbol_info(mt5_symbol) or info
+            tick = api.symbol_info_tick(mt5_symbol) if selectable else None
             results.append({
                 "symbol": symbol, "mt5_symbol": mt5_symbol, "available": available,
                 "visible": bool(getattr(info, "visible", visible)) if info else False,

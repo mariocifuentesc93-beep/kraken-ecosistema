@@ -23,19 +23,27 @@ class RiskWidget(QWidget):
 
         self.group = QButtonGroup(self)
 
+        self.enabled = QCheckBox("Gestión de riesgo habilitada")
+        self.enabled.setChecked(True)
+        layout.addWidget(self.enabled)
+
         self.percent = QRadioButton("%")
 
         self.amount = QRadioButton("$")
 
+        self.lot = QRadioButton("Lote fijo")
+
         self.group.addButton(self.percent)
 
         self.group.addButton(self.amount)
+        self.group.addButton(self.lot)
 
         self.percent.setChecked(True)
 
         modes.addWidget(self.percent)
 
         modes.addWidget(self.amount)
+        modes.addWidget(self.lot)
 
         layout.addLayout(modes)
 
@@ -53,6 +61,17 @@ class RiskWidget(QWidget):
         layout.addWidget(
             self.value
         )
+
+        self.maxRiskPercent = QDoubleSpinBox()
+        self.maxRiskPercent.setDecimals(2)
+        self.maxRiskPercent.setRange(0.01, 10.0)
+        self.maxRiskPercent.setValue(5.0)
+        self.maxRiskPercent.setSuffix(" %")
+        self.maxRiskPercent.setToolTip(
+            "Límite máximo permitido para cualquier operación del perfil."
+        )
+        layout.addWidget(QLabel("Riesgo máximo permitido"))
+        layout.addWidget(self.maxRiskPercent)
 
         self.group.buttonClicked.connect(self._update_value_presentation)
 
@@ -148,6 +167,7 @@ class RiskWidget(QWidget):
         self._set_daily_limits_enabled(False)
         self.drawdownLimit.setEnabled(False)
         self._update_value_presentation()
+        self.value.setValue(2.0)
 
     def _set_daily_limits_enabled(self, enabled):
         self.dailyLossLimit.setEnabled(enabled)
@@ -157,7 +177,11 @@ class RiskWidget(QWidget):
         self.value.setPrefix("")
         self.value.setSuffix("")
         self.value.setDecimals(2)
-        if self.amount.isChecked():
+        if self.lot.isChecked():
+            self.valueLabel.setText("Lote fijo")
+            self.value.setRange(0.0, 100000.0)
+            self.value.setToolTip("Volumen fijo solicitado para cada operación.")
+        elif self.amount.isChecked():
             self.valueLabel.setText("Riesgo fijo por operación (USD)")
             self.value.setPrefix("$ ")
             self.value.setRange(0.0, 99999999.0)

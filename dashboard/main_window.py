@@ -1,7 +1,6 @@
 from datetime import datetime
 from pathlib import Path
 import shutil
-import asyncio
 import threading
 
 from PySide6.QtCore import (QEasingCurve, Qt, QSize, QSettings, QTimer,
@@ -47,10 +46,12 @@ from dashboard.pages.signal_inspector_page import SignalInspectorPage
 from dashboard.pages.trade_timeline_page import TradeTimelinePage
 from dashboard.pages.market_data_page import MarketDataPage
 from dashboard.pages.live_readiness_page import LiveReadinessPage
-from dashboard.pages.paper_trading_page import PaperTradingPage
 from dashboard.pages.trading_calendar_page import TradingCalendarPage
 from dashboard.pages.analytics_page import AnalyticsPage
-from dashboard.pages.replay_page import ReplayPage
+from dashboard.pages.symbol_ranking_page import SymbolRankingPage
+from dashboard.pages.operational_monitoring_page import (
+    OperationalMonitoringPage,
+)
 from dashboard.event_handlers import DashboardEventHandlers
 from dashboard.dialogs.about_dialog import AboutDialog
 from utils.application_lifecycle import shutdown_application
@@ -82,6 +83,22 @@ from dashboard.layout_manager import enterprise_layout
 from dashboard.professional_forms import professional_forms
 from dashboard.navigation import (EnterpriseNavigationDelegate, EnterpriseNavigationList,
                                   FULL_TEXT_ROLE, GROUP_ROLE)
+
+
+def run_telegram_connection_action(account, manager=None, runner=None):
+    """Connect/disconnect Telethon only on Kraken's persistent asyncio loop."""
+    if manager is None:
+        from telegram.account_manager import telegram_account_manager
+
+        manager = telegram_account_manager
+    if runner is None:
+        from telegram.async_runner import telegram_async_runner
+
+        runner = telegram_async_runner
+
+    if manager.connection_state(account.id) == "CONNECTED":
+        return runner.run(manager.disconnect(account.id))
+    return runner.run(manager.connect(account.id))
 
 
 class ResponsiveStack(QStackedWidget):
@@ -371,31 +388,28 @@ class MainWindow(QMainWindow):
 
             "Certificación LIVE",
 
-            "Paper Trading",
-
             "Calendario de Trading",
 
             "Analíticas",
-
-            "Replay",
 
             "Configuración",
 
             "Inspector INTERNAL",
 
             "Terminales MT5",
+            "Centro de monitoreo",
+            "Ranking de símbolos",
 
         ]
 
         icon_map = ["layout-dashboard", "list-checks", "chart-no-axes-combined", "users",
                     "activity", "send", "radio-tower", "tags", "scroll-text", "search-check",
-                    "history", "chart-spline", "circle-check", "briefcase-business", "calendar-days",
-                    "chart-no-axes-combined", "play", "settings", "radio-tower", "activity"]
-        groups = (("OPERATION", range(0, 4)), ("TRADING", (12, 13, 16, 14, 15)),
-                  ("MARKET", range(4, 8)), ("ANALYSIS", (9, 10, 11, 8)),
-                  ("CONFIGURATION", (3, 18, 17)))
-        # Perfiles belongs to Operación; keep Configuración free of the duplicate.
-        groups = groups[:-1] + ((groups[-1][0], (18, 19, 17)),)
+                    "history", "chart-spline", "circle-check", "calendar-days",
+                    "chart-no-axes-combined", "settings", "radio-tower", "activity",
+                    "activity", "chart-no-axes-combined"]
+        groups = (("OPERATION", range(0, 4)), ("TRADING", (12, 13, 14, 19)),
+                  ("MARKET", range(4, 8)), ("ANALYSIS", (18, 9, 10, 11, 8)),
+                  ("CONFIGURATION", (16, 17, 15)))
         self.page_items = {}
         self.navigation_groups = {}
         for group, indices in groups:
@@ -460,19 +474,20 @@ class MainWindow(QMainWindow):
 
         self.liveReadinessPage = LiveReadinessPage()
 
-        self.paperTradingPage = PaperTradingPage()
-
         self.tradingCalendarPage = TradingCalendarPage()
 
         self.analyticsPage = AnalyticsPage()
-
-        self.replayPage = ReplayPage()
 
         self.settingsPage = SettingsPage()
 
         self.internalSourceSettingsPage = InternalSourceSettingsPage()
 
         self.mt5TerminalsPage = MT5TerminalsPage()
+        self.operationalMonitoringPage = OperationalMonitoringPage()
+        self.symbolRankingPage = SymbolRankingPage()
+        self.operationalMonitoringPage.openTerminalsRequested.connect(
+            lambda: self.navigate_to_page("Terminales MT5")
+        )
 
         self.stack.addWidget(self.dashboardPage)
 
@@ -500,19 +515,17 @@ class MainWindow(QMainWindow):
 
         self.stack.addWidget(self.liveReadinessPage)
 
-        self.stack.addWidget(self.paperTradingPage)
-
         self.stack.addWidget(self.tradingCalendarPage)
 
         self.stack.addWidget(self.analyticsPage)
-
-        self.stack.addWidget(self.replayPage)
 
         self.stack.addWidget(self.settingsPage)
 
         self.stack.addWidget(self.internalSourceSettingsPage)
 
         self.stack.addWidget(self.mt5TerminalsPage)
+        self.stack.addWidget(self.operationalMonitoringPage)
+        self.stack.addWidget(self.symbolRankingPage)
 
         page_details = (
             (self.operationsPage, "Operaciones", "Consulte las operaciones generadas por simulación y paper trading."),
@@ -527,10 +540,9 @@ class MainWindow(QMainWindow):
             (self.tradeTimelinePage, "Línea de tiempo", "Las transiciones aparecerán al simular operaciones."),
             (self.marketDataPage, "Datos de mercado", "Actualice la vista para consultar precios."),
             (self.liveReadinessPage, "Certificación LIVE", "Valide conectividad, riesgo y protecciones antes de operar en LIVE."),
-            (self.paperTradingPage, "Paper Trading", "Simule señales para crear posiciones virtuales."),
             (self.tradingCalendarPage, "Calendario de Trading", "Cargue demostración o cierre operaciones para ver rendimiento."),
-            (self.analyticsPage, "Analíticas", "Las métricas se generan con operaciones simuladas o paper trading."),
-            (self.replayPage, "Replay", "Seleccione una fecha con operaciones para reproducir su línea de tiempo."),
+            (self.analyticsPage, "Analíticas", "Las métricas consolidan operaciones SIMULATION, PAPER, DEMO y LIVE."),
+            (self.symbolRankingPage, "Ranking de símbolos", "Clasifique símbolos por TP1, TP2, TP3, Stop Loss y rendimiento."),
             (self.settingsPage, "Configuración", "Ajuste el modo y protecciones antes de iniciar el motor."),
             (
                 self.internalSourceSettingsPage,
@@ -541,6 +553,11 @@ class MainWindow(QMainWindow):
                 self.mt5TerminalsPage,
                 "Terminales MT5",
                 "Administre instalaciones independientes y el terminal Scanner.",
+            ),
+            (
+                self.operationalMonitoringPage,
+                "Centro de monitoreo",
+                "Observe salud, alertas y trazabilidad sin ejecutar acciones operativas.",
             ),
         )
         page_heading_icons = {
@@ -555,11 +572,11 @@ class MainWindow(QMainWindow):
             "Inspector de señales": "search-check",
             "Línea de tiempo": "history",
             "Datos de mercado": "chart-spline",
+            "Centro de monitoreo": "activity",
             "Certificación LIVE": "circle-check",
-            "Paper Trading": "briefcase-business",
             "Calendario de Trading": "calendar-days",
             "Analíticas": "chart-no-axes-combined",
-            "Replay": "play",
+            "Ranking de símbolos": "chart-no-axes-combined",
             "Configuración": "settings",
             "Inspector INTERNAL": "radio-tower",
         }
@@ -577,13 +594,12 @@ class MainWindow(QMainWindow):
         for form_page in (
             self.settingsPage,
             self.internalSourceSettingsPage,
-            self.paperTradingPage,
-            self.replayPage,
             self.telegramPage,
             self.mt5Page,
             self.profilesPage,
             self.tradingCalendarPage,
             self.analyticsPage,
+            self.symbolRankingPage,
         ):
             professional_forms.configure(form_page)
 
@@ -723,8 +739,21 @@ class MainWindow(QMainWindow):
             self.refresh_connectivity_status
         )
         self.connectivity_timer.start()
+
+        self.account_metrics_timer = QTimer(self)
+        self.account_metrics_timer.setInterval(5000)
+        self.account_metrics_timer.timeout.connect(
+            self.refresh_account_metrics_views
+        )
+        self.account_metrics_timer.start()
+
         self.refresh_connectivity_status()
         self.update_statusbar()
+
+    def refresh_account_metrics_views(self):
+        """Keep profile-scoped MT5 metrics current without manual refresh."""
+        self.dashboardPage.refresh()
+        self.profilesPage.refresh()
 
     def refresh_connectivity_status(self):
         """Refresh real service state on the Qt main thread."""
@@ -780,14 +809,43 @@ class MainWindow(QMainWindow):
             try:
                 load_active_config()
                 if service == "MT5":
-                    from mt5.connector import mt5_connector
-                    if mt5_connector.is_connected():
-                        mt5_connector.disconnect()
+                    from services.mt5_connection_registry import (
+                        mt5_connection_registry,
+                    )
+                    from repositories.mt5_account_repository import (
+                        mt5_account_repository,
+                    )
+
+                    active_workers = [
+                        value
+                        for value in mt5_connection_registry.status().values()
+                        if value["alive"]
+                    ]
+                    if active_workers:
+                        mt5_connection_registry.stop_all()
                     else:
-                        account = get_mt5_account()
-                        if account is None:
-                            raise RuntimeError("No hay una cuenta MT5 activa.")
-                        mt5_connector.connect(account)
+                        accounts = [
+                            account
+                            for account in mt5_account_repository.get_enabled()
+                            if getattr(account, "mt5_terminal_id", None)
+                            and getattr(account, "auto_connect", True)
+                        ]
+                        if not accounts:
+                            raise RuntimeError(
+                                "No hay cuentas MT5 activas vinculadas a "
+                                "terminales administradas."
+                            )
+                        errors = []
+                        for account in accounts:
+                            try:
+                                mt5_connection_registry.connection_for(
+                                    account.id,
+                                    account.mt5_terminal_id,
+                                )
+                            except Exception as error:
+                                errors.append(f"{account.name}: {error}")
+                        if errors:
+                            raise RuntimeError(" | ".join(errors))
                 else:
                     from telegram.account_manager import (
                         telegram_account_manager,
@@ -797,17 +855,10 @@ class MainWindow(QMainWindow):
                         raise RuntimeError(
                             "No hay una cuenta Telegram activa."
                         )
-                    if (
-                        telegram_account_manager.connection_state(account.id)
-                        == "CONNECTED"
-                    ):
-                        asyncio.run(
-                            telegram_account_manager.disconnect(account.id)
-                        )
-                    else:
-                        asyncio.run(
-                            telegram_account_manager.connect(account.id)
-                        )
+                    run_telegram_connection_action(
+                        account,
+                        manager=telegram_account_manager,
+                    )
                 self.connection_finished.emit(service, True, "")
             except Exception as error:
                 self.connection_finished.emit(
@@ -822,6 +873,8 @@ class MainWindow(QMainWindow):
 
     def _connection_finished(self, service, success, error):
         self.refresh_connectivity_status()
+        if service == "MT5" and success:
+            self.refresh_account_metrics_views()
         if not success:
             self.log(f"Error de conexión {service}: {error}")
 
@@ -1076,21 +1129,23 @@ class MainWindow(QMainWindow):
         self.notifications.append(text)
 
     def start_engine(self):
-        if not load_active_config():
-            QMessageBox.warning(self, "Kraken Engine", "No hay un perfil activo. Active un perfil antes de iniciar el motor.")
-            return
-        if get_execution_mode() == "LIVE":
-            issues = live_mode_issues()
-            if issues:
-                QMessageBox.warning(
-                    self,
-                    "LIVE bloqueado",
-                    "No se puede iniciar LIVE:\n\n- " + "\n- ".join(issues),
-                )
-                return
+        load_active_config()
+        mode = get_execution_mode() or "OFF"
         try:
             kraken_engine.start()
-            self.set_mode(get_execution_mode())
+            if mode == "LIVE":
+                issues = live_mode_issues()
+                if issues:
+                    kraken_engine.stop()
+                    self.set_mode("OFF")
+                    QMessageBox.warning(
+                        self,
+                        "LIVE bloqueado",
+                        "No se puede iniciar LIVE:\n\n- "
+                        + "\n- ".join(issues),
+                    )
+                    return
+            self.set_mode(mode)
             self.log("Kraken Engine iniciado.")
         except Exception as error:
             self.log(f"Error al iniciar Kraken Engine: {error}")
@@ -1126,7 +1181,7 @@ class MainWindow(QMainWindow):
                          self.profilesPage, self.mt5Page, self.telegramPage,
                          self.channelsPage, self.symbolsPage, self.logsPage,
                          self.signalInspectorPage, self.tradeTimelinePage,
-                         self.marketDataPage, self.liveReadinessPage, self.paperTradingPage, self.tradingCalendarPage, self.analyticsPage, self.replayPage, self.settingsPage):
+                         self.marketDataPage, self.liveReadinessPage, self.tradingCalendarPage, self.analyticsPage, self.symbolRankingPage, self.settingsPage):
                 refresh = getattr(page, "refresh", None)
                 if callable(refresh):
                     refresh()

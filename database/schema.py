@@ -64,6 +64,8 @@ def create_tables(connection: sqlite3.Connection):
 
         risk_percent REAL DEFAULT 2.0,
 
+        max_risk_percent REAL DEFAULT 5.0,
+
         risk_amount REAL DEFAULT 0,
 
         fixed_lot REAL DEFAULT 0.10,
@@ -87,6 +89,12 @@ def create_tables(connection: sqlite3.Connection):
         tp_level INTEGER DEFAULT 1,
 
         tp1_management TEXT DEFAULT 'PROTECT_TP1',
+
+        break_even_enabled INTEGER DEFAULT 0,
+
+        trailing_stop_enabled INTEGER DEFAULT 0,
+
+        partial_take_profit_enabled INTEGER DEFAULT 0,
 
         execute_market INTEGER DEFAULT 1,
 
@@ -144,6 +152,7 @@ def create_tables(connection: sqlite3.Connection):
         "net_profit": "REAL DEFAULT 0",
         "win_rate": "REAL DEFAULT 0",
         "signal_source_mode": "TEXT DEFAULT 'TELEGRAM'",
+        "max_risk_percent": "REAL DEFAULT 5.0",
     }.items():
         if column not in profile_columns:
             cursor.execute(

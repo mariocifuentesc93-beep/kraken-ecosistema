@@ -1,11 +1,15 @@
-from mt5.connector import mt5_connector
 from repositories.mt5_account_repository import mt5_account_repository
 from repositories.profile_repository import profile_repository
 from repositories.telegram_account_repository import telegram_account_repository
 
 
-def live_mode_issues(profile=None):
+def live_mode_issues(profile=None, mt5_registry=None):
     """Return every unmet prerequisite for LIVE mode without placing trades."""
+    if mt5_registry is None:
+        from services.mt5_connection_registry import mt5_connection_registry
+
+        mt5_registry = mt5_connection_registry
+
     profile = profile or profile_repository.get_active()
     issues = []
     if profile is None or not profile.active or not profile.enabled:
@@ -17,8 +21,19 @@ def live_mode_issues(profile=None):
         account = mt5_account_repository.get_by_id(profile.default_mt5_account)
         if account is None:
             issues.append("La cuenta MT5 predeterminada no existe.")
-        elif not mt5_connector.is_connected():
-            issues.append("MT5 no está conectado.")
+        else:
+            terminal_id = (
+                getattr(profile, "mt5_terminal_id", None)
+                or getattr(account, "mt5_terminal_id", None)
+            )
+            if terminal_id is None:
+                issues.append("El perfil no tiene una terminal MT5 asignada.")
+            else:
+                connection = mt5_registry.peek(account.id, terminal_id)
+                if connection is None or not connection.alive:
+                    issues.append(
+                        "La cuenta MT5 del perfil no está conectada."
+                    )
 
     if not profile.telegram_account_id:
         issues.append("El perfil no tiene una cuenta Telegram asignada.")

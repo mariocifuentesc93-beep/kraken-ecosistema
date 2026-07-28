@@ -7,6 +7,29 @@ from pathlib import Path
 from engine.runtime import RuntimeStatus
 
 
+def resolve_internal_directory(settings, fallback_directory):
+    """Resolve FILE_COMMON-compatible Scanner output without profiles."""
+    scanner_enabled = settings.get_bool(
+        "internal.scanner.enabled",
+        False,
+    )
+    scanner_directory = settings.get(
+        "internal.scanner.output_directory",
+        "",
+    )
+    legacy_directory = settings.get("internal.csv_directory", "")
+    configured = (
+        scanner_directory
+        if scanner_enabled and str(scanner_directory or "").strip()
+        else legacy_directory
+    )
+    return (
+        Path(configured)
+        if str(configured or "").strip()
+        else Path(fallback_directory)
+    )
+
+
 @dataclass(frozen=True)
 class RuntimeSnapshot:
     state: RuntimeStatus
@@ -139,6 +162,7 @@ class RuntimeCoordinator:
         signal_engine=None,
         execution_engine=None,
         operation_monitor=None,
+        mt5_connection_registry=None,
         enable_sources=True,
     ):
         self._telegram_runtime = telegram_runtime
@@ -147,6 +171,7 @@ class RuntimeCoordinator:
         self._signal_engine = signal_engine
         self._execution_engine = execution_engine
         self._operation_monitor = operation_monitor
+        self._mt5_connection_registry = mt5_connection_registry
         self._enable_sources = bool(enable_sources)
         self.state = RuntimeStatus.STOPPED
         self.internal_state = RuntimeStatus.STOPPED
@@ -154,6 +179,12 @@ class RuntimeCoordinator:
         self._lock = threading.RLock()
 
     def _build_defaults(self):
+        if self._mt5_connection_registry is None:
+            from services.mt5_connection_registry import (
+                mt5_connection_registry,
+            )
+
+            self._mt5_connection_registry = mt5_connection_registry
         if self._signal_engine is None:
             from engine.signal_engine import signal_engine
             self._signal_engine = signal_engine
@@ -190,14 +221,9 @@ class RuntimeCoordinator:
             from telegram.signal_publisher import TelegramSignalPublisher
             from repositories.settings_repository import settings_repository
 
-            configured_directory = settings_repository.get(
-                "internal.csv_directory",
-                "",
-            )
-            directory = (
-                Path(configured_directory)
-                if str(configured_directory or "").strip()
-                else default_internal_directory()
+            directory = resolve_internal_directory(
+                settings_repository,
+                default_internal_directory(),
             )
             observation_only = settings_repository.get_bool(
                 "internal.observation_only",
@@ -280,6 +306,8 @@ class RuntimeCoordinator:
                 self._telegram_runtime.stop()
             if self._operation_monitor is not None:
                 self._operation_monitor.stop()
+            if self._mt5_connection_registry is not None:
+                self._mt5_connection_registry.stop_all()
             if self._execution_engine is not None:
                 self._execution_engine.stop()
             if self._signal_engine is not None:

@@ -72,3 +72,34 @@ def test_profile_dialog_selectors_open_reload_and_close_repeatedly():
         database_manager.close()
         database_manager.database = original_database
         shutil.rmtree(directory)
+
+
+def test_profile_dialog_auto_selects_only_account_for_terminal():
+    _application()
+    original_database = database_manager.database
+    database_manager.close()
+    directory = Path(tempfile.mkdtemp())
+    database_manager.database = directory / "profile-account.db"
+    try:
+        database_manager.initialize()
+        dialog = ProfileDialog()
+        account = SimpleNamespace(
+            id=3,
+            name="Copy general",
+            mt5_terminal_id=11,
+            balance=1500.0,
+            connected=True,
+        )
+        dialog._all_mt5_accounts = [account]
+        dialog.mt5TerminalCombo.clear()
+        dialog.mt5TerminalCombo.addItem("Terminal general", 11)
+
+        dialog._filter_mt5_accounts()
+
+        assert dialog.get_profile_data()["default_mt5_account"] == 3
+        assert "1 cuenta(s)" in dialog.lblMt5Capital.text()
+        dialog.close()
+    finally:
+        database_manager.close()
+        database_manager.database = original_database
+        shutil.rmtree(directory)

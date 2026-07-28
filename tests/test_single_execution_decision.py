@@ -36,12 +36,23 @@ def test_one_signal_produces_at_most_one_mode_decision():
     assert len(manager.calls) == 1
 
 
-def test_internal_demo_and_live_never_reach_decision_manager():
-    for mode in ("DEMO", "LIVE", "PAPER"):
+def test_internal_demo_and_live_reach_one_decision_manager_call():
+    for mode in ("DEMO", "LIVE"):
         manager = DecisionManager()
         engine = ExecutionEngine(manager)
         engine.start()
         signal, profile, account = context(mode, "INTERNAL")
-        assert engine.execute(signal, profile, account) is False
-        assert manager.calls == []
+        assert engine.execute(signal, profile, account) is True
+        assert len(manager.calls) == 1
+        assert manager.calls[0][0].execution_mode == mode
+
+
+def test_internal_paper_remains_outside_execution_contract():
+    manager = DecisionManager()
+    engine = ExecutionEngine(manager)
+    engine.start()
+    signal, profile, account = context("PAPER", "INTERNAL")
+
+    assert engine.execute(signal, profile, account) is False
+    assert manager.calls == []
 

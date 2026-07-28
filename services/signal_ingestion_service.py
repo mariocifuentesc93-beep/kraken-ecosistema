@@ -237,6 +237,26 @@ class SignalIngestionService:
             )
 
         if not routed:
+            if (
+                persisted_signal.metadata.get("routing_status")
+                == "NO_ELIGIBLE_PROFILES"
+            ):
+                persisted_signal.status = STATUS_RECEIVED
+                persisted_signal.rejection_reason = ""
+                persisted_signal.metadata["signal_status"] = "VALIDATED"
+                persisted_signal.metadata["execution_status"] = "SKIPPED"
+                self.update_outcome(persisted_signal)
+                reason = "PROFILE_ROUTING | no eligible profiles"
+                self.record_event(persisted_signal, "PROFILE_ROUTING", reason)
+                return SignalIngestionResult(
+                    accepted=True,
+                    created=True,
+                    duplicate=False,
+                    signal=persisted_signal,
+                    reason=reason,
+                    routed=False,
+                    routed_profiles=(),
+                )
             reason = (
                 persisted_signal.rejection_reason
                 or "SignalEngine no pudo enrutar la señal."

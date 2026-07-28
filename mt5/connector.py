@@ -1,3 +1,4 @@
+import os
 import time
 
 import MetaTrader5 as mt5
@@ -27,6 +28,20 @@ class MT5Connector:
             and getattr(account, "server", "")
         )
 
+    @staticmethod
+    def _same_terminal_path(current_path, expected_path):
+        if not isinstance(current_path, str) or not current_path.strip():
+            return None
+        if not isinstance(expected_path, str) or not expected_path.strip():
+            return None
+        def normalized(value):
+            path = os.path.abspath(value)
+            if os.path.splitext(path)[1].lower() == ".exe":
+                path = os.path.dirname(path)
+            return os.path.normcase(path)
+
+        return normalized(current_path) == normalized(expected_path)
+
     def connect(self, account, timeout_ms=10_000, retries=2):
         if account is None:
             return self._error("No se seleccionó una cuenta MT5.")
@@ -34,11 +49,34 @@ class MT5Connector:
         self.account = account
         terminal = getattr(account, "terminal_path", "")
         try:
+            terminal_info = mt5.terminal_info()
+            current_path = getattr(terminal_info, "path", None)
+            same_terminal = self._same_terminal_path(current_path, terminal)
+            if same_terminal is False:
+                # Detach only the Python integration.  This does not close the
+                # running terminal and lets initialize() bind the requested one.
+                mt5.shutdown()
+
             for attempt in range(retries + 1):
                 kwargs = {"timeout": timeout_ms}
                 if terminal:
                     kwargs["path"] = terminal
                 if mt5.initialize(**kwargs):
+                    initialized_info = mt5.terminal_info()
+                    initialized_path = getattr(initialized_info, "path", None)
+                    initialized_matches = self._same_terminal_path(
+                        initialized_path, terminal
+                    )
+                    if initialized_matches is False:
+                        self.last_error = (
+                            "MT5 se vinculó a una terminal distinta de la "
+                            "configurada para la cuenta."
+                        )
+                        mt5.shutdown()
+                        if attempt < retries:
+                            time.sleep(0.25 * (attempt + 1))
+                            continue
+                        return self._error(self.last_error)
                     self.connected = True
                     self.last_error = ""
                     return True
@@ -89,7 +127,22 @@ class MT5Connector:
         self.last_error = ""
 
     def is_connected(self):
-        self.connected = mt5.terminal_info() is not None
+        terminal_info = mt5.terminal_info()
+        account_info = mt5.account_info() if terminal_info is not None else None
+        expected_login = int(
+            getattr(self.account, "login", 0) or 0
+        )
+        detected_login = int(
+            getattr(account_info, "login", 0) or 0
+        )
+        self.connected = bool(
+            terminal_info is not None
+            and account_info is not None
+            and expected_login > 0
+            and detected_login == expected_login
+        )
+        if self.connected:
+            self.current_account = detected_login
         return self.connected
 
     def get_account_info(self):

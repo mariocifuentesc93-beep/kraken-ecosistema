@@ -5,6 +5,12 @@ from models.operation import Operation
 from repositories.operation_repository import (
     operation_repository,
 )
+from repositories.execution_timeline_repository import (
+    execution_timeline_repository,
+)
+from repositories.operation_milestone_repository import (
+    operation_milestone_repository,
+)
 
 from trading.operation_events import (
     operation_events,
@@ -87,6 +93,10 @@ class OperationManager:
         operation.updated_at = datetime.now()
 
         operation_repository.update(operation)
+        operation_milestone_repository.save_levels(
+            operation,
+            str(getattr(operation.profile, "execution_mode", "UNKNOWN")).upper(),
+        )
 
         operation_events.operation_opened(operation)
 
@@ -170,6 +180,26 @@ class OperationManager:
         print(f"Profit    : {profit}")
         print(f"Motivo    : {reason}")
 
+    def reject(self, operation, code, reason):
+        operation.status = "REJECTED"
+        operation.result = code
+        operation.close_reason = reason
+        operation.closed_at = datetime.now()
+        operation.updated_at = operation.closed_at
+        operation_repository.update(operation)
+        execution_timeline_repository.record(
+            operation,
+            "CREATED",
+            "REJECTED",
+            reason,
+            str(getattr(operation.profile, "execution_mode", "UNKNOWN")).upper(),
+        )
+        operation_events.operation_closed(operation)
+        event_bus.operationClosed.emit(
+            OperationClosedEvent(operation=operation, profit=0.0)
+        )
+        return operation
+
     # =====================================================
     # UPDATE
     # =====================================================
@@ -182,7 +212,6 @@ class OperationManager:
         operation.updated_at = datetime.now()
 
         operation_repository.update(operation)
-
         event_bus.operationModified.emit(
             OperationModifiedEvent(
                 operation=operation,

@@ -59,6 +59,7 @@ class ProfileRepository:
                 risk_enabled,
                 risk_mode,
                 risk_percent,
+                max_risk_percent,
                 risk_amount,
                 fixed_lot,
                 min_lot,
@@ -73,6 +74,9 @@ class ProfileRepository:
                 execution_mode,
                 tp_level,
                 tp1_management,
+                break_even_enabled,
+                trailing_stop_enabled,
+                partial_take_profit_enabled,
                 execute_market,
 
                 magic_number,
@@ -93,7 +97,7 @@ class ProfileRepository:
             )
 
             VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 profile.name,
@@ -116,6 +120,7 @@ class ProfileRepository:
                 int(profile.risk_enabled),
                 profile.risk_mode,
                 profile.risk_percent,
+                profile.max_risk_percent,
                 profile.risk_amount,
                 profile.fixed_lot,
                 profile.min_lot,
@@ -130,6 +135,9 @@ class ProfileRepository:
                 profile.execution_mode,
                 profile.tp_level,
                 profile.tp1_management,
+                int(profile.break_even_enabled),
+                int(profile.trailing_stop_enabled),
+                int(profile.partial_take_profit_enabled),
                 int(profile.execute_market),
 
                 profile.magic_number,
@@ -155,6 +163,7 @@ class ProfileRepository:
         profile.id = cursor.lastrowid
 
         self._save_terminal_context(profile)
+        self._notify_change(profile.id)
 
         return profile
 
@@ -195,6 +204,7 @@ class ProfileRepository:
                 risk_enabled=?,
                 risk_mode=?,
                 risk_percent=?,
+                max_risk_percent=?,
                 risk_amount=?,
                 fixed_lot=?,
                 min_lot=?,
@@ -209,6 +219,9 @@ class ProfileRepository:
                 execution_mode=?,
                 tp_level=?,
                 tp1_management=?,
+                break_even_enabled=?,
+                trailing_stop_enabled=?,
+                partial_take_profit_enabled=?,
                 execute_market=?,
 
                 magic_number=?,
@@ -249,6 +262,7 @@ class ProfileRepository:
                 int(profile.risk_enabled),
                 profile.risk_mode,
                 profile.risk_percent,
+                profile.max_risk_percent,
                 profile.risk_amount,
                 profile.fixed_lot,
                 profile.min_lot,
@@ -263,6 +277,9 @@ class ProfileRepository:
                 profile.execution_mode,
                 profile.tp_level,
                 profile.tp1_management,
+                int(profile.break_even_enabled),
+                int(profile.trailing_stop_enabled),
+                int(profile.partial_take_profit_enabled),
                 int(profile.execute_market),
 
                 profile.magic_number,
@@ -285,6 +302,8 @@ class ProfileRepository:
         )
 
         database_manager.commit()
+        self._save_terminal_context(profile)
+        self._notify_change(profile.id)
 
         return profile
 
@@ -301,9 +320,17 @@ class ProfileRepository:
 
         database_manager.commit()
 
-        self._save_terminal_context(profile)
+        changed = cursor.rowcount > 0
+        if changed:
+            self._notify_change(profile_id)
+        return changed
 
-        return cursor.rowcount > 0
+    @staticmethod
+    def _notify_change(profile_id):
+        from services.routing_configuration_service import (
+            routing_configuration_service,
+        )
+        routing_configuration_service.notify_changed(profile_id, "profile")
 
     def _save_terminal_context(self, profile):
         columns = {
@@ -462,8 +489,10 @@ class ProfileRepository:
             SELECT *
             FROM profiles
             WHERE
-                enabled=1
+                active=1
+                AND enabled=1
                 AND signal_source_mode IN ('INTERNAL', 'BOTH')
+                AND execution_mode IN ('SIMULATION', 'DEMO', 'LIVE')
             ORDER BY name
             """
         )

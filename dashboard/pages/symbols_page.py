@@ -67,7 +67,7 @@ class SymbolsPage(QWidget):
         toolbar.addWidget(self.btn_refresh)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(10)
+        self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels(
             [
                 "ID selección",
@@ -79,7 +79,6 @@ class SymbolsPage(QWidget):
                 "Activo",
                 "Disponibilidad",
                 "Símbolo MT5",
-                "Perfil",
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -147,7 +146,6 @@ class SymbolsPage(QWidget):
                 "Sí" if record and record.enabled else "No",
                 "NO VERIFICADO",
                 definition["mt5_symbol"],
-                profile_id,
             )
             for column, value in enumerate(values):
                 item = QTableWidgetItem(str(value))

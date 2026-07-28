@@ -138,7 +138,7 @@ class ProfileDialog(QDialog):
             "Esta opción es independiente del modo de ejecución."
         )
         self.cboRiskMode = QComboBox()
-        self.cboRiskMode.addItems(["PERCENT", "AMOUNT"])
+        self.cboRiskMode.addItems(["PERCENT", "AMOUNT", "LOT"])
         self.spnMaxTrades = QSpinBox()
         self.spnMaxTrades.setToolTip(
             "Máximo de operaciones abiertas al mismo tiempo para este perfil. "
@@ -286,7 +286,12 @@ class ProfileDialog(QDialog):
         self._all_mt5_accounts = mt5_account_repository.get_all()
         self.mt5TerminalCombo.clear()
         self.mt5TerminalCombo.addItem("(Sin instalación vinculada)", None)
+        current_terminal_id = getattr(
+            self.profile, "mt5_terminal_id", None
+        )
         for terminal in mt5_terminal_repository.get_all():
+            if not terminal.active and terminal.id != current_terminal_id:
+                continue
             self.mt5TerminalCombo.addItem(
                 f"{terminal.name} · {terminal.role}", terminal.id
             )
@@ -311,7 +316,7 @@ class ProfileDialog(QDialog):
         self.cboSignalSource.setCurrentText(
             getattr(profile, "signal_source_mode", "TELEGRAM")
         )
-        risk_mode = profile.risk_mode if profile.risk_mode in {"PERCENT", "AMOUNT"} else "PERCENT"
+        risk_mode = profile.risk_mode if profile.risk_mode in {"PERCENT", "AMOUNT", "LOT"} else "PERCENT"
         self.cboRiskMode.setCurrentText(risk_mode)
         self.spnMaxTrades.setValue(profile.max_open_trades)
         self.spnScore.setValue(profile.min_signal_score)
@@ -320,12 +325,25 @@ class ProfileDialog(QDialog):
             getattr(profile, "tp1_management", "PROTECT_TP1")
         )
         self.riskWidget.tp1Management.setCurrentIndex(max(0, tp1_index))
+        self.riskWidget.breakEven.setChecked(
+            getattr(profile, "break_even_enabled", False)
+        )
+        self.riskWidget.trailing.setChecked(
+            getattr(profile, "trailing_stop_enabled", False)
+        )
+        self.riskWidget.partial.setChecked(
+            getattr(profile, "partial_take_profit_enabled", False)
+        )
 
         self._set_risk_widget_mode(risk_mode)
+        self.riskWidget.enabled.setChecked(profile.risk_enabled)
+        self.riskWidget.maxRiskPercent.setValue(profile.max_risk_percent)
         if risk_mode == "PERCENT":
             self.riskWidget.value.setValue(profile.risk_percent)
-        else:
+        elif risk_mode == "AMOUNT":
             self.riskWidget.value.setValue(profile.risk_amount)
+        else:
+            self.riskWidget.value.setValue(profile.fixed_lot)
         daily_limit_enabled = (
             profile.max_daily_loss > 0 or profile.max_daily_profit > 0
         )
@@ -403,9 +421,13 @@ class ProfileDialog(QDialog):
             "magic_number": self.spnMagic.value(),
             "execution_mode": self.cboExecution.currentText(),
             "risk_mode": risk_mode,
+            "risk_enabled": self.riskWidget.enabled.isChecked(),
             "risk_percent": risk_value if risk_mode == "PERCENT" else 0.0,
             "risk_amount": risk_value if risk_mode == "AMOUNT" else 0.0,
-            "fixed_lot": self.profile.fixed_lot if self.profile else 0.0,
+            "fixed_lot": risk_value if risk_mode == "LOT" else (
+                self.profile.fixed_lot if self.profile else 0.10
+            ),
+            "max_risk_percent": self.riskWidget.maxRiskPercent.value(),
             "max_open_trades": self.spnMaxTrades.value(),
             "min_signal_score": self.spnScore.value(),
             "max_daily_loss": (
@@ -422,6 +444,9 @@ class ProfileDialog(QDialog):
             ),
             "tp_level": self.spnTP.value(),
             "tp1_management": self.riskWidget.tp1Management.currentData(),
+            "break_even_enabled": self.riskWidget.breakEven.isChecked(),
+            "trailing_stop_enabled": self.riskWidget.trailing.isChecked(),
+            "partial_take_profit_enabled": self.riskWidget.partial.isChecked(),
             "default_mt5_account": self._selected_account_id(self.mt5Selector),
             "mt5_terminal_id": self.mt5TerminalCombo.currentData(),
             "catalog_id": self.mt5CatalogCombo.currentText(),
@@ -444,6 +469,12 @@ class ProfileDialog(QDialog):
                 if getattr(account, "mt5_terminal_id", None) == terminal_id
             ]
         self.set_mt5_accounts(accounts)
+        # A managed terminal represents one trading account in the current
+        # architecture. Select that sole compatible account automatically so
+        # a newly created profile cannot silently retain an empty account link.
+        if terminal_id is not None and len(accounts) == 1:
+            self.mt5Selector.setSelected([accounts[0].id])
+            self._update_mt5_capital()
 
     def _update_mt5_capital(self):
         accounts = self.mt5Selector.selectedAccounts()
@@ -530,6 +561,42 @@ class ProfileDialog(QDialog):
         if not data["name"]:
             QMessageBox.warning(self, "Perfil", "Debe ingresar un nombre.")
             return
+        if data["max_risk_percent"] <= 0 or data["max_risk_percent"] > 10:
+            QMessageBox.warning(
+                self, "Riesgo", "El riesgo máximo debe estar entre 0 y 10 %."
+            )
+            return
+        if data["risk_mode"] == "PERCENT" and (
+            data["risk_percent"] <= 0
+            or data["risk_percent"] > data["max_risk_percent"]
+        ):
+            QMessageBox.warning(
+                self,
+                "Riesgo",
+                "El riesgo por operación debe ser mayor que 0 y no superar el máximo.",
+            )
+            return
+        if data["risk_mode"] == "AMOUNT" and data["risk_amount"] <= 0:
+            QMessageBox.warning(self, "Riesgo", "El importe debe ser mayor que 0.")
+            return
+        if data["risk_mode"] == "LOT" and data["fixed_lot"] <= 0:
+            QMessageBox.warning(self, "Riesgo", "El lote fijo debe ser mayor que 0.")
+            return
+        if data["execution_mode"] in {"DEMO", "LIVE"}:
+            if data["mt5_terminal_id"] is None:
+                QMessageBox.warning(
+                    self,
+                    "MT5",
+                    "Seleccione la instalación MT5 que ejecutará este perfil.",
+                )
+                return
+            if data["default_mt5_account"] is None:
+                QMessageBox.warning(
+                    self,
+                    "MT5",
+                    "Seleccione la cuenta MT5 que ejecutará este perfil.",
+                )
+                return
 
         profile = self.profile or Profile()
         for field, value in data.items():
@@ -607,6 +674,7 @@ class ProfileDialog(QDialog):
         buttons = {
             "PERCENT": self.riskWidget.percent,
             "AMOUNT": self.riskWidget.amount,
+            "LOT": self.riskWidget.lot,
         }
         button = buttons.get(mode, self.riskWidget.percent)
         button.setChecked(True)
@@ -618,6 +686,8 @@ class ProfileDialog(QDialog):
     def _risk_mode(self):
         if self.riskWidget.amount.isChecked():
             return "AMOUNT"
+        if self.riskWidget.lot.isChecked():
+            return "LOT"
         return "PERCENT"
 
     @staticmethod

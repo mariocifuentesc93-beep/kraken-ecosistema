@@ -278,7 +278,7 @@ class DashboardPage(QWidget):
         actions.setHorizontalSpacing(6)
         actions.setVerticalSpacing(6)
         actions.setContentsMargins(0, 0, 0, 0)
-        for row, col, icon, title, action, color in ((0, 0, "play", "Simulación", "SIMULATION", "#00D47A"), (0, 1, "chart-spline", "Paper Trading", "Paper Trading", "#45A3FF"), (1, 0, "calendar-days", "Calendario", "Calendario de Trading", "#D279FF"), (1, 1, "chart-no-axes-combined", "Analíticas", "Analíticas", "#FF9E28")):
+        for row, col, icon, title, action, color in ((0, 0, "play", "Simulación", "SIMULATION", "#00D47A"), (0, 1, "chart-no-axes-combined", "Ranking", "Ranking de símbolos", "#45A3FF"), (1, 0, "calendar-days", "Calendario", "Calendario de Trading", "#D279FF"), (1, 1, "chart-no-axes-combined", "Analíticas", "Analíticas", "#FF9E28")):
             actions.addWidget(self._quick_button(icon, title, action, color), row, col)
         actions_widget = QWidget()
         actions_widget.setLayout(actions)

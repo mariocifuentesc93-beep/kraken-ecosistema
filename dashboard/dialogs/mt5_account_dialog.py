@@ -167,7 +167,12 @@ class MT5AccountDialog(QDialog):
 
         self.cboTerminalInstallation = QComboBox()
         self.cboTerminalInstallation.addItem("(Sin instalación vinculada)", None)
+        current_terminal_id = getattr(
+            self.account, "mt5_terminal_id", None
+        )
         for terminal in mt5_terminal_repository.get_all():
+            if not terminal.active and terminal.id != current_terminal_id:
+                continue
             self.cboTerminalInstallation.addItem(
                 f"{terminal.name} · {terminal.role}", terminal.id
             )
