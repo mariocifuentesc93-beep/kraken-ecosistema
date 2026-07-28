@@ -337,13 +337,21 @@ class MainWindow(QMainWindow):
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(8, 8, 8, 6)
         sidebar_layout.setSpacing(4)
-        brand = KrakenLogo(Path(__file__).resolve().parent.parent / "assets" / "branding" / "kraken_enterprise.png"); brand.setToolTip("Kraken Bot Enterprise"); brand.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        brand_name = QLabel("KRAKEN BOT")
+        brand = KrakenLogo(Path(__file__).resolve().parent.parent / "assets" / "branding" / "trading_ecosystem_logo.png"); brand.setToolTip("Trading Ecosystem"); brand.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        brand_name = QLabel("TRADING")
         brand_name.setAlignment(Qt.AlignHCenter)
-        brand_name.setStyleSheet("font-size:18px;font-weight:800;color:#F4F7FA;padding:0;")
-        brand_subtitle = QLabel("ENTERPRISE")
+        brand_name.setStyleSheet(
+            "font-family:'Bahnschrift SemiBold','Segoe UI Semibold';"
+            "font-size:19px;font-weight:600;letter-spacing:1.4px;"
+            "color:#F4F7FA;background:transparent;border:none;padding:0;"
+        )
+        brand_subtitle = QLabel("ECOSYSTEM")
         brand_subtitle.setAlignment(Qt.AlignHCenter)
-        brand_subtitle.setStyleSheet("font-size:11px;font-weight:700;letter-spacing:3px;color:#00C853;padding:0 0 6px 0;")
+        brand_subtitle.setStyleSheet(
+            "font-family:'Segoe UI Semibold';font-size:10px;font-weight:600;"
+            "letter-spacing:3.6px;color:#00E676;background:transparent;"
+            "border:none;padding:0 0 7px 0;"
+        )
         brand_row = QVBoxLayout(); brand_row.setContentsMargins(0, 0, 0, 0); brand_row.setSpacing(1); brand_row.setAlignment(Qt.AlignHCenter); brand_row.addWidget(brand, alignment=Qt.AlignHCenter); brand_row.addWidget(brand_name, alignment=Qt.AlignHCenter); brand_row.addWidget(brand_subtitle, alignment=Qt.AlignHCenter)
         self.sidebar_brand_widgets = (brand, brand_name, brand_subtitle)
         sidebar_layout.addLayout(brand_row)
@@ -1261,8 +1269,8 @@ class KrakenLogo(QLabel):
         super().__init__(parent)
         cache_key = str(Path(path).resolve())
         if cache_key not in self._pixmap_cache:
-            # The source artwork is 1254 px square but is displayed at only
-            # 140x114.  Pre-scaling avoids processing 1.5 million pixels for
+            # The source artwork is square but is displayed at only
+            # 168x136. Pre-scaling avoids processing the full source image for
             # every window while retaining ample detail for the final render.
             source = QPixmap(cache_key).scaled(
                 280, 280, Qt.KeepAspectRatio, Qt.SmoothTransformation
@@ -1274,7 +1282,7 @@ class KrakenLogo(QLabel):
         self.setStyleSheet("background:transparent;border:0;")
 
     def sizeHint(self):
-        return QSize(140, 114)
+        return QSize(168, 136)
 
     @staticmethod
     def _blend_into_sidebar(pixmap):

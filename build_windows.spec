@@ -1,8 +1,8 @@
-# Packaging configuration: the vector logo remains sharp in generated Windows builds.
-# A Windows installer may replace the SVG with a signed .ico asset at release time.
+# Packaging configuration for the Trading Ecosystem identity.
+# A Windows installer may replace the PNG with a signed .ico asset at release time.
 from pathlib import Path
 
 ROOT = Path(SPECPATH)
-a = Analysis([str(ROOT / "app.py")], pathex=[str(ROOT)], datas=[(str(ROOT / "assets" / "branding" / "kraken_bot_logo.svg"), "assets/branding")])
+a = Analysis([str(ROOT / "app.py")], pathex=[str(ROOT)], datas=[(str(ROOT / "assets" / "branding" / "trading_ecosystem_logo.png"), "assets/branding")])
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, a.binaries, a.datas, name="KrakenBotEnterprise", console=False, icon=str(ROOT / "assets" / "branding" / "kraken_bot_logo.svg"))
+exe = EXE(pyz, a.scripts, a.binaries, a.datas, name="TradingEcosystem", console=False, icon=str(ROOT / "assets" / "branding" / "trading_ecosystem_logo.png"))

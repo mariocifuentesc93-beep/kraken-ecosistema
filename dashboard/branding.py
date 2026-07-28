@@ -6,7 +6,7 @@ from version import APPLICATION_NAME, COPYRIGHT, RELEASE_CHANNEL, VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
 LOGO_SVG = ROOT / "assets" / "branding" / "kraken_bot_logo.svg"
-LOGO_PNG = ROOT / "assets" / "branding" / "kraken_bot_logo.png"
+LOGO_PNG = ROOT / "assets" / "branding" / "trading_ecosystem_logo.png"
 
 def application_icon():
     return QIcon(str(LOGO_PNG if LOGO_PNG.exists() else LOGO_SVG))

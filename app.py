@@ -11,7 +11,7 @@ from dashboard.ui_theme import apply_terminal_palette, application_style
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Kraken Bot Enterprise")
+    app.setApplicationName("Trading Ecosystem")
     app.setWindowIcon(application_icon())
     apply_terminal_palette(app)
     app.setStyleSheet(application_style())
