@@ -398,7 +398,45 @@ class MT5Executor:
 
             return None
 
-        if result.retcode != api.TRADE_RETCODE_DONE:
+        accepted_retcodes = {
+            int(getattr(api, "TRADE_RETCODE_PLACED", 10008)),
+            int(getattr(api, "TRADE_RETCODE_DONE", 10009)),
+            int(getattr(api, "TRADE_RETCODE_DONE_PARTIAL", 10010)),
+        }
+        invalid_fill = int(
+            getattr(api, "TRADE_RETCODE_INVALID_FILL", 10030)
+        )
+
+        # A symbol may reject IOC even though all pre-flight checks pass.
+        # Retrying is safe only for INVALID_FILL because MT5 did not accept
+        # the original order.
+        if int(result.retcode) == invalid_fill:
+            attempted = {int(request.get("type_filling", -1))}
+            for filling_mode in (
+                int(getattr(api, "ORDER_FILLING_FOK", 0)),
+                int(getattr(api, "ORDER_FILLING_RETURN", 2)),
+            ):
+                if filling_mode in attempted:
+                    continue
+                attempted.add(filling_mode)
+                retry_request = dict(request)
+                retry_request["type_filling"] = filling_mode
+                result = api.order_send(retry_request)
+                if result is None:
+                    self.last_error = str(api.last_error())
+                    continue
+                if int(result.retcode) in accepted_retcodes:
+                    break
+                if int(result.retcode) != invalid_fill:
+                    break
+
+        if result is None:
+            if not self.last_error:
+                self.last_error = str(api.last_error())
+            print("[MT5]", self.last_error)
+            return None
+
+        if int(result.retcode) not in accepted_retcodes:
 
             print()
             print("=" * 60)

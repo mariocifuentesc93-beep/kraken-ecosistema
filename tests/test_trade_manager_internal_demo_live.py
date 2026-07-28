@@ -223,7 +223,7 @@ def test_demo_stops_remaining_orders_after_partial_send_failure(
     profile = profile_factory(1, execution_mode="DEMO")
     account = account_factory(1)
     created = []
-    closed = []
+    rejected = []
     monkeypatch.setattr(
         operation_manager,
         "create",
@@ -235,8 +235,8 @@ def test_demo_stops_remaining_orders_after_partial_send_failure(
     monkeypatch.setattr(operation_manager, "open", lambda **_kwargs: None)
     monkeypatch.setattr(
         operation_manager,
-        "close",
-        lambda **kwargs: closed.append(kwargs),
+        "reject",
+        lambda **kwargs: rejected.append(kwargs),
     )
     monkeypatch.setattr(
         risk_manager,
@@ -283,7 +283,10 @@ def test_demo_stops_remaining_orders_after_partial_send_failure(
     assert result is False
     assert sent == [2.0, 2.0]
     assert len(created) == 2
-    assert len(closed) == 1
+    assert len(rejected) == 1
+    assert rejected[0]["code"] == "MT5_SEND_REJECTED"
     assert signal.metadata["execution_plan"]["status"] == "PARTIAL"
     assert signal.metadata["execution_plan"]["completed_orders"] == 1
     assert signal.metadata["execution_plan"]["failed_order_index"] == 2
+    assert signal.metadata["failure_stage"] == "MT5_SEND"
+    assert signal.execution_decision == "REJECTED"

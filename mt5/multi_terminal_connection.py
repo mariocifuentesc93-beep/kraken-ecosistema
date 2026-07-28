@@ -49,6 +49,27 @@ def _object(value):
     return value
 
 
+def _invoke_mt5(api, method, args=(), kwargs=None):
+    """Call MT5 methods while preserving the native trade-request signature."""
+    kwargs = kwargs or {}
+    if method in {"order_send", "order_check"}:
+        if "request" in kwargs:
+            trade_request = kwargs["request"]
+        elif args:
+            trade_request = args[0]
+        elif kwargs:
+            trade_request = kwargs
+        else:
+            raise MT5WorkerError(
+                f"{method} requiere una solicitud de trading."
+            )
+        # Keep every MqlTradeRequest field named when crossing into the native
+        # extension. ``request=<dict>`` creates an empty request (10013), and
+        # a positional mapping is rejected by some MetaTrader5 builds.
+        return getattr(api, method)(**trade_request)
+    return getattr(api, method)(*args, **kwargs)
+
+
 def _worker_main(requests, responses, configuration):
     import MetaTrader5 as mt5
 
@@ -121,9 +142,11 @@ def _worker_main(requests, responses, configuration):
                 )
                 continue
             try:
-                result = getattr(mt5, method)(
-                    *request.get("args", ()),
-                    **request.get("kwargs", {}),
+                result = _invoke_mt5(
+                    mt5,
+                    method,
+                    request.get("args", ()),
+                    request.get("kwargs", {}),
                 )
                 responses.put(
                     {"id": request_id, "ok": True, "value": _plain(result)}
@@ -143,10 +166,15 @@ class MT5TerminalConnection:
     ORDER_TYPE_BUY = 0
     ORDER_TYPE_SELL = 1
     ORDER_TIME_GTC = 0
+    ORDER_FILLING_FOK = 0
     ORDER_FILLING_IOC = 1
+    ORDER_FILLING_RETURN = 2
     TRADE_ACTION_DEAL = 1
     TRADE_ACTION_SLTP = 6
+    TRADE_RETCODE_PLACED = 10008
     TRADE_RETCODE_DONE = 10009
+    TRADE_RETCODE_DONE_PARTIAL = 10010
+    TRADE_RETCODE_INVALID_FILL = 10030
     DEAL_ENTRY_OUT = 1
     DEAL_ENTRY_OUT_BY = 3
     DEAL_REASON_SL = 4
@@ -280,7 +308,9 @@ class MT5TerminalConnection:
         return self.call("order_calc_profit", *args)
 
     def order_send(self, request):
-        return self.call("order_send", request)
+        # Preserve the MqlTradeRequest fields until the isolated worker calls
+        # the native MetaTrader5 extension.
+        return self.call("order_send", **request)
 
     def last_error(self):
         return self.call("last_error")

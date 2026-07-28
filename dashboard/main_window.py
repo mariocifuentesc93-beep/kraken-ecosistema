@@ -1131,17 +1131,20 @@ class MainWindow(QMainWindow):
     def start_engine(self):
         load_active_config()
         mode = get_execution_mode() or "OFF"
-        if mode == "LIVE":
-            issues = live_mode_issues()
-            if issues:
-                QMessageBox.warning(
-                    self,
-                    "LIVE bloqueado",
-                    "No se puede iniciar LIVE:\n\n- " + "\n- ".join(issues),
-                )
-                return
         try:
             kraken_engine.start()
+            if mode == "LIVE":
+                issues = live_mode_issues()
+                if issues:
+                    kraken_engine.stop()
+                    self.set_mode("OFF")
+                    QMessageBox.warning(
+                        self,
+                        "LIVE bloqueado",
+                        "No se puede iniciar LIVE:\n\n- "
+                        + "\n- ".join(issues),
+                    )
+                    return
             self.set_mode(mode)
             self.log("Kraken Engine iniciado.")
         except Exception as error:

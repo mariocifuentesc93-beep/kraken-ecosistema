@@ -3,6 +3,10 @@ from types import SimpleNamespace
 from models.mt5_account import MT5Account
 from models.mt5_terminal import MT5Terminal
 from mt5.executor import MT5Executor
+from mt5.multi_terminal_connection import (
+    MT5TerminalConnection,
+    _invoke_mt5,
+)
 from risk.position_sizing_service import PositionSizingService
 from risk.risk_manager import RiskManager
 from services.mt5_connection_registry import (
@@ -152,6 +156,54 @@ def test_registry_keeps_one_isolated_worker_per_terminal_and_account():
     assert registry.status() == {}
 
 
+def test_terminal_proxy_sends_expanded_trade_request_fields():
+    connection = object.__new__(MT5TerminalConnection)
+    captured = {}
+
+    def call(method, *args, **kwargs):
+        captured.update(
+            {"method": method, "args": args, "kwargs": kwargs}
+        )
+        return SimpleNamespace(
+            retcode=connection.TRADE_RETCODE_DONE,
+            order=110001,
+            deal=210001,
+            price=100.1,
+        )
+
+    connection.call = call
+    request = {"action": connection.TRADE_ACTION_DEAL}
+
+    connection.order_send(request)
+
+    assert captured == {
+        "method": "order_send",
+        "args": (),
+        "kwargs": request,
+    }
+
+
+def test_worker_unwraps_trade_request_into_native_named_call():
+    calls = []
+
+    class Api:
+        def order_send(self, *args, **kwargs):
+            calls.append((args, kwargs))
+            return "sent"
+
+    request = {"action": 1, "symbol": "LionX75"}
+
+    result = _invoke_mt5(
+        Api(),
+        "order_send",
+        (),
+        {"request": request},
+    )
+
+    assert result == "sent"
+    assert calls == [((), request)]
+
+
 def test_executor_sends_each_account_to_its_own_terminal_worker():
     registry, accounts, _terminals, _created = _registry()
     executor = MT5Executor(connection_registry=registry)
@@ -184,6 +236,59 @@ def test_executor_sends_each_account_to_its_own_terminal_worker():
     assert connection_two.requests[0]["volume"] == 0.2
     assert connection_one.requests[0]["tp"] == 102.0
     assert connection_two.requests[0]["tp"] == 102.0
+
+
+def test_executor_retries_only_invalid_fill_with_supported_mode():
+    registry, accounts, _terminals, _created = _registry()
+    executor = MT5Executor(connection_registry=registry)
+    connection = registry.connection_for(1, 11)
+    connection.TRADE_RETCODE_INVALID_FILL = 10030
+    connection.TRADE_RETCODE_PLACED = 10008
+    connection.TRADE_RETCODE_DONE_PARTIAL = 10010
+    connection.ORDER_FILLING_FOK = 0
+    connection.ORDER_FILLING_RETURN = 2
+    calls = []
+
+    def order_send(request):
+        calls.append(dict(request))
+        if len(calls) == 1:
+            return SimpleNamespace(
+                retcode=10030,
+                comment="Unsupported filling mode",
+            )
+        return SimpleNamespace(
+            retcode=connection.TRADE_RETCODE_DONE,
+            comment="Done",
+            order=110002,
+            deal=210002,
+            price=100.1,
+        )
+
+    connection.order_send = order_send
+    profile = SimpleNamespace(
+        id=7,
+        catalog_id="BRIDGE_SYNTHETICS",
+        tp_level=2,
+    )
+    signal = SimpleNamespace(
+        symbol="EMASVOL10",
+        direction="BUY",
+        stop_loss=99.0,
+        take_profits=[101.0, 102.0, 103.0],
+        metadata={},
+    )
+
+    result = executor.execute_market_order(
+        signal,
+        0.1,
+        accounts[1],
+        profile,
+        SimpleNamespace(allowed=True),
+    )
+
+    assert result.order == 110002
+    assert [call["type_filling"] for call in calls] == [1, 0]
+    assert executor.last_error == ""
 
 
 def test_risk_sizing_uses_metrics_and_symbol_from_destination_worker():

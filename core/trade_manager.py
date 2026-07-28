@@ -441,9 +441,16 @@ class TradeManager:
                     preflight,
                 )
             if result is None:
-                operation_manager.close(
+                from mt5.executor import mt5_executor
+
+                reason = (
+                    str(getattr(mt5_executor, "last_error", "") or "").strip()
+                    or "MT5 no devolvió un resultado de ejecución."
+                )
+                operation_manager.reject(
                     operation=operation,
-                    reason="SEND_ERROR",
+                    code="MT5_SEND_REJECTED",
+                    reason=reason,
                 )
                 plan["status"] = (
                     "PARTIAL"
@@ -451,6 +458,20 @@ class TradeManager:
                     else "FAILED"
                 )
                 plan["failed_order_index"] = index + 1
+                plan["error"] = reason
+                signal.rejection_reason = reason
+                signal.execution_decision = "REJECTED"
+                signal.metadata["failure_stage"] = "MT5_SEND"
+                signal.metadata["rejection_reason"] = reason
+                signal.metadata["execution_decision"] = "REJECTED"
+                self._log_preflight(
+                    signal,
+                    profile,
+                    account,
+                    "REJECTED",
+                    "MT5_SEND_REJECTED",
+                    reason,
+                )
                 signal.volume = total_volume
                 return False
 
