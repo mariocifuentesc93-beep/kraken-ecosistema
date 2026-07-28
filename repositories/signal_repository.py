@@ -189,6 +189,27 @@ class SignalRepository:
         connection.commit()
         return cursor.rowcount > 0
 
+    def update_levels(self, signal_id, stop_loss, take_profits, metadata=None):
+        connection = self._connection()
+        if metadata is None:
+            current = self.get_by_id(signal_id)
+            metadata = current.metadata if current is not None else {}
+        cursor = connection.execute(
+            """
+            UPDATE signals
+            SET stop_loss=?, take_profits=?, metadata=?
+            WHERE id=?
+            """,
+            (
+                float(stop_loss),
+                json.dumps([float(value) for value in take_profits]),
+                json.dumps(dict(metadata or {}), sort_keys=True),
+                int(signal_id),
+            ),
+        )
+        connection.commit()
+        return cursor.rowcount > 0
+
     def update_outcome(self, signal: Signal):
         connection = self._connection()
         columns = {

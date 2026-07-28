@@ -118,6 +118,16 @@ class OperationRepository:
             (symbol,),
         )
 
+    def get_open_by_signal(self, signal_id):
+        return self._fetch(
+            """
+            SELECT * FROM operations
+            WHERE signal_id=? AND status='OPEN'
+            ORDER BY id
+            """,
+            (int(signal_id),),
+        )
+
     def get_by_magic(self, magic):
         return self._fetch(
             "SELECT * FROM operations WHERE magic=? ORDER BY id DESC",
@@ -215,6 +225,7 @@ class OperationRepository:
     def _to_operation(row):
         return Operation(
             id=row["id"],
+            signal_id=row["signal_id"],
             profile_id=row["profile_id"],
             mt5_account_id=row["mt5_account_id"],
             ticket=row["ticket"],

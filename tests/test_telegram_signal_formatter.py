@@ -1,7 +1,11 @@
+from datetime import datetime
+
+from internal.signal_level_update import InternalSignalLevelUpdate
 from models.signal import Signal
 import pytest
 
 from telegram.signal_publisher import (
+    format_internal_level_update,
     format_internal_telegram_signal,
     format_signal_price,
 )
@@ -48,6 +52,27 @@ def test_sell_format_is_exact():
     assert "INTERNAL:LIONX100:12305" not in message
     assert not any(marker in message for marker in ("*", "#", "<", ">"))
     assert "🚨" not in message
+
+
+def test_level_update_format_is_plain_and_only_lists_changes():
+    signal = make_signal("sell")
+    update = InternalSignalLevelUpdate(
+        symbol="LIONX100",
+        external_signal_id="12305",
+        direction="SELL",
+        previous_stop_loss=253891.42,
+        stop_loss=253850.0,
+        previous_take_profits=(253649.44, 253558.69, 253437.70),
+        take_profits=(253640.0, 253558.69, 253437.70),
+        detected_at=datetime(2026, 7, 28, 12, 0),
+    )
+
+    assert format_internal_level_update(signal, update) == (
+        "SIGNAL UPDATE - LionX100 (SELL)\n\n"
+        "SL: 253891.42 -> 253850.00\n"
+        "TP1: 253649.44 -> 253640.00\n\n"
+        "Signal ID: 12305"
+    )
 
 
 @pytest.mark.parametrize(

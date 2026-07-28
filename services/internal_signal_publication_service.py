@@ -1,6 +1,8 @@
 """Global, optional and idempotent publication of INTERNAL signals."""
 
 from dataclasses import dataclass
+import hashlib
+import json
 import logging
 
 from repositories.telegram_publication_repository import (
@@ -230,6 +232,70 @@ class InternalSignalPublicationService:
                 FAILED,
                 telegram_channel_id=channel_id,
                 error=outcome.error,
+                traceback=outcome.traceback,
+            )
+        ]
+
+    def publish_update(self, signal, update):
+        """Publica una sola notificación consolidada por cambio detectado."""
+        from telegram.signal_publisher import format_internal_level_update
+
+        destination, skipped = self._destination()
+        if skipped is not None:
+            return [skipped]
+        account_id, chat_id, channel_id = destination
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                update.changes, sort_keys=True, default=str
+            ).encode("utf-8")
+        ).hexdigest()[:24]
+        update_key = f"{update.signal_key}:LEVELS:{fingerprint}"
+        reservation = self._repository.get_or_create(
+            signal.id,
+            update_key,
+            account_id,
+            chat_id,
+        )
+        publication = reservation.publication
+        if publication.status == SENT:
+            return [
+                InternalPublicationResult(
+                    account_id,
+                    chat_id,
+                    SENT,
+                    telegram_channel_id=channel_id,
+                    already_sent=True,
+                )
+            ]
+        if not reservation.created and publication.status == PENDING:
+            return [
+                InternalPublicationResult(
+                    account_id,
+                    chat_id,
+                    PENDING,
+                    telegram_channel_id=channel_id,
+                    skipped=True,
+                )
+            ]
+        outcome = self._publisher.publish_text(
+            format_internal_level_update(signal, update),
+            account_id,
+            chat_id,
+            reference=update_key,
+        )
+        if outcome.success:
+            self._repository.mark_sent(publication.id)
+        else:
+            self._repository.mark_failed(publication.id, outcome.error)
+        return [
+            InternalPublicationResult(
+                account_id,
+                chat_id,
+                SENT if outcome.success else FAILED,
+                telegram_channel_id=channel_id,
+                sent=outcome.success,
+                error=outcome.error,
+                message_id=outcome.message_id,
                 traceback=outcome.traceback,
             )
         ]

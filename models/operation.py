@@ -15,6 +15,7 @@ class Operation:
     # =====================================================
 
     id: Optional[int] = None
+    signal_id: Optional[int] = None
 
     signal: Optional[Signal] = None
 
@@ -139,6 +140,7 @@ class Operation:
     def __post_init__(self):
 
         if self.signal:
+            self.signal_id = getattr(self.signal, "id", None)
 
             self.symbol = getattr(self.signal, "symbol", "")
 

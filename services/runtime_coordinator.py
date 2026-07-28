@@ -240,6 +240,28 @@ class RuntimeCoordinator:
                     telegram_channel_repository.list_sendable
                 ),
             )
+            from services.internal_signal_level_update_service import (
+                InternalSignalLevelUpdateService,
+            )
+            from repositories.signal_repository import signal_repository
+            from repositories.operation_repository import operation_repository
+            from repositories.profile_repository import profile_repository
+            from repositories.operation_milestone_repository import (
+                operation_milestone_repository,
+            )
+            from repositories.log_repository import log_repository
+            from mt5.executor import mt5_executor
+
+            level_update_service = InternalSignalLevelUpdateService(
+                signal_repository=signal_repository,
+                operation_repository=operation_repository,
+                profile_repository=profile_repository,
+                milestone_repository=operation_milestone_repository,
+                executor=mt5_executor,
+                connection_registry=self._mt5_connection_registry,
+                logger=log_repository,
+                publication_service=publication_service,
+            )
             self._internal_source = InternalSignalSource(
                 directory=directory,
                 checkpoint_store=InternalCheckpointStore(
@@ -248,6 +270,7 @@ class RuntimeCoordinator:
                 observation_only=observation_only,
                 ingestion_service=signal_ingestion_service,
                 publication_service=publication_service,
+                level_update_service=level_update_service,
             )
         if self._enable_sources and self._internal_watcher is None:
             from internal.csv_watcher import InternalCsvWatcher

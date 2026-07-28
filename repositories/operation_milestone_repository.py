@@ -51,6 +51,22 @@ class OperationMilestoneRepository:
             "SL": float(payload.get("stop_loss") or operation.stop_loss or 0.0),
         }
 
+    def update_levels(self, operation, stop_loss, take_profits, execution_mode):
+        targets = list(take_profits or [])
+        payload = {
+            "message": "Niveles INTERNAL actualizados",
+            "tp1": targets[0] if len(targets) > 0 else 0.0,
+            "tp2": targets[1] if len(targets) > 1 else 0.0,
+            "tp3": targets[2] if len(targets) > 2 else 0.0,
+            "stop_loss": float(stop_loss or 0.0),
+        }
+        return self._insert(
+            operation,
+            "OPEN",
+            json.dumps(payload, ensure_ascii=False),
+            execution_mode,
+        )
+
     def reached(self, operation_id):
         rows = database_manager.execute(
             """

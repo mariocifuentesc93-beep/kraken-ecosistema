@@ -45,6 +45,20 @@ def format_internal_telegram_signal(signal):
     )
 
 
+def format_internal_level_update(signal, update):
+    lines = [
+        f"SIGNAL UPDATE - {signal.symbol} ({signal.direction})",
+        "",
+    ]
+    for name, (previous, current) in update.changes.items():
+        lines.append(
+            f"{name}: {format_signal_price(previous)} -> "
+            f"{format_signal_price(current)}"
+        )
+    lines.extend(["", f"Signal ID: {signal.external_signal_id}"])
+    return "\n".join(lines)
+
+
 @dataclass(frozen=True)
 class TelegramPublishResult:
     success: bool
@@ -61,13 +75,23 @@ class TelegramSignalPublisher:
         self._logger = logger or logging.getLogger(__name__)
 
     def publish(self, signal, telegram_account_id, chat_id):
+        return self.publish_text(
+            format_internal_telegram_signal(signal),
+            telegram_account_id,
+            chat_id,
+            reference=signal.idempotency_key,
+        )
+
+    def publish_text(
+        self, text, telegram_account_id, chat_id, reference="INTERNAL_UPDATE"
+    ):
         try:
             client = self._client_provider(telegram_account_id)
             if client is None:
                 raise RuntimeError("Cliente Telegram de salida no disponible.")
             result = client.send_message(
                 chat_id,
-                format_internal_telegram_signal(signal),
+                text,
             )
             if inspect.isawaitable(result):
                 raise RuntimeError(
@@ -82,7 +106,7 @@ class TelegramSignalPublisher:
                 message_id = result.get("id", result.get("message_id"))
             self._logger.info(
                 "Señal %s publicada en Telegram %s:%s.",
-                signal.idempotency_key,
+                reference,
                 telegram_account_id,
                 chat_id,
             )

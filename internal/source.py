@@ -10,6 +10,7 @@ from pathlib import Path
 from internal.checkpoint_store import InternalCheckpointStore
 from internal.csv_parser import parse_csv
 from internal.signal_assembler import assemble_signals
+from internal.signal_level_update import InternalSignalLevelUpdate
 from models.signal import Signal
 
 
@@ -84,6 +85,7 @@ class InternalSignalSource:
         observation_only=True,
         ingestion_service=None,
         publication_service=None,
+        level_update_service=None,
         logger=None,
     ):
         self.directory = Path(directory or default_internal_directory())
@@ -92,6 +94,7 @@ class InternalSignalSource:
         self.observation_only = bool(observation_only)
         self._ingestion_service = ingestion_service
         self._publication_service = publication_service
+        self._level_update_service = level_update_service
         self._logger = logger or logging.getLogger(__name__)
 
     def _get_ingestion_service(self):
@@ -111,6 +114,31 @@ class InternalSignalSource:
     def process_file(self, path):
         detected = []
         for signal in self.scan_file(path):
+            previous_levels = (
+                self.checkpoint_store.level_snapshot(
+                    signal.symbol, signal.external_signal_id
+                )
+                if self.checkpoint_store is not None
+                and hasattr(self.checkpoint_store, "level_snapshot")
+                else None
+            )
+            current_levels = {
+                "stop_loss": float(signal.stop_loss),
+                "take_profits": [
+                    float(value) for value in signal.take_profits[:3]
+                ],
+            }
+            # KrakenPro puede eliminar y recrear un objeto durante el mismo
+            # redibujado. Un cero intermedio no representa una actualización
+            # operativa y no debe modificar MT5, el checkpoint ni Telegram.
+            levels_are_complete = (
+                current_levels["stop_loss"] > 0
+                and len(current_levels["take_profits"]) == 3
+                and all(
+                    value > 0
+                    for value in current_levels["take_profits"]
+                )
+            )
             if (
                 self.checkpoint_store is not None
                 and self.checkpoint_store.contains(
@@ -118,6 +146,40 @@ class InternalSignalSource:
                     signal.external_signal_id
                 )
             ):
+                if not levels_are_complete:
+                    continue
+                if previous_levels is None:
+                    self.checkpoint_store.update_level_snapshot(
+                        signal.symbol,
+                        signal.external_signal_id,
+                        signal.stop_loss,
+                        signal.take_profits,
+                    )
+                elif (
+                    previous_levels != current_levels
+                    and self._level_update_service is not None
+                ):
+                    update = InternalSignalLevelUpdate(
+                        symbol=signal.symbol,
+                        external_signal_id=signal.external_signal_id,
+                        direction=signal.direction,
+                        previous_stop_loss=float(
+                            previous_levels["stop_loss"]
+                        ),
+                        stop_loss=float(signal.stop_loss),
+                        previous_take_profits=tuple(
+                            previous_levels["take_profits"]
+                        ),
+                        take_profits=tuple(signal.take_profits[:3]),
+                        detected_at=datetime.now(),
+                    )
+                    self._level_update_service.apply(update)
+                    self.checkpoint_store.update_level_snapshot(
+                        signal.symbol,
+                        signal.external_signal_id,
+                        signal.stop_loss,
+                        signal.take_profits,
+                    )
                 continue
             if self.observation_only:
                 detected.append(signal)
@@ -125,6 +187,12 @@ class InternalSignalSource:
                     self.checkpoint_store.mark(
                         signal.symbol,
                         signal.external_signal_id
+                    )
+                    self.checkpoint_store.update_level_snapshot(
+                        signal.symbol,
+                        signal.external_signal_id,
+                        signal.stop_loss,
+                        signal.take_profits,
                     )
                 continue
 
@@ -263,6 +331,12 @@ class InternalSignalSource:
                 self.checkpoint_store.mark(
                     signal.symbol,
                     signal.external_signal_id
+                )
+                self.checkpoint_store.update_level_snapshot(
+                    signal.symbol,
+                    signal.external_signal_id,
+                    signal.stop_loss,
+                    signal.take_profits,
                 )
         return detected
 

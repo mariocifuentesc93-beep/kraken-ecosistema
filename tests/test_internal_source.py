@@ -74,6 +74,87 @@ def test_source_checkpoint_keeps_same_id_for_different_symbols(
     assert second_scan == []
 
 
+def test_source_emits_one_level_update_after_initial_signal(tmp_path):
+    source_path = tmp_path / "Kraken_BMSP_EmasVol70.csv"
+    source_path.write_text(
+        (FIXTURES / "Kraken_BMSP_repeated_updates.csv").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+
+    class Updates:
+        def __init__(self):
+            self.items = []
+
+        def apply(self, update):
+            self.items.append(update)
+
+    updates = Updates()
+    source = InternalSignalSource(
+        directory=tmp_path,
+        checkpoint_store=InternalCheckpointStore(
+            tmp_path / "checkpoint.json"
+        ),
+        level_update_service=updates,
+    )
+    assert len(source.scan_once()) == 1
+
+    with source_path.open("a", encoding="utf-8") as output:
+        output.write(
+            "\n2026-07-23 16:01:00;UPDATED;EmasVol70;"
+            "BMSP_60001_sl_line;OBJ_HLINE;92;"
+        )
+    assert source.scan_once() == []
+    assert source.scan_once() == []
+
+    assert len(updates.items) == 1
+    assert updates.items[0].changes == {"SL": (90.0, 92.0)}
+
+
+def test_source_ignores_zero_during_object_redraw(tmp_path):
+    source_path = tmp_path / "Kraken_BMSP_EmasVol70.csv"
+    source_path.write_text(
+        (FIXTURES / "Kraken_BMSP_repeated_updates.csv").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+
+    class Updates:
+        def __init__(self):
+            self.items = []
+
+        def apply(self, update):
+            self.items.append(update)
+
+    updates = Updates()
+    source = InternalSignalSource(
+        directory=tmp_path,
+        checkpoint_store=InternalCheckpointStore(
+            tmp_path / "checkpoint.json"
+        ),
+        level_update_service=updates,
+    )
+    assert len(source.scan_once()) == 1
+
+    with source_path.open("a", encoding="utf-8") as output:
+        output.write(
+            "\n2026-07-23 16:01:00;UPDATED;EmasVol70;"
+            "BMSP_60001_tp1_line;OBJ_HLINE;0;"
+        )
+    assert source.scan_once() == []
+    assert updates.items == []
+
+    with source_path.open("a", encoding="utf-8") as output:
+        output.write(
+            "\n2026-07-23 16:01:02;UPDATED;EmasVol70;"
+            "BMSP_60001_tp1_line;OBJ_HLINE;110;"
+        )
+    assert source.scan_once() == []
+    assert updates.items == []
+
+
 def test_importing_source_does_not_import_operational_pipeline():
     repository_root = Path(__file__).resolve().parents[1]
     script = (
